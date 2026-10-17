@@ -9,6 +9,6 @@ async function bootstrap(): Promise<void> {
   app.setGlobalPrefix('api/v1');
   const config = new DocumentBuilder().setTitle('Renivet API').setVersion('0.1.0').build();
   SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, config));
-  await app.listen(Number(process.env.PORT || '4000'), '0.0.0.0');
+  await app.listen(Number(process.env.PORT || '4000'), process.env.HOST || '127.0.0.1');
 }
 void bootstrap();
