@@ -1,20 +1,14 @@
-# Renivet backend — Windows/local Phase 0.3
+# Renivet backend — Phase 0.4
 
-Fresh **NestJS + Fastify** modular monolith. No historical code, payment adapters, policies or live migrations imported.
+New NestJS + Fastify **modular monolith** repository. No imported legacy modules.
 
-Run `setup-windows.ps1` from `renivet-engineering-os/dev/scripts` first, then start local dependencies and the three applications.
+- `src/modules/health` is active and serves `GET /api/v1/health`.
+- `src/modules/{identity,catalog,inventory,cart,checkout,orders,payments,settlements,fulfillment,integrations}` are *reserved empty NestJS module shells*, **not** registered in `AppModule`.
+- `src/common`: cross-cutting transport helpers; `src/infrastructure`: future technical adapters; `src/workers`: future backend-owned async processors.
+- `src/db`: proposed Drizzle foundations. No domain migrations are executed.
 
-```powershell
-# From renivet-backend:
-npm run dev
-# New PowerShell tab, after PostgreSQL, Redis, Typesense and Python are running:
-npm run deps:check
-```
+See `docs/architecture.md` for how to add approved features without breaking module boundaries. Windows local setup remains in `renivet-engineering-os/dev/README.md`.
 
-- Backend liveness: http://127.0.0.1:4000/api/v1/health
-- Draft OpenAPI: http://127.0.0.1:4000/docs
-- `deps:check` uses the ignored local `.env` and performs a read-only SQL `SELECT 1`, Redis `PING`, an authenticated Typesense collection listing, and a Python health request.
-- `deps:check` intentionally rejects non-local service URLs and is disabled in `NODE_ENV=production`.
-- These checks do **not** prove checkout, inventory, data migration, server-side cache wiring, or production readiness.
+Run `npm install`, `npm run dev`. Health: http://127.0.0.1:4000/api/v1/health; OpenAPI: http://127.0.0.1:4000/docs. `npm run deps:check` is a read-only local connectivity test (PostgreSQL, Redis, Typesense, Python).
 
-**Never run** `npm run db:migrate` on any shared/production database without an approved migration and rollback plan. D02 domain schema and business policy remain In Review. Node dependency lockfile and `npm ci` still need supply-chain review.
+Tests verify health and that unfinished commerce routes do **not** accidentally become public. Domain decisions remain In Review; automatic seller transfers are explicitly out of scope.
