@@ -9,7 +9,7 @@
     "dev": "nest start --watch",
     "build": "nest build",
     "start": "node dist/main.js",
-    "lint": "eslint 'src/**/*.ts' drizzle.config.ts",
+    "lint": "eslint \"src/**/*.ts\" drizzle.config.ts",
     "test": "node --test tests/*.test.cjs",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
