@@ -23,3 +23,5 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Reject high/critical runtime dependency advisories
         run: npm audit --omit=dev --audit-level=high
+      - name: Reject moderate-or-higher advisories in full dependency tree
+        run: npm audit --audit-level=moderate
