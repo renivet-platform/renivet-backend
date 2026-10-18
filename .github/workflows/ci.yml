@@ -20,6 +20,8 @@ jobs:
       - run: npm run deps:check:syntax
       - run: npm run typecheck
       - run: npm run lint
+      - name: Smoke-test installed Drizzle Kit CLI without DB migration
+        run: npx --no-install drizzle-kit --version
       - run: npm run build
       - run: npm test
   docker:
