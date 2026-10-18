@@ -22,3 +22,37 @@ jobs:
       - run: npm run lint
       - run: npm run build
       - run: npm test
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build production image
+        run: docker build --tag renivet-backend:ci .
+      - name: Start isolated staging container with dummy-only config
+        run: |
+          docker run --detach --name renivet-backend-ci \
+            --publish 127.0.0.1:49000:4000 \
+            --env NODE_ENV=staging \
+            --env HOST=0.0.0.0 \
+            --env DATABASE_URL=postgres://ci:dummy@db.invalid:5432/renivet \
+            --env REDIS_URL=redis://cache.invalid:6379 \
+            --env TYPESENSE_URL=https://search.invalid:8108 \
+            --env TYPESENSE_API_KEY=ci-example-not-a-secret \
+            --env PYTHON_SERVICE_URL=https://ai.invalid:8000 \
+            renivet-backend:ci
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:49000/api/v1/health | grep -q '"status":"ok"'; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs renivet-backend-ci
+          exit 1
+      - name: Verify staging hides Swagger endpoints
+        run: |
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:49000/docs)" = "404"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:49000/docs-json)" = "404"
+      - name: Stop disposable container
+        if: always()
+        run: docker rm --force renivet-backend-ci || true
