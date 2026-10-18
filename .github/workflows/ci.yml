@@ -14,7 +14,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install --no-audit --no-fund
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --no-audit --no-fund
       - run: npm run deps:check:syntax
       - run: npm run typecheck
       - run: npm run lint
