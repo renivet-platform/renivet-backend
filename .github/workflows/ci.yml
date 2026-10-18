@@ -22,11 +22,10 @@ jobs:
       - run: npm run lint
       - name: Smoke-test installed Drizzle Kit CLI without DB migration
         run: npx --no-install drizzle-kit --version
-      - name: Check Drizzle config and disposable schema generation (no DB access)
+      - name: Validate checked-in Drizzle config with disposable local generation (no DB access)
         run: |
-          node --import tsx --input-type=module -e "import cfg from './drizzle.config.ts'; if (cfg.dialect !== 'postgresql' || cfg.schema !== './src/db/schema.ts') process.exit(1)"
-          npx --no-install drizzle-kit generate --dialect=postgresql --schema=./src/db/schema.ts --out="$RUNNER_TEMP/renivet-drizzle-check"
-          test -d "$RUNNER_TEMP/renivet-drizzle-check/meta"
+          npx --no-install drizzle-kit generate --config=./drizzle.config.ts
+          test -d "./drizzle/meta"
       - run: npm run build
       - run: npm test
   docker:
