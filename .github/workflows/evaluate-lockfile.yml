@@ -1,0 +1,26 @@
+name: Refresh NestJS 12 evaluation lockfile
+on:
+  push:
+    branches: [phase0/security-nest12-evaluation]
+permissions:
+  contents: write
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Resolve compatible dependencies
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Commit lockfile updates
+        run: |
+          git add package-lock.json
+          if ! git diff --cached --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "build(backend): lock NestJS 12 evaluation dependencies"
+            git push origin HEAD:phase0/security-nest12-evaluation
+          fi
