@@ -1,0 +1,26 @@
+# Review-branch-only helper to resolve an npm v3 lockfile in a clean Node 22 runner.
+# Delete before merging. It cannot commit, push or modify any persistent environment.
+name: Backend Drizzle lockfile regeneration (temporary)
+on:
+  pull_request:
+    paths:
+      - package.json
+      - .github/workflows/temporary-drizzle-lockfile.yml
+permissions:
+  contents: read
+jobs:
+  lockfile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Resolve npm lockfile without lifecycle scripts or migrations
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Emit lockfile for a reviewed GitHub connector commit
+        run: |
+          echo RENIVET_LOCK_BEGIN
+          sed 's/^/RENIVET_LOCK_LINE:/' package-lock.json
+          echo RENIVET_LOCK_END
