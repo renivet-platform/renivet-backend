@@ -35,6 +35,33 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Build production image
         run: docker build --tag renivet-backend:ci .
+      - name: Reject fixable high/critical container OS and library CVEs
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: 'renivet-backend:ci'
+          version: 'v0.70.0'
+          format: table
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          scanners: vuln
+          exit-code: '1'
+      - name: Create SPDX SBOM for reviewed CI container
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: 'renivet-backend:ci'
+          version: 'v0.70.0'
+          format: spdx-json
+          output: 'container-sbom.spdx.json'
+          scanners: vuln
+          exit-code: '0'
+      - name: Preserve CI container SBOM for release review
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: renivet-backend-container-sbom
+          path: container-sbom.spdx.json
+          retention-days: 7
+          if-no-files-found: error
       - name: Start isolated staging container with dummy-only config
         run: |
           docker run --detach --name renivet-backend-ci \
