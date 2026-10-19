@@ -1,0 +1,15 @@
+name: Repository security policy gates
+on:
+  pull_request:
+  push:
+    branches: [main, phase0/foundation]
+permissions:
+  contents: read
+jobs:
+  repository-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Validate CI/action trust boundaries and Dependabot configuration
+        run: python3 .github/scripts/check_repo_security.py
