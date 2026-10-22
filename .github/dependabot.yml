@@ -1,5 +1,7 @@
-# Staged on phase0/foundation. Dependabot reads the default (main) branch.
-# No automatic merge, local Docker pull or production deployment.
+# Default-branch Dependabot policy. No automatic merge or deployment.
+# W0 compatibility review: backend runs a Node 22 container, NestJS Swagger
+# presently supports TypeScript 5/6, and @types/node must match the selected
+# runtime major. Keep incompatible major upgrades as explicit migration PRs.
 version: 2
 updates:
   - package-ecosystem: "npm"
@@ -7,6 +9,16 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 3
+    ignore:
+      # @nestjs/swagger@12.0.2 currently rejects TypeScript 7 (npm ERESOLVE).
+      # Do not suppress dependency/security audits or force npm peer resolution.
+      - dependency-name: "typescript"
+        update-types:
+          - "version-update:semver-major"
+      # Avoid declaring Node 26 APIs against a Node 22 Docker runtime.
+      - dependency-name: "@types/node"
+        update-types:
+          - "version-update:semver-major"
     groups:
       minor-and-patch:
         applies-to: version-updates
@@ -25,3 +37,10 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 3
+    ignore:
+      # Current Dockerfile and CI are on approved Node 22. The proposed Node 25
+      # runtime is outside package.json engines and had HIGH image CVEs.
+      # Continue receiving patch/minor updates within the chosen image line.
+      - dependency-name: "node"
+        update-types:
+          - "version-update:semver-major"
