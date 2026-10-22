@@ -1,0 +1,91 @@
+name: Backend foundation CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run deps:check:syntax
+      - run: npm run typecheck
+      - run: npm run lint
+      - name: Smoke-test installed Drizzle Kit CLI without DB migration
+        run: npx --no-install drizzle-kit --version
+      - name: Validate checked-in Drizzle config with disposable local generation (no DB access)
+        run: |
+          npx --no-install drizzle-kit generate --config=./drizzle.config.ts
+          test -d "./drizzle/meta"
+      - run: npm run build
+      - run: npm test
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Build production image
+        run: docker build --tag renivet-backend:ci .
+      - name: Reject fixable high/critical container OS and library CVEs
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: 'renivet-backend:ci'
+          version: 'v0.70.0'
+          format: table
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          scanners: vuln
+          exit-code: '1'
+      - name: Create SPDX SBOM for reviewed CI container
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: 'renivet-backend:ci'
+          version: 'v0.70.0'
+          format: spdx-json
+          output: 'container-sbom.spdx.json'
+          scanners: vuln
+          exit-code: '0'
+      - name: Preserve CI container SBOM for release review
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: renivet-backend-container-sbom
+          path: container-sbom.spdx.json
+          retention-days: 7
+          if-no-files-found: error
+      - name: Start isolated staging container with dummy-only config
+        run: |
+          docker run --detach --name renivet-backend-ci \
+            --publish 127.0.0.1:49000:4000 \
+            --env NODE_ENV=staging \
+            --env HOST=0.0.0.0 \
+            --env DATABASE_URL=postgres://ci:dummy@db.invalid:5432/renivet \
+            --env REDIS_URL=redis://cache.invalid:6379 \
+            --env TYPESENSE_URL=https://search.invalid:8108 \
+            --env TYPESENSE_API_KEY=ci-example-not-a-secret \
+            --env PYTHON_SERVICE_URL=https://ai.invalid:8000 \
+            renivet-backend:ci
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:49000/api/v1/health | grep -q '"status":"ok"'; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs renivet-backend-ci
+          exit 1
+      - name: Verify staging hides Swagger endpoints
+        run: |
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:49000/docs)" = "404"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:49000/docs-json)" = "404"
+      - name: Stop disposable container
+        if: always()
+        run: docker rm --force renivet-backend-ci || true
