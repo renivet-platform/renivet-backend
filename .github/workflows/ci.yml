@@ -28,6 +28,37 @@ jobs:
           test -d "./drizzle/meta"
       - run: npm run build
       - run: npm test
+  postgres-integration:
+    name: PostgreSQL 16 disposable integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: renivet_ci
+          POSTGRES_USER: renivet_ci
+          POSTGRES_PASSWORD: ci_disposable_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U renivet_ci -d renivet_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install locked project dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify real PostgreSQL transaction/unique-key/claim semantics
+        env:
+          RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
+        run: node --test tests/postgres-foundation.integration.cjs
   docker:
     runs-on: ubuntu-latest
     timeout-minutes: 20
