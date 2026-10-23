@@ -1,0 +1,56 @@
+name: W0.2 security scanners
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+
+jobs:
+  sast:
+    name: Semgrep Community SAST
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install pinned Semgrep into isolated environment
+        run: |
+          python3 -m venv /tmp/renivet-semgrep
+          /tmp/renivet-semgrep/bin/pip install --disable-pip-version-check semgrep==1.181.0
+      - name: Scan application and automation source with public security-audit rules
+        env:
+          SEMGREP_SEND_METRICS: "off"
+        run: /tmp/renivet-semgrep/bin/semgrep scan --config p/security-audit --metrics=off --disable-version-check --error .
+
+  secrets:
+    name: Gitleaks full Git history
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Scan committed content and history without exposing secret values
+        run: |
+          docker run --rm --network none --user "$(id -u):$(id -g)" \
+            --volume "$PWD:/repo:ro" --workdir /repo \
+            ghcr.io/gitleaks/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
+            git --no-banner --redact=100 --log-opts=--all /repo
+
+  iac:
+    name: Trivy configuration misconfigurations
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Scan Dockerfiles and supported IaC; high and critical block
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: config
+          scan-ref: .
+          version: v0.70.0
+          scanners: misconfig
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          hide-progress: true
