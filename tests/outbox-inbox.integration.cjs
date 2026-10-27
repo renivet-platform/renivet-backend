@@ -100,21 +100,29 @@ test('REN2-29 platform event schema enforces atomicity, inbox dedupe and bounded
 
     const aggregateId = randomUUID();
     const eventKey = `${fixturePrefix}:order-created`;
-    await pool.query('BEGIN');
-    const event = await pool.query(
-      'INSERT INTO system_events (event_name) VALUES ($1) RETURNING id',
-      [`${fixturePrefix}:committed-domain-effect`],
-    );
-    systemEventIds.push(event.rows[0].id);
-    const createdOutboxEvent = await pool.query(
-      `INSERT INTO platform.outbox_events
-         (aggregate_type, aggregate_id, event_type, event_version, event_payload, event_key, occurred_at)
-       VALUES ('test_order', $1, 'test.order.created', 1, $2::jsonb, $3, now())
-       RETURNING id`,
-      [aggregateId, JSON.stringify({ fixture: fixturePrefix, testOnly: true }), eventKey],
-    );
-    outboxIds.push(createdOutboxEvent.rows[0].id);
-    await pool.query('COMMIT');
+    const commitClient = await pool.connect();
+    try {
+      await commitClient.query('BEGIN');
+      const event = await commitClient.query(
+        'INSERT INTO system_events (event_name) VALUES ($1) RETURNING id',
+        [`${fixturePrefix}:committed-domain-effect`],
+      );
+      systemEventIds.push(event.rows[0].id);
+      const createdOutboxEvent = await commitClient.query(
+        `INSERT INTO platform.outbox_events
+           (aggregate_type, aggregate_id, event_type, event_version, event_payload, event_key, occurred_at)
+         VALUES ('test_order', $1, 'test.order.created', 1, $2::jsonb, $3, now())
+         RETURNING id`,
+        [aggregateId, JSON.stringify({ fixture: fixturePrefix, testOnly: true }), eventKey],
+      );
+      outboxIds.push(createdOutboxEvent.rows[0].id);
+      await commitClient.query('COMMIT');
+    } catch (error) {
+      await commitClient.query('ROLLBACK').catch(() => {});
+      throw error;
+    } finally {
+      commitClient.release();
+    }
 
     const committed = await pool.query(
       `SELECT count(*)::integer AS count
@@ -126,6 +134,7 @@ test('REN2-29 platform event schema enforces atomicity, inbox dedupe and bounded
     assert.equal(committed.rows[0].count, 1, 'Domain mutation and outbox event must commit together');
 
     const rollbackClient = await pool.connect();
+    const rollbackEventKey = `${fixturePrefix}:rolled-back-event`;
     try {
       await rollbackClient.query('BEGIN');
       const rolledBackEffect = await rollbackClient.query(
@@ -133,6 +142,14 @@ test('REN2-29 platform event schema enforces atomicity, inbox dedupe and bounded
         [`${fixturePrefix}:rolled-back-domain-effect`],
       );
       systemEventIds.push(rolledBackEffect.rows[0].id);
+      const insertedBeforeFailure = await rollbackClient.query(
+        `INSERT INTO platform.outbox_events
+           (aggregate_type, aggregate_id, event_type, event_version, event_payload, event_key)
+         VALUES ('test_order', $1, 'test.order.rolled_back', 1, '{}'::jsonb, $2)
+         RETURNING id`,
+        [randomUUID(), rollbackEventKey],
+      );
+      outboxIds.push(insertedBeforeFailure.rows[0].id);
       await assert.rejects(
         rollbackClient.query(
           `INSERT INTO platform.outbox_events
@@ -152,6 +169,11 @@ test('REN2-29 platform event schema enforces atomicity, inbox dedupe and bounded
       [`${fixturePrefix}:rolled-back-domain-effect`],
     );
     assert.equal(rolledBack.rows[0].count, 0, 'A rejected outbox insert must leave no domain mutation');
+    const rolledBackOutbox = await pool.query(
+      'SELECT count(*)::integer AS count FROM platform.outbox_events WHERE event_key = $1',
+      [rollbackEventKey],
+    );
+    assert.equal(rolledBackOutbox.rows[0].count, 0, 'A later transaction failure must roll back an earlier outbox insert');
 
     await assert.rejects(
       pool.query(
