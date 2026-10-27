@@ -135,6 +135,8 @@ jobs:
           vuln-type: 'os,library'
           scanners: vuln
           exit-code: '1'
+        env:
+          TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db:2
       - name: Create SPDX SBOM for reviewed CI container
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -144,6 +146,8 @@ jobs:
           output: 'container-sbom.spdx.json'
           scanners: vuln
           exit-code: '0'
+        env:
+          TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db:2
       - name: Preserve CI container SBOM for release review
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
