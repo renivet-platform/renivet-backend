@@ -8,6 +8,7 @@ test('development defaults bind to loopback without requiring service credential
   assert.equal(config.PORT, 4000);
   assert.equal(config.HOST, '127.0.0.1');
   assert.equal(config.DATABASE_URL, undefined);
+  assert.equal(validateEnvironment({ AUTH_RATE_LIMIT_HMAC_KEY: 'local-only-set-a-random-32-byte-value' }).AUTH_RATE_LIMIT_HMAC_KEY, 'local-only-set-a-random-32-byte-value');
 });
 
 test('reject invalid NODE_ENV, ports, hosts and URLs with field-only errors', () => {
@@ -39,6 +40,7 @@ test('staging and production refuse known local credentials', () => {
     TYPESENSE_URL: 'https://search.internal:8108',
     PYTHON_SERVICE_URL: 'https://ai.internal:8000',
     TYPESENSE_API_KEY: 'real-deployment-key',
+    AUTH_RATE_LIMIT_HMAC_KEY: 'synthetic-not-a-real-deployment-key-0000000000000000',
   };
   assert.throws(() => validateEnvironment(environment), /DATABASE_URL/);
   environment.DATABASE_URL = 'postgres://app:different-password@db.internal:5432/renivet';
@@ -46,6 +48,29 @@ test('staging and production refuse known local credentials', () => {
   assert.throws(() => validateEnvironment(environment), /TYPESENSE_API_KEY/);
   environment.TYPESENSE_API_KEY = 'real-deployment-key';
   assert.equal(validateEnvironment(environment).PORT, 4000);
+});
+
+test('protected environments require a private rate-limit HMAC key and bounded auth limits', () => {
+  const environment = {
+    NODE_ENV: 'staging',
+    DATABASE_URL: 'postgres://app:deployment-only@db.internal:5432/renivet',
+    REDIS_URL: 'redis://cache.internal:6379',
+    TYPESENSE_URL: 'https://search.internal:8108',
+    TYPESENSE_API_KEY: 'deployment-only-typesense-key',
+    PYTHON_SERVICE_URL: 'https://ai.internal:8000',
+  };
+  assert.throws(() => validateEnvironment(environment), /AUTH_RATE_LIMIT_HMAC_KEY/);
+  environment.AUTH_RATE_LIMIT_HMAC_KEY = 'short';
+  assert.throws(() => validateEnvironment(environment), /AUTH_RATE_LIMIT_HMAC_KEY/);
+  environment.AUTH_RATE_LIMIT_HMAC_KEY = 'local-only-set-a-random-32-byte-value';
+  assert.throws(() => validateEnvironment(environment), /AUTH_RATE_LIMIT_HMAC_KEY/);
+  environment.AUTH_RATE_LIMIT_HMAC_KEY = 'synthetic-not-a-real-deployment-key-0000000000000000';
+  environment.AUTH_LOGIN_ACCOUNT_LIMIT = '0';
+  assert.throws(() => validateEnvironment(environment), /AUTH_LOGIN_ACCOUNT_LIMIT/);
+  environment.AUTH_LOGIN_ACCOUNT_LIMIT = '5';
+  const config = validateEnvironment(environment);
+  assert.equal(config.AUTH_RATE_LIMIT_WINDOW_SECONDS, 900);
+  assert.equal(config.AUTH_LOGIN_ACCOUNT_LIMIT, 5);
 });
 
 test('invalid URL errors never print supplied credential values', () => {
