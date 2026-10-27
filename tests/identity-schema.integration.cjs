@@ -71,6 +71,37 @@ test('REN2-20 identity schema enforces canonical ownership, foreign keys and has
       );
     }
 
+    const indexes = await pool.query(`
+      SELECT indexname, indexdef
+      FROM pg_indexes
+      WHERE schemaname = 'identity' AND indexname LIKE 'identity_%'
+      ORDER BY indexname
+    `);
+    const expectedIndexDefinitions = {
+      identity_auth_challenges_expires_idx: /USING btree \(expires_at\)$/i,
+      identity_auth_challenges_user_created_idx: /USING btree \(user_id, created_at\)$/i,
+      identity_user_credentials_one_active_per_user_uq: /CREATE UNIQUE INDEX .*USING btree \(user_id\) WHERE \(disabled_at IS NULL\)$/i,
+      identity_user_credentials_user_version_uq: /CREATE UNIQUE INDEX .*USING btree \(user_id, credential_version\)$/i,
+      identity_user_sessions_expires_idx: /USING btree \(expires_at\)$/i,
+      identity_user_sessions_token_hash_uq: /CREATE UNIQUE INDEX .*USING btree \(token_hash\)$/i,
+      identity_user_sessions_user_created_idx: /USING btree \(user_id, created_at\)$/i,
+      identity_users_email_normalized_uq: /CREATE UNIQUE INDEX .*USING btree \(lower\(btrim\(email\)\)\)$/i,
+      identity_users_phone_e164_uq: /CREATE UNIQUE INDEX .*USING btree \(phone\)$/i,
+    };
+    assert.deepEqual(
+      indexes.rows.map((row) => row.indexname),
+      Object.keys(expectedIndexDefinitions).sort(),
+      'REN2-20 must create exactly the reviewed identity indexes',
+    );
+    const indexDefinitions = new Map(indexes.rows.map((row) => [row.indexname, row.indexdef]));
+    for (const [indexName, expectedDefinition] of Object.entries(expectedIndexDefinitions)) {
+      assert.match(
+        indexDefinitions.get(indexName),
+        expectedDefinition,
+        `${indexName} must keep its reviewed uniqueness and indexed columns`,
+      );
+    }
+
     const createUser = async ({ email, phone, state = 'pending_verification', emailVerifiedAt, phoneVerifiedAt }) => {
       const result = await pool.query(
         `INSERT INTO identity.users (email, phone, state, email_verified_at, phone_verified_at)

@@ -71,6 +71,23 @@ jobs:
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
         run: node --test tests/postgres-foundation.integration.cjs
+      - name: Rebuild disposable PostgreSQL 16 from a recovery snapshot
+        env:
+          RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
+          RENIVET_ALLOW_DISPOSABLE_DATABASE_REBUILD: '1'
+        run: node --test tests/identity-schema.recovery.integration.cjs
+      - name: Verify migration replay after PostgreSQL recovery
+        env:
+          DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
+        run: npx --no-install drizzle-kit migrate --config=./drizzle.config.ts
+      - name: Re-verify identity indexes and constraints after recovery
+        env:
+          RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
+        run: node --test tests/identity-schema.integration.cjs
+      - name: Re-verify PostgreSQL transaction/unique-key/claim semantics after recovery
+        env:
+          RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
+        run: node --test tests/postgres-foundation.integration.cjs
   docker:
     runs-on: ubuntu-latest
     timeout-minutes: 20
