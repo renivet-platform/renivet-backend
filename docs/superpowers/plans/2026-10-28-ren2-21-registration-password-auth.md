@@ -73,5 +73,5 @@
 ### Task 6: Full verification and handoff
 
 - [x] Run typecheck, lint, build, unit/API tests, PostgreSQL/Redis integration, OpenAPI drift, generated-client drift, Postman CLI, npm audit, and repository security-policy checks.
-- [ ] Finish diff review and prepare a **Draft** feature PR without merging.
+- [x] Finish diff review and prepare Draft PR #22 without merging.
 - [ ] Obtain owner D04 route/DTO signoff for the proposed contract before a merge or Linear Done transition.
