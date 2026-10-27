@@ -8,6 +8,13 @@
       "when": 1793116335261,
       "tag": "0000_ren2_20_identity_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793119889422,
+      "tag": "0001_ren2_29_outbox_inbox_schema",
+      "breakpoints": true
     }
   ]
 }

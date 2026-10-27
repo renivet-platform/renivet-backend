@@ -71,6 +71,10 @@ jobs:
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
         run: node --test tests/postgres-foundation.integration.cjs
+      - name: Verify REN2-29 outbox, inbox, receipt and job constraints
+        env:
+          RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
+        run: node --test tests/outbox-inbox.integration.cjs
       - name: Rebuild disposable PostgreSQL 16 from a recovery snapshot
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
@@ -88,6 +92,10 @@ jobs:
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
         run: node --test tests/postgres-foundation.integration.cjs
+      - name: Re-verify REN2-29 constraints after recovery
+        env:
+          RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
+        run: node --test tests/outbox-inbox.integration.cjs
   docker:
     runs-on: ubuntu-latest
     timeout-minutes: 20

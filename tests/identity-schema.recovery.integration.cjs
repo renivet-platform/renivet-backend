@@ -26,13 +26,14 @@ function requireDisposablePostgresUrl() {
   return { connection, adminConnection: address.toString() };
 }
 
-test('REN2-20 disposable PostgreSQL snapshot recovery preserves the migrated schema and data', { timeout: 30000 }, async () => {
+test('W1 disposable PostgreSQL snapshot recovery preserves the migrated schema and data', { timeout: 30000 }, async () => {
   const { connection, adminConnection } = requireDisposablePostgresUrl();
   const admin = new Pool({ connectionString: adminConnection, max: 1, connectionTimeoutMillis: 5000 });
   let snapshotCreated = false;
   let targetDropped = false;
   let targetRestored = false;
   let fixtureEmail;
+  let fixtureOutboxId;
 
   try {
     const server = await admin.query(`
@@ -60,6 +61,14 @@ test('REN2-20 disposable PostgreSQL snapshot recovery preserves the migrated sch
         `INSERT INTO identity.users (email, state) VALUES ($1, 'recovery_probe')`,
         [fixtureEmail],
       );
+      const event = await fixture.query(
+        `INSERT INTO platform.outbox_events
+           (aggregate_type, aggregate_id, event_type, event_version, event_payload, event_key)
+         VALUES ('recovery_probe', gen_random_uuid(), 'recovery.probe', 1, '{"synthetic":true}'::jsonb, $1)
+         RETURNING id`,
+        [`recovery-${randomUUID()}`],
+      );
+      fixtureOutboxId = event.rows[0].id;
     } finally {
       await fixture.end();
     }
@@ -75,10 +84,17 @@ test('REN2-20 disposable PostgreSQL snapshot recovery preserves the migrated sch
     try {
       const user = await restored.query('SELECT email, state FROM identity.users WHERE email = $1', [fixtureEmail]);
       assert.deepEqual(user.rows, [{ email: fixtureEmail, state: 'recovery_probe' }]);
+      const outbox = await restored.query(
+        `SELECT event_type, event_version, event_payload
+         FROM platform.outbox_events WHERE id = $1`,
+        [fixtureOutboxId],
+      );
+      assert.deepEqual(outbox.rows, [{ event_type: 'recovery.probe', event_version: 1, event_payload: { synthetic: true } }]);
       const objects = await restored.query(`
         SELECT table_schema, table_name
         FROM information_schema.tables
         WHERE (table_schema = 'identity' AND table_type = 'BASE TABLE')
+           OR (table_schema = 'platform' AND table_type = 'BASE TABLE')
            OR (table_schema = 'public' AND table_name = 'system_events')
         ORDER BY table_schema, table_name
       `);
@@ -87,6 +103,11 @@ test('REN2-20 disposable PostgreSQL snapshot recovery preserves the migrated sch
         { table_schema: 'identity', table_name: 'user_credentials' },
         { table_schema: 'identity', table_name: 'user_sessions' },
         { table_schema: 'identity', table_name: 'users' },
+        { table_schema: 'platform', table_name: 'dead_letter_cases' },
+        { table_schema: 'platform', table_name: 'durable_jobs' },
+        { table_schema: 'platform', table_name: 'inbox_receipts' },
+        { table_schema: 'platform', table_name: 'outbox_events' },
+        { table_schema: 'platform', table_name: 'webhook_inbox' },
         { table_schema: 'public', table_name: 'system_events' },
       ]);
     } finally {
@@ -104,6 +125,7 @@ test('REN2-20 disposable PostgreSQL snapshot recovery preserves the migrated sch
     }
     if ((!targetDropped || targetRestored) && fixtureEmail) {
       const cleanup = new Pool({ connectionString: connection, max: 1, connectionTimeoutMillis: 5000 });
+      if (fixtureOutboxId) await cleanup.query('DELETE FROM platform.outbox_events WHERE id = $1', [fixtureOutboxId]).catch(() => {});
       await cleanup.query('DELETE FROM identity.users WHERE email = $1', [fixtureEmail]).catch(() => {});
       await cleanup.end();
     }
