@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { AuthRateLimiter, AuthRateLimitExceededError, AuthRateLimitUnavailableError } = require('../dist/modules/identity/rate-limiter');
+const { AuthLockContentionError } = require('../dist/modules/identity/rate-limiter');
 
 test('rate-limit Redis keys conceal account and IP identifiers', async () => {
   const calls = [];
@@ -56,4 +57,27 @@ test('concurrent first requests share one lazy Redis connection', async () => {
   ]);
   assert.equal(connections, 1);
   assert.equal(calls, 2);
+});
+
+test('distributed lock is acquired with a hashed identity and released after success or failure', async () => {
+  const calls = [];
+  const limiter = new AuthRateLimiter({ eval: async (...args) => { calls.push(args); return 1; } }, 'synthetic-rate-limit-key-for-tests-only');
+  assert.equal(await limiter.withLock('challenge-issue', 'buyer@example.test', 5000, async () => 'done'), 'done');
+  assert.equal(calls.length, 2);
+  assert.match(calls[0][2], /^renivet:auth:lock:v1:challenge-issue:[a-f0-9]{64}$/);
+  assert.equal(JSON.stringify(calls).includes('buyer@example.test'), false);
+  await assert.rejects(limiter.withLock('challenge-issue', 'buyer@example.test', 5000, async () => { throw new Error('task failed'); }), /task failed/);
+  assert.equal(calls.length, 4);
+});
+
+test('distributed lock contention rejects without running the task', async () => {
+  let ran = false;
+  const limiter = new AuthRateLimiter({ eval: async () => 0 }, 'synthetic-rate-limit-key-for-tests-only');
+  await assert.rejects(limiter.withLock('verify', 'challenge-id', 1000, async () => { ran = true; }), AuthLockContentionError);
+  assert.equal(ran, false);
+});
+
+test('distributed lock fails closed if Redis is unavailable', async () => {
+  const limiter = new AuthRateLimiter({ eval: async () => { throw new Error('secret redis failure'); } }, 'synthetic-rate-limit-key-for-tests-only');
+  await assert.rejects(limiter.withLock('verify', 'challenge-id', 1000, async () => 'no'), AuthRateLimitUnavailableError);
 });

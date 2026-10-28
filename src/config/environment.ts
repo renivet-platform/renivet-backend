@@ -81,6 +81,7 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
   const python = parseUrl(input, 'PYTHON_SERVICE_URL', ['http:', 'https:'], protectedEnvironment);
   const searchKey = optionalString(input, 'TYPESENSE_API_KEY');
   const authRateLimitKey = optionalString(input, 'AUTH_RATE_LIMIT_HMAC_KEY');
+  const authChallengeKey = optionalString(input, 'AUTH_CHALLENGE_HMAC_KEY');
   if (authRateLimitKey && authRateLimitKey.length < 32) {
     error('AUTH_RATE_LIMIT_HMAC_KEY', 'must contain at least 32 characters');
   }
@@ -89,6 +90,15 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
   }
   if (protectedEnvironment && !authRateLimitKey) {
     error('AUTH_RATE_LIMIT_HMAC_KEY', 'is required in staging and production');
+  }
+  if (authChallengeKey && authChallengeKey.length < 32) {
+    error('AUTH_CHALLENGE_HMAC_KEY', 'must contain at least 32 characters');
+  }
+  if (protectedEnvironment && authChallengeKey === 'local-only-set-a-random-32-byte-value') {
+    error('AUTH_CHALLENGE_HMAC_KEY', 'must not use the local example value');
+  }
+  if (protectedEnvironment && !authChallengeKey) {
+    error('AUTH_CHALLENGE_HMAC_KEY', 'is required in staging and production');
   }
   if (protectedEnvironment) {
     if (!searchKey) error('TYPESENSE_API_KEY', 'is required in staging and production');
@@ -111,11 +121,20 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
     PYTHON_SERVICE_URL: python,
     TYPESENSE_API_KEY: searchKey,
     AUTH_RATE_LIMIT_HMAC_KEY: authRateLimitKey,
+    AUTH_CHALLENGE_HMAC_KEY: authChallengeKey,
     AUTH_RATE_LIMIT_WINDOW_SECONDS: positiveInteger(input, 'AUTH_RATE_LIMIT_WINDOW_SECONDS', 900, 86_400),
     AUTH_REGISTER_ACCOUNT_LIMIT: positiveInteger(input, 'AUTH_REGISTER_ACCOUNT_LIMIT', 5, 10_000),
     AUTH_REGISTER_IP_LIMIT: positiveInteger(input, 'AUTH_REGISTER_IP_LIMIT', 30, 100_000),
     AUTH_LOGIN_ACCOUNT_LIMIT: positiveInteger(input, 'AUTH_LOGIN_ACCOUNT_LIMIT', 5, 10_000),
     AUTH_LOGIN_IP_LIMIT: positiveInteger(input, 'AUTH_LOGIN_IP_LIMIT', 60, 100_000),
     AUTH_SESSION_TTL_SECONDS: positiveInteger(input, 'AUTH_SESSION_TTL_SECONDS', 1_800, 604_800),
+    AUTH_CHALLENGE_TTL_SECONDS: positiveInteger(input, 'AUTH_CHALLENGE_TTL_SECONDS', 300, 3_600),
+    AUTH_CHALLENGE_MAX_ATTEMPTS: positiveInteger(input, 'AUTH_CHALLENGE_MAX_ATTEMPTS', 5, 20),
+    AUTH_CHALLENGE_RESEND_COOLDOWN_SECONDS: positiveInteger(input, 'AUTH_CHALLENGE_RESEND_COOLDOWN_SECONDS', 60, 3_600),
+    AUTH_CHALLENGE_RESEND_WINDOW_SECONDS: positiveInteger(input, 'AUTH_CHALLENGE_RESEND_WINDOW_SECONDS', 900, 86_400),
+    AUTH_CHALLENGE_RESEND_MAX: positiveInteger(input, 'AUTH_CHALLENGE_RESEND_MAX', 3, 20),
+    AUTH_CHALLENGE_IP_LIMIT: positiveInteger(input, 'AUTH_CHALLENGE_IP_LIMIT', 30, 100_000),
+    AUTH_CHALLENGE_IDENTITY_LIMIT: positiveInteger(input, 'AUTH_CHALLENGE_IDENTITY_LIMIT', 5, 10_000),
+    AUTH_CHALLENGE_VERIFY_IP_LIMIT: positiveInteger(input, 'AUTH_CHALLENGE_VERIFY_IP_LIMIT', 60, 100_000),
   };
 }

@@ -205,6 +205,174 @@
           "Auth"
         ]
       }
+    },
+    "/api/v1/auth/challenges": {
+      "post": {
+        "description": "Public operation with no authentication or permission requirement. Creates a short-lived one-use challenge only for an unverified registered contact. Unknown contacts and transient delivery failures after challenge invalidation receive the same neutral accepted response. Delivery is unavailable by default until a provider has separately passed owner review. Linear: REN2-22; route and DTO remain a proposed D04 contract pending owner approval.",
+        "operationId": "createOtpChallenge",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OtpIssueRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Neutral accepted result; does not reveal contact registration or delivery state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OtpAcceptedDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "AUTH_INPUT_INVALID. Invalid channel/purpose pair or malformed destination.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "AUTH_RATE_LIMITED. Per-IP, identity, purpose, cooldown, or resend limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorDto"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "AUTH_INTERNAL_ERROR. Unexpected failure with a safe response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AUTH_SERVICE_UNAVAILABLE. Redis, PostgreSQL, OTP proof configuration, or delivery provider is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Request an email or phone verification challenge",
+        "tags": [
+          "Otp"
+        ]
+      }
+    },
+    "/api/v1/auth/challenges/{challengeId}/verify": {
+      "post": {
+        "description": "Public operation with no authentication or permission requirement. A successful proof marks only the bound contact as verified; every invalid, expired, wrong-purpose, exhausted, or replayed proof shares one generic denial. No session is issued. Linear: REN2-22; route and DTO remain a proposed D04 contract pending owner approval.",
+        "operationId": "verifyOtpChallenge",
+        "parameters": [
+          {
+            "name": "challengeId",
+            "required": true,
+            "in": "path",
+            "description": "Opaque UUID returned by the challenge request operation.",
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "example": "37a7d0bf-8414-4f75-bd11-311c7a442d84"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OtpVerifyRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The challenge is consumed and its bound contact is verified.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OtpVerifiedDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "AUTH_INPUT_INVALID. Malformed request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "AUTHENTICATION_FAILED. Generic challenge denial.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorDto"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "AUTH_RATE_LIMITED. Per-IP or concurrent challenge limit exceeded.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorDto"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "AUTH_INTERNAL_ERROR. Unexpected failure with a safe response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AUTH_SERVICE_UNAVAILABLE. Redis, PostgreSQL, or OTP proof configuration is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Verify and consume a one-use email or phone challenge",
+        "tags": [
+          "Otp"
+        ]
+      }
     }
   },
   "info": {
@@ -342,6 +510,97 @@
         "required": [
           "authenticationState",
           "user"
+        ]
+      },
+      "OtpIssueRequestDto": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "enum": [
+              "email",
+              "phone"
+            ],
+            "example": "email"
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "email_verification",
+              "phone_verification"
+            ],
+            "example": "email_verification"
+          },
+          "destination": {
+            "type": "string",
+            "example": "buyer@example.test",
+            "description": "Email address or E.164 phone number. The requested channel and purpose must match."
+          }
+        },
+        "required": [
+          "channel",
+          "purpose",
+          "destination"
+        ]
+      },
+      "OtpAcceptedDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "accepted"
+            ],
+            "example": "accepted"
+          },
+          "challengeId": {
+            "type": "string",
+            "format": "uuid",
+            "example": "37a7d0bf-8414-4f75-bd11-311c7a442d84",
+            "description": "Opaque challenge reference; unknown contacts receive an unusable synthetic reference to keep results enumeration-neutral."
+          }
+        },
+        "required": [
+          "status",
+          "challengeId"
+        ]
+      },
+      "OtpVerifyRequestDto": {
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "email_verification",
+              "phone_verification"
+            ],
+            "example": "email_verification"
+          },
+          "code": {
+            "type": "string",
+            "pattern": "^[0-9]{6}$",
+            "example": "123456",
+            "description": "Six-digit synthetic example. Real codes are delivered out of band."
+          }
+        },
+        "required": [
+          "purpose",
+          "code"
+        ]
+      },
+      "OtpVerifiedDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "verified"
+            ],
+            "example": "verified"
+          }
+        },
+        "required": [
+          "status"
         ]
       }
     }

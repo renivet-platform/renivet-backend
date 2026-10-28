@@ -6,12 +6,16 @@ import { AuthRateLimiter, RedisEvalClient } from './rate-limiter';
 import { IdentityInfrastructure } from './identity-infrastructure';
 import { IdentityRepository } from './identity.repository';
 import { PasswordHashService } from './passwords';
+import { OtpController } from './otp.controller';
+import { OtpChallengeService } from './otp-challenge.service';
+import { OTP_DELIVERY, UnavailableOtpDelivery } from './otp-delivery';
 
 @Module({
-  controllers: [AuthController],
+  controllers: [AuthController, OtpController],
   providers: [
     IdentityInfrastructure,
     IdentityRepository,
+    { provide: OTP_DELIVERY, useClass: UnavailableOtpDelivery },
     PasswordHashService,
     {
       provide: AuthRateLimiter,
@@ -39,6 +43,22 @@ import { PasswordHashService } from './passwords';
         sessionTtlSeconds: configuration.get<number>('AUTH_SESSION_TTL_SECONDS') ?? 1_800,
       }),
       inject: [IdentityRepository, PasswordHashService, AuthRateLimiter, ConfigService],
+    },
+    {
+      provide: OtpChallengeService,
+      useFactory: (repository: IdentityRepository, limiter: AuthRateLimiter, delivery: UnavailableOtpDelivery, configuration: ConfigService) =>
+        new OtpChallengeService(repository, limiter, delivery, {
+          hmacKey: configuration.get<string>('AUTH_CHALLENGE_HMAC_KEY'),
+          ttlSeconds: configuration.get<number>('AUTH_CHALLENGE_TTL_SECONDS') ?? 300,
+          maxAttempts: configuration.get<number>('AUTH_CHALLENGE_MAX_ATTEMPTS') ?? 5,
+          resendCooldownSeconds: configuration.get<number>('AUTH_CHALLENGE_RESEND_COOLDOWN_SECONDS') ?? 60,
+          resendWindowSeconds: configuration.get<number>('AUTH_CHALLENGE_RESEND_WINDOW_SECONDS') ?? 900,
+          resendMax: configuration.get<number>('AUTH_CHALLENGE_RESEND_MAX') ?? 3,
+          issueIpLimit: configuration.get<number>('AUTH_CHALLENGE_IP_LIMIT') ?? 30,
+          identityLimit: configuration.get<number>('AUTH_CHALLENGE_IDENTITY_LIMIT') ?? 5,
+          verifyIpLimit: configuration.get<number>('AUTH_CHALLENGE_VERIFY_IP_LIMIT') ?? 60,
+        }),
+      inject: [IdentityRepository, AuthRateLimiter, OTP_DELIVERY, ConfigService],
     },
   ],
 })

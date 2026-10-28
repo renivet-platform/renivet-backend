@@ -1,0 +1,23 @@
+'use strict';
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const contract = require('../openapi/renivet.openapi.json');
+
+test('REN2-22 OpenAPI exposes only the implemented issue and verify contracts', () => {
+  const issuePath = contract.paths['/api/v1/auth/challenges']?.post;
+  const verifyPath = contract.paths['/api/v1/auth/challenges/{challengeId}/verify']?.post;
+  assert.ok(issuePath);
+  assert.ok(verifyPath);
+  assert.equal(issuePath.operationId, 'createOtpChallenge');
+  assert.equal(verifyPath.operationId, 'verifyOtpChallenge');
+  assert.match(issuePath.description, /REN2-22/);
+  assert.match(verifyPath.description, /REN2-22/);
+  assert.match(issuePath.description, /no authentication or permission/);
+  assert.match(verifyPath.description, /No session is issued/);
+  for (const status of ['202', '400', '429', '500', '503']) assert.ok(issuePath.responses[status], `issue response ${status} is documented`);
+  for (const status of ['200', '400', '401', '429', '500', '503']) assert.ok(verifyPath.responses[status], `verify response ${status} is documented`);
+  assert.deepEqual(verifyPath.parameters.find((parameter) => parameter.name === 'challengeId')?.schema, {
+    type: 'string', format: 'uuid', example: '37a7d0bf-8414-4f75-bd11-311c7a442d84',
+  });
+});
