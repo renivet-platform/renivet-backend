@@ -156,7 +156,7 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
       if (!current.rowCount) { await client.query('ROLLBACK'); return false; }
       await client.query(
         `UPDATE identity.auth_challenges
-            SET consumed_at = now(), updated_at = now(), row_version = row_version + 1
+            SET consumed_at = clock_timestamp(), updated_at = clock_timestamp(), row_version = row_version + 1
           WHERE user_id = $1 AND kind = $2 AND consumed_at IS NULL AND expires_at > now()`,
         [input.userId, input.kind],
       );
@@ -176,7 +176,7 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
   async invalidate(id: string): Promise<void> {
     await this.requirePool().query(
       `UPDATE identity.auth_challenges
-          SET consumed_at = now(), updated_at = now(), row_version = row_version + 1
+          SET consumed_at = clock_timestamp(), updated_at = clock_timestamp(), row_version = row_version + 1
         WHERE id = $1 AND consumed_at IS NULL`,
       [id],
     );
@@ -227,8 +227,8 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
         await client.query(
           `UPDATE identity.auth_challenges
               SET attempt_count = $2,
-                  consumed_at = CASE WHEN $2 >= $3 THEN now() ELSE consumed_at END,
-                  updated_at = now(), row_version = row_version + 1
+                  consumed_at = CASE WHEN $2 >= $3 THEN clock_timestamp() ELSE consumed_at END,
+                  updated_at = clock_timestamp(), row_version = row_version + 1
             WHERE id = $1`,
           [input.id, attempts, input.maxAttempts],
         );
@@ -239,13 +239,13 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
         `UPDATE identity.users
             SET ${verifiedColumn} = now(),
                 state = CASE WHEN $2 = 'email' AND state = 'pending_verification' THEN 'active' ELSE state END,
-                updated_at = now(), row_version = row_version + 1
+                updated_at = clock_timestamp(), row_version = row_version + 1
           WHERE id = $1`,
         [challenge.user_id, channel],
       );
       await client.query(
         `UPDATE identity.auth_challenges
-            SET consumed_at = now(), updated_at = now(), row_version = row_version + 1
+            SET consumed_at = clock_timestamp(), updated_at = clock_timestamp(), row_version = row_version + 1
           WHERE id = $1 AND consumed_at IS NULL`,
         [input.id],
       );
