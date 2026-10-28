@@ -197,8 +197,10 @@ test('REN2-22 purpose-bound OTP challenge HTTP and PostgreSQL acceptance', { ski
     assert.equal(attempts.rows[0].attempt_count, 5);
     assert.ok(attempts.rows[0].consumed_at);
 
+    challengeService.options.ttlSeconds = 2;
     const expiredId = await issue(emails[3]);
-    await pool.query('UPDATE identity.auth_challenges SET expires_at=now()-interval \'1 second\' WHERE id=$1', [expiredId]);
+    challengeService.options.ttlSeconds = 300;
+    await new Promise((resolve) => setTimeout(resolve, 2_100));
     assert.equal((await verify(expiredId)).status, 401);
 
     const changedId = await issue(emails[4]);
