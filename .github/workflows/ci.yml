@@ -27,6 +27,8 @@ jobs:
           npx --no-install drizzle-kit generate --config=./drizzle.config.ts
           test -d "./drizzle/meta"
       - run: npm run build
+      - name: Check generated OpenAPI, TypeScript client, and Postman contract artifacts
+        run: npm run api:check
       - run: npm test
   postgres-integration:
     name: PostgreSQL 16 disposable integration
@@ -43,6 +45,15 @@ jobs:
           - 5432:5432
         options: >-
           --health-cmd "pg_isready -U renivet_ci -d renivet_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 15
@@ -75,6 +86,16 @@ jobs:
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
         run: node --test tests/outbox-inbox.integration.cjs
+      - name: Verify REN2-21 registration, password login, and Postman examples
+        env:
+          RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
+          RENIVET_TEST_REDIS_URL: redis://127.0.0.1:6379/15
+          RENIVET_TEST_SERVICES_DISPOSABLE: '1'
+        run: |
+          npm run build
+          npm install --global postman-cli@1.80.0 --no-audit --no-fund
+          postman --version
+          node --test tests/auth-api.integration.test.cjs
       - name: Rebuild disposable PostgreSQL 16 from a recovery snapshot
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
@@ -114,6 +135,8 @@ jobs:
           vuln-type: 'os,library'
           scanners: vuln
           exit-code: '1'
+        env:
+          TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db:2
       - name: Create SPDX SBOM for reviewed CI container
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -123,6 +146,8 @@ jobs:
           output: 'container-sbom.spdx.json'
           scanners: vuln
           exit-code: '0'
+        env:
+          TRIVY_DB_REPOSITORY: ghcr.io/aquasecurity/trivy-db:2
       - name: Preserve CI container SBOM for release review
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -138,6 +163,7 @@ jobs:
             --env HOST=0.0.0.0 \
             --env DATABASE_URL=postgres://ci:dummy@db.invalid:5432/renivet \
             --env REDIS_URL=redis://cache.invalid:6379 \
+            --env AUTH_RATE_LIMIT_HMAC_KEY=ci-only-dummy-auth-rate-limit-hmac-key-not-a-secret \
             --env TYPESENSE_URL=https://search.invalid:8108 \
             --env TYPESENSE_API_KEY=ci-example-not-a-secret \
             --env PYTHON_SERVICE_URL=https://ai.invalid:8000 \

@@ -1,0 +1,96 @@
+{
+  "info": {
+    "_postman_id": "4f1980e8-d7f5-44ea-9433-7b88144e153a",
+    "name": "Renivet Backend — Identity and Authentication (REN2-21)",
+    "description": "Version-controlled functional documentation for implemented REN2-21 routes. NestJS-generated OpenAPI is the contract source of truth. Requests use synthetic variables; no cloud sync is performed. Linear issue: REN2-21 — Registration and Password Authentication.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "apiBaseUrl", "value": "http://127.0.0.1:4000/api/v1", "type": "string" },
+    { "key": "syntheticEmail", "value": "{{syntheticEmail}}", "type": "string" },
+    { "key": "syntheticPassword", "value": "{{syntheticPassword}}", "type": "string" },
+    { "key": "verifiedEmail", "value": "{{verifiedEmail}}", "type": "string" },
+    { "key": "verifiedPassword", "value": "{{verifiedPassword}}", "type": "string" },
+    { "key": "wrongPassword", "value": "{{wrongPassword}}", "type": "string" },
+    { "key": "unknownEmail", "value": "{{unknownEmail}}", "type": "string" },
+    { "key": "unknownFailure", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "01 — Identity & Authentication",
+      "description": "Public registration and password-session operations. No authentication is required to call these endpoints. Session cookie is HttpOnly, Secure, SameSite=Lax, host-only, and Path=/.",
+      "item": [
+        {
+          "name": "Begin email registration (new synthetic identity)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{syntheticEmail}}\",\n  \"password\": \"{{syntheticPassword}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{apiBaseUrl}}/auth/register",
+            "description": "Purpose: create a pending-verification account. Duplicate canonical emails receive the same neutral result and are not overwritten. Linear: REN2-21. Parameters: none. Body: email (valid address), password (15–128 characters). Authentication/permissions: public; none. Responses: 202 accepted; 400 AUTH_INPUT_INVALID; 429 AUTH_RATE_LIMITED; 503 AUTH_SERVICE_UNAVAILABLE; 500 AUTH_INTERNAL_ERROR. Synthetic example only."
+          },
+          "response": [{ "name": "Accepted", "originalRequest": { "method": "POST", "url": "{{apiBaseUrl}}/auth/register" }, "status": "Accepted", "code": 202, "header": [{ "key": "Content-Type", "value": "application/json; charset=utf-8" }], "body": "{\n  \"status\": \"accepted\"\n}" }],
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('new registration returns a neutral 202', function () { pm.response.to.have.status(202); });", "pm.test('registration body does not reveal account state', function () { pm.expect(pm.response.json()).to.eql({ status: 'accepted' }); });"] } }]
+        },
+        {
+          "name": "Repeat registration (duplicate stays neutral)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{syntheticEmail}}\",\n  \"password\": \"{{syntheticPassword}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{apiBaseUrl}}/auth/register",
+            "description": "Purpose: verify duplicate-registration enumeration resistance. Linear: REN2-21. Parameters: none. Body: same synthetic email/password as registration example. Authentication/permissions: public; none. Responses: same 202 accepted body as first registration; validation/rate-limit/service errors use documented error envelopes."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('duplicate registration remains neutral', function () { pm.response.to.have.status(202); pm.expect(pm.response.json()).to.eql({ status: 'accepted' }); });"] } }]
+        },
+        {
+          "name": "Reject invalid passphrase length",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"invalid-length@example.test\",\n  \"password\": \"too-short\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{apiBaseUrl}}/auth/register",
+            "description": "Negative validation example. Linear: REN2-21. Invalid body is synthetic. Expected 400 AUTH_INPUT_INVALID."
+          },
+          "response": [{ "name": "Invalid input", "originalRequest": { "method": "POST", "url": "{{apiBaseUrl}}/auth/register" }, "status": "Bad Request", "code": 400, "header": [{ "key": "Content-Type", "value": "application/json; charset=utf-8" }], "body": "{\n  \"code\": \"AUTH_INPUT_INVALID\",\n  \"message\": \"The request could not be processed.\",\n  \"requestId\": \"req-1\"\n}" }],
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('invalid passphrase returns a safe 400 envelope', function () { pm.response.to.have.status(400); pm.expect(pm.response.json().code).to.eql('AUTH_INPUT_INVALID'); pm.expect(pm.response.text()).not.to.include('too-short'); });"] } }]
+        },
+        {
+          "name": "Password login — unknown synthetic identity",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{unknownEmail}}\",\n  \"password\": \"{{verifiedPassword}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{apiBaseUrl}}/auth/sessions",
+            "description": "Purpose: deny an unknown account without revealing existence. Linear: REN2-21. Parameters: none. Body: synthetic email/password. Authentication/permissions: public. Responses: 200 with authenticated user and Set-Cookie; 400 AUTH_INPUT_INVALID; 401 AUTHENTICATION_FAILED; 429 AUTH_RATE_LIMITED; 503 AUTH_SERVICE_UNAVAILABLE; 500 AUTH_INTERNAL_ERROR."
+          },
+          "response": [{ "name": "Generic authentication failure", "originalRequest": { "method": "POST", "url": "{{apiBaseUrl}}/auth/sessions" }, "status": "Unauthorized", "code": 401, "header": [{ "key": "Content-Type", "value": "application/json; charset=utf-8" }], "body": "{\n  \"code\": \"AUTHENTICATION_FAILED\",\n  \"message\": \"The credentials could not be verified.\",\n  \"requestId\": \"req-1\"\n}" }],
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('unknown identity gets generic 401', function () { pm.response.to.have.status(401); pm.expect(pm.response.json().code).to.eql('AUTHENTICATION_FAILED'); });", "pm.environment.set('unknownFailure', JSON.stringify({ code: pm.response.json().code, message: pm.response.json().message }));"] } }]
+        },
+        {
+          "name": "Password login — wrong passphrase has same failure",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{verifiedEmail}}\",\n  \"password\": \"{{wrongPassword}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{apiBaseUrl}}/auth/sessions",
+            "description": "Negative authentication example proving wrong-password and unknown-account responses match. Linear: REN2-21. Synthetic verified account fixture is supplied only at runtime."
+          },
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('wrong passphrase uses the same 401 response as unknown account', function () { pm.response.to.have.status(401); pm.expect({ code: pm.response.json().code, message: pm.response.json().message }).to.eql(JSON.parse(pm.environment.get('unknownFailure'))); });"] } }]
+        },
+        {
+          "name": "Password login — verified synthetic identity",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{verifiedEmail}}\",\n  \"password\": \"{{verifiedPassword}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{apiBaseUrl}}/auth/sessions",
+            "description": "Positive authentication example. Linear: REN2-21. Requires an active, email-verified account with a synthetic Argon2id credential. Success returns a minimal user identity and __Host-renivet_session cookie."
+          },
+          "response": [{ "name": "Authenticated", "originalRequest": { "method": "POST", "url": "{{apiBaseUrl}}/auth/sessions" }, "status": "OK", "code": 200, "header": [{ "key": "Set-Cookie", "value": "__Host-renivet_session=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA; Path=/; Max-Age=1800; HttpOnly; Secure; SameSite=Lax" }, { "key": "Content-Type", "value": "application/json; charset=utf-8" }], "body": "{\n  \"authenticationState\": \"authenticated\",\n  \"user\": {\n    \"id\": \"7d785d72-ea2c-44bb-9d82-87b272112b32\"\n  }\n}" }],
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('verified password returns authenticated identity', function () { pm.response.to.have.status(200); pm.expect(pm.response.json().authenticationState).to.eql('authenticated'); pm.expect(pm.response.json().user.id).to.be.a('string'); });", "pm.test('cookie flags protect the session secret', function () { const cookie = pm.response.headers.get('Set-Cookie') || ''; pm.expect(cookie).to.match(/^__Host-renivet_session=[A-Za-z0-9_-]{43}; Path=\\/; Max-Age=1800; HttpOnly; Secure; SameSite=Lax$/); pm.expect(cookie).not.to.match(/Domain=/i); });"] } }]
+        }
+      ]
+    }
+  ]
+}
