@@ -204,7 +204,7 @@ test('REN2-22 purpose-bound OTP challenge HTTP and PostgreSQL acceptance', { ski
     assert.equal((await verify(expiredId)).status, 401);
 
     const changedId = await issue(emails[4]);
-    const changedEmail = `changed-${token}@example.test`;
+    const changedEmail = `contact-updated-${randomUUID()}@example.test`;
     await pool.query('UPDATE identity.users SET email=$2 WHERE id=$1', [userIds[4], changedEmail]);
     assert.equal((await verify(changedId)).status, 401, 'contact changes invalidate the proof binding');
 
