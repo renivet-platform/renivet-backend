@@ -226,10 +226,10 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
         const attempts = challenge.attempt_count + 1;
         await client.query(
           `UPDATE identity.auth_challenges
-              SET attempt_count = $2,
-                  consumed_at = CASE WHEN $2 >= $3 THEN clock_timestamp() ELSE consumed_at END,
+              SET attempt_count = $2::integer,
+                  consumed_at = CASE WHEN $2::integer >= $3::integer THEN clock_timestamp() ELSE consumed_at END,
                   updated_at = clock_timestamp(), row_version = row_version + 1
-            WHERE id = $1`,
+            WHERE id = $1::uuid`,
           [input.id, attempts, input.maxAttempts],
         );
         await client.query('COMMIT'); return 'denied';
