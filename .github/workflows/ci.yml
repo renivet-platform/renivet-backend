@@ -96,6 +96,16 @@ jobs:
           npm install --global postman-cli@1.80.0 --no-audit --no-fund
           postman --version
           node --test tests/auth-api.integration.test.cjs
+      - name: Verify REN2-22 OTP challenge lifecycle and Postman collection
+        env:
+          RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
+          RENIVET_TEST_REDIS_URL: redis://127.0.0.1:6379/15
+          RENIVET_TEST_SERVICES_DISPOSABLE: '1'
+          AUTH_CHALLENGE_HMAC_KEY: synthetic-otp-ci-proof-key-not-a-secret-000000000000
+          AUTH_RATE_LIMIT_HMAC_KEY: synthetic-otp-ci-rate-key-not-a-secret-000000000000
+        run: |
+          npm run build
+          node --test tests/otp-challenges.integration.test.cjs
       - name: Rebuild disposable PostgreSQL 16 from a recovery snapshot
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
@@ -164,6 +174,7 @@ jobs:
             --env DATABASE_URL=postgres://ci:dummy@db.invalid:5432/renivet \
             --env REDIS_URL=redis://cache.invalid:6379 \
             --env AUTH_RATE_LIMIT_HMAC_KEY=ci-only-dummy-auth-rate-limit-hmac-key-not-a-secret \
+            --env AUTH_CHALLENGE_HMAC_KEY=ci-only-dummy-auth-challenge-hmac-key-not-a-secret \
             --env TYPESENSE_URL=https://search.invalid:8108 \
             --env TYPESENSE_API_KEY=ci-example-not-a-secret \
             --env PYTHON_SERVICE_URL=https://ai.invalid:8000 \

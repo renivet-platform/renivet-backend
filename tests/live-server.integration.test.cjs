@@ -29,6 +29,7 @@ test('staging HTTP server is live while Swagger and unfinished commerce routes s
       TYPESENSE_API_KEY: 'stage-test-key-not-a-real-secret',
       PYTHON_SERVICE_URL: 'http://localhost:8000',
       AUTH_RATE_LIMIT_HMAC_KEY: 'stage-test-rate-limit-key-not-a-real-secret-000000',
+      AUTH_CHALLENGE_HMAC_KEY: 'stage-test-challenge-proof-key-not-a-real-secret-000000',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

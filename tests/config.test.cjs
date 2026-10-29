@@ -41,6 +41,7 @@ test('staging and production refuse known local credentials', () => {
     PYTHON_SERVICE_URL: 'https://ai.internal:8000',
     TYPESENSE_API_KEY: 'real-deployment-key',
     AUTH_RATE_LIMIT_HMAC_KEY: 'synthetic-not-a-real-deployment-key-0000000000000000',
+    AUTH_CHALLENGE_HMAC_KEY: 'synthetic-challenge-not-a-deployment-key-0000000000',
   };
   assert.throws(() => validateEnvironment(environment), /DATABASE_URL/);
   environment.DATABASE_URL = 'postgres://app:different-password@db.internal:5432/renivet';
@@ -61,6 +62,7 @@ test('protected environments require a private rate-limit HMAC key and bounded a
   };
   assert.throws(() => validateEnvironment(environment), /AUTH_RATE_LIMIT_HMAC_KEY/);
   environment.AUTH_RATE_LIMIT_HMAC_KEY = 'short';
+  environment.AUTH_CHALLENGE_HMAC_KEY = 'dedicated-not-a-real-deployment-key-0000000000000';
   assert.throws(() => validateEnvironment(environment), /AUTH_RATE_LIMIT_HMAC_KEY/);
   environment.AUTH_RATE_LIMIT_HMAC_KEY = 'local-only-set-a-random-32-byte-value';
   assert.throws(() => validateEnvironment(environment), /AUTH_RATE_LIMIT_HMAC_KEY/);
@@ -79,4 +81,32 @@ test('invalid URL errors never print supplied credential values', () => {
     () => validateEnvironment({ DATABASE_URL: sensitive }),
     (err) => err instanceof Error && /DATABASE_URL/.test(err.message) && !err.message.includes(sensitive),
   );
+});
+
+test('OTP runtime limits have approved defaults and reject values outside bounded ranges', () => {
+  const config = validateEnvironment({});
+  assert.equal(config.AUTH_CHALLENGE_TTL_SECONDS, 300);
+  assert.equal(config.AUTH_CHALLENGE_MAX_ATTEMPTS, 5);
+  assert.equal(config.AUTH_CHALLENGE_RESEND_COOLDOWN_SECONDS, 60);
+  assert.equal(config.AUTH_CHALLENGE_RESEND_WINDOW_SECONDS, 900);
+  assert.equal(config.AUTH_CHALLENGE_RESEND_MAX, 3);
+  assert.throws(() => validateEnvironment({ AUTH_CHALLENGE_TTL_SECONDS: '0' }), /AUTH_CHALLENGE_TTL_SECONDS/);
+  assert.throws(() => validateEnvironment({ AUTH_CHALLENGE_MAX_ATTEMPTS: '1001' }), /AUTH_CHALLENGE_MAX_ATTEMPTS/);
+});
+
+test('staging and production require a dedicated OTP challenge HMAC key', () => {
+  const env = {
+    NODE_ENV: 'staging',
+    DATABASE_URL: 'postgres://app:deployment-only@db.internal:5432/renivet',
+    REDIS_URL: 'redis://cache.internal:6379',
+    TYPESENSE_URL: 'https://search.internal:8108',
+    TYPESENSE_API_KEY: 'deployment-only-typesense-key',
+    PYTHON_SERVICE_URL: 'https://ai.internal:8000',
+    AUTH_RATE_LIMIT_HMAC_KEY: 'synthetic-not-a-real-deployment-key-0000000000000000',
+  };
+  assert.throws(() => validateEnvironment(env), /AUTH_CHALLENGE_HMAC_KEY/);
+  env.AUTH_CHALLENGE_HMAC_KEY = 'dedicated-not-a-real-deployment-key-0000000000000';
+  assert.equal(validateEnvironment(env).AUTH_CHALLENGE_HMAC_KEY, env.AUTH_CHALLENGE_HMAC_KEY);
+  env.AUTH_CHALLENGE_HMAC_KEY = 'local-only-set-a-random-32-byte-value';
+  assert.throws(() => validateEnvironment(env), /AUTH_CHALLENGE_HMAC_KEY/);
 });

@@ -60,6 +60,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/challenges": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request an email or phone verification challenge
+         * @description Public operation with no authentication or permission requirement. Creates a short-lived one-use challenge only for an unverified registered contact. Unknown contacts and transient delivery failures after challenge invalidation receive the same neutral accepted response. Delivery is unavailable by default until a provider has separately passed owner review. Linear: REN2-22; route and DTO remain a proposed D04 contract pending owner approval.
+         */
+        post: operations["createOtpChallenge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/challenges/{challengeId}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify and consume a one-use email or phone challenge
+         * @description Public operation with no authentication or permission requirement. A successful proof marks only the bound contact as verified; every invalid, expired, wrong-purpose, exhausted, or replayed proof shares one generic denial. No session is issued. Linear: REN2-22; route and DTO remain a proposed D04 contract pending owner approval.
+         */
+        post: operations["verifyOtpChallenge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -116,6 +156,55 @@ export interface components {
              */
             authenticationState: "authenticated";
             user: components["schemas"]["AuthenticatedUserDto"];
+        };
+        OtpIssueRequestDto: {
+            /**
+             * @example email
+             * @enum {string}
+             */
+            channel: "email" | "phone";
+            /**
+             * @example email_verification
+             * @enum {string}
+             */
+            purpose: "email_verification" | "phone_verification";
+            /**
+             * @description Email address or E.164 phone number. The requested channel and purpose must match.
+             * @example buyer@example.test
+             */
+            destination: string;
+        };
+        OtpAcceptedDto: {
+            /**
+             * @example accepted
+             * @enum {string}
+             */
+            status: "accepted";
+            /**
+             * Format: uuid
+             * @description Opaque challenge reference; unknown contacts receive an unusable synthetic reference to keep results enumeration-neutral.
+             * @example 37a7d0bf-8414-4f75-bd11-311c7a442d84
+             */
+            challengeId: string;
+        };
+        OtpVerifyRequestDto: {
+            /**
+             * @example email_verification
+             * @enum {string}
+             */
+            purpose: "email_verification" | "phone_verification";
+            /**
+             * @description Six-digit synthetic example. Real codes are delivered out of band.
+             * @example 123456
+             */
+            code: string;
+        };
+        OtpVerifiedDto: {
+            /**
+             * @example verified
+             * @enum {string}
+             */
+            status: "verified";
         };
     };
     responses: never;
@@ -268,6 +357,138 @@ export interface operations {
                 };
             };
             /** @description AUTH_SERVICE_UNAVAILABLE. PostgreSQL or Redis is unavailable; authentication fails closed. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+        };
+    };
+    createOtpChallenge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OtpIssueRequestDto"];
+            };
+        };
+        responses: {
+            /** @description Neutral accepted result; does not reveal contact registration or delivery state. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OtpAcceptedDto"];
+                };
+            };
+            /** @description AUTH_INPUT_INVALID. Invalid channel/purpose pair or malformed destination. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description AUTH_RATE_LIMITED. Per-IP, identity, purpose, cooldown, or resend limit exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description AUTH_INTERNAL_ERROR. Unexpected failure with a safe response. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description AUTH_SERVICE_UNAVAILABLE. Redis, PostgreSQL, OTP proof configuration, or delivery provider is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+        };
+    };
+    verifyOtpChallenge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Opaque UUID returned by the challenge request operation. */
+                challengeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OtpVerifyRequestDto"];
+            };
+        };
+        responses: {
+            /** @description The challenge is consumed and its bound contact is verified. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OtpVerifiedDto"];
+                };
+            };
+            /** @description AUTH_INPUT_INVALID. Malformed request. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description AUTHENTICATION_FAILED. Generic challenge denial. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description AUTH_RATE_LIMITED. Per-IP or concurrent challenge limit exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description AUTH_INTERNAL_ERROR. Unexpected failure with a safe response. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description AUTH_SERVICE_UNAVAILABLE. Redis, PostgreSQL, or OTP proof configuration is unavailable. */
             503: {
                 headers: {
                     [name: string]: unknown;
