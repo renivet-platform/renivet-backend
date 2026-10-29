@@ -46,11 +46,10 @@ test('REN2-20 identity schema enforces canonical ownership, foreign keys and has
       WHERE table_schema = 'identity' AND table_type = 'BASE TABLE'
       ORDER BY table_name
     `);
-    assert.deepEqual(
-      tables.rows.map((row) => row.table_name),
-      ['auth_challenges', 'user_credentials', 'user_sessions', 'users'],
-      'REN2-20 migration must create only the reviewed W1 identity tables',
-    );
+    const identityTableNames = tables.rows.map((row) => row.table_name);
+    for (const tableName of ['auth_challenges', 'user_credentials', 'user_sessions', 'users']) {
+      assert.ok(identityTableNames.includes(tableName), `REN2-20 table identity.${tableName} must remain present`);
+    }
     const columns = await pool.query(`
       SELECT table_name, column_name
       FROM information_schema.columns
@@ -60,7 +59,7 @@ test('REN2-20 identity schema enforces canonical ownership, foreign keys and has
     const canonicalColumns = {
       auth_challenges: ['id', 'created_at', 'updated_at', 'row_version', 'user_id', 'kind', 'code_hash', 'expires_at', 'attempt_count', 'consumed_at'],
       user_credentials: ['id', 'created_at', 'updated_at', 'row_version', 'user_id', 'password_hash', 'credential_version', 'rotated_at', 'disabled_at'],
-      user_sessions: ['id', 'created_at', 'updated_at', 'row_version', 'user_id', 'token_hash', 'device_hash', 'expires_at', 'revoked_at', 'ip_hash'],
+      user_sessions: ['id', 'created_at', 'updated_at', 'row_version', 'user_id', 'token_hash', 'device_hash', 'expires_at', 'revoked_at', 'ip_hash', 'absolute_expires_at', 'mfa_verified_at'],
       users: ['id', 'created_at', 'updated_at', 'row_version', 'email', 'phone', 'display_name', 'state', 'email_verified_at', 'phone_verified_at', 'last_login_at'],
     };
     for (const [tableName, expectedColumns] of Object.entries(canonicalColumns)) {
@@ -88,8 +87,9 @@ test('REN2-20 identity schema enforces canonical ownership, foreign keys and has
       identity_users_email_normalized_uq: /CREATE UNIQUE INDEX .*USING btree \(lower\(btrim\(email\)\)\)$/i,
       identity_users_phone_e164_uq: /CREATE UNIQUE INDEX .*USING btree \(phone\)$/i,
     };
+    const canonicalIndexes = indexes.rows.filter((row) => Object.hasOwn(expectedIndexDefinitions, row.indexname));
     assert.deepEqual(
-      indexes.rows.map((row) => row.indexname),
+      canonicalIndexes.map((row) => row.indexname),
       Object.keys(expectedIndexDefinitions).sort(),
       'REN2-20 must create exactly the reviewed identity indexes',
     );

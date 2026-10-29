@@ -48,6 +48,19 @@ for (const path of ['/api/v1/auth/register', '/api/v1/auth/sessions', '/api/v1/a
 for (const path of ['/api/v1/auth/challenges', '/api/v1/auth/challenges/{challengeId}/verify']) {
   if (!openapi.paths[path]) throw new Error(`Expected implemented OTP route ${path} is absent from OpenAPI`);
 }
+for (const path of ['/api/v1/auth/mfa', '/api/v1/auth/mfa/enrollments', '/api/v1/auth/mfa/enrollments/verify', '/api/v1/auth/mfa/step-up', '/api/v1/auth/mfa/factor']) {
+  if (!openapi.paths[path]) throw new Error(`Expected implemented MFA route ${path} is absent from OpenAPI`);
+  if (!operations.has(`${path.endsWith('/mfa') ? 'get' : path.endsWith('/factor') ? 'delete' : 'post'} ${path}`)) {
+    throw new Error(`Implemented MFA operation ${path} is missing from the handwritten Postman collection`);
+  }
+}
+const mfaRequests = requests.filter(({ item }) => item.name.includes('MFA') || item.name.includes('factor') || item.name.includes('authenticator'));
+for (const { item } of mfaRequests) {
+  const description = item.request.description ?? '';
+  for (const section of ['Purpose:', 'Parameters:', 'Body:', 'Authentication/permissions:', 'Responses:', 'Linear: REN2-24']) {
+    if (!description.includes(section)) throw new Error(`${item.name}: MFA request description must include ${section}`);
+  }
+}
 
 const implementedRoutes = Object.keys(openapi.paths).filter((path) => path.startsWith('/api/v1/auth/') || path === '/api/v1/health').length;
 process.stdout.write(`Postman/OpenAPI drift check passed (${requests.length} requests, ${operations.size} unique operations, ${implementedRoutes} implemented routes).\n`);

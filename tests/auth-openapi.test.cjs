@@ -33,3 +33,41 @@ test('REN2-23 OpenAPI documents authenticated session inspection and CSRF-protec
   assert.match(session.delete.description, /X-CSRF-Token/);
   assert.match(session.delete.description, /same-origin/);
 });
+
+test('REN2-24 OpenAPI describes the implemented MFA lifecycle, security requirements and safe session rotation', () => {
+  const paths = spec.paths;
+  const status = paths['/api/v1/auth/mfa']?.get;
+  const enrollment = paths['/api/v1/auth/mfa/enrollments']?.post;
+  const confirmation = paths['/api/v1/auth/mfa/enrollments/verify']?.post;
+  const stepUp = paths['/api/v1/auth/mfa/step-up']?.post;
+  const revocation = paths['/api/v1/auth/mfa/factor']?.delete;
+  assert.ok(status && enrollment && confirmation && stepUp && revocation);
+  assert.equal(status.operationId, 'getMfaStatus');
+  assert.equal(enrollment.operationId, 'beginMfaEnrollment');
+  assert.equal(confirmation.operationId, 'confirmMfaEnrollment');
+  assert.equal(stepUp.operationId, 'stepUpWithMfa');
+  assert.equal(revocation.operationId, 'revokeMfaFactor');
+  for (const operation of [status, enrollment, confirmation, stepUp, revocation]) {
+    assert.ok(operation.security?.some((entry) => entry.renivetSession));
+    assert.match(operation.description, /REN2-24/);
+  }
+  for (const operation of [enrollment, confirmation, stepUp, revocation]) {
+    const headers = (operation.parameters ?? []).filter((parameter) => parameter.in === 'header').map((parameter) => parameter.name.toLowerCase());
+    assert.ok(headers.includes('origin'));
+    assert.ok(headers.includes('sec-fetch-site'));
+    assert.ok(headers.includes('x-csrf-token'));
+    assert.ok(operation.responses['403']);
+  }
+  assert.equal(confirmation.requestBody.content['application/json'].schema.$ref, '#/components/schemas/MfaEnrollmentCodeRequestDto');
+  assert.equal(stepUp.requestBody.content['application/json'].schema.$ref, '#/components/schemas/MfaStepUpRequestDto');
+  assert.equal(enrollment.responses['200'].headers['Cache-Control'].schema.example, 'no-store');
+  assert.equal(confirmation.responses['200'].headers['Set-Cookie'].schema.type, 'string');
+  assert.equal(stepUp.responses['200'].headers['Set-Cookie'].schema.type, 'string');
+  assert.match(enrollment.description, /once/);
+  assert.match(confirmation.description, /rotates the session/);
+  assert.match(stepUp.description, /unused recovery code/);
+  assert.match(revocation.description, /300 seconds/);
+  assert.deepEqual(Object.keys(status.responses).sort(), ['200', '401', '500', '503']);
+  assert.ok(confirmation.responses['401']);
+  assert.ok(stepUp.responses['401']);
+});

@@ -15,6 +15,13 @@
       "when": 1793119889422,
       "tag": "0001_ren2_29_outbox_inbox_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793302229862,
+      "tag": "0002_ren2_24_privileged_mfa",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Reflector } from '@nestjs/core';
+import { MfaGuard } from '../../common/guards/require-mfa';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { AuthRateLimiter, RedisEvalClient } from './rate-limiter';
@@ -10,12 +12,16 @@ import { OtpController } from './otp.controller';
 import { OtpChallengeService } from './otp-challenge.service';
 import { OTP_DELIVERY, UnavailableOtpDelivery } from './otp-delivery';
 import { SessionService } from './session.service';
+import { MfaController } from './mfa.controller';
+import { MfaRepository } from './mfa.repository';
+import { MfaService } from './mfa.service';
 
 @Module({
-  controllers: [AuthController, OtpController],
+  controllers: [AuthController, OtpController, MfaController],
   providers: [
     IdentityInfrastructure,
     IdentityRepository,
+    MfaRepository,
     {
       provide: SessionService,
       useFactory: (repository: IdentityRepository, configuration: ConfigService) => new SessionService(
@@ -52,6 +58,7 @@ import { SessionService } from './session.service';
         loginAccountLimit: configuration.get<number>('AUTH_LOGIN_ACCOUNT_LIMIT') ?? 5,
         loginIpLimit: configuration.get<number>('AUTH_LOGIN_IP_LIMIT') ?? 60,
         sessionTtlSeconds: configuration.get<number>('AUTH_SESSION_IDLE_TTL_SECONDS') ?? configuration.get<number>('AUTH_SESSION_TTL_SECONDS') ?? 1_800,
+        absoluteSessionTtlSeconds: configuration.get<number>('AUTH_SESSION_ABSOLUTE_TTL_SECONDS') ?? 604_800,
       }),
       inject: [IdentityRepository, PasswordHashService, AuthRateLimiter, ConfigService],
     },
@@ -71,6 +78,28 @@ import { SessionService } from './session.service';
         }, passwords),
       inject: [IdentityRepository, AuthRateLimiter, OTP_DELIVERY, ConfigService, PasswordHashService],
     },
+    {
+      provide: MfaService,
+      useFactory: (
+        repository: MfaRepository,
+        limiter: AuthRateLimiter,
+        configuration: ConfigService,
+      ) => {
+        const encryptionKey = configuration.get<string>('AUTH_MFA_ENCRYPTION_KEY');
+        return new MfaService(repository, limiter, {
+          encryptionKey: encryptionKey ? Buffer.from(encryptionKey, 'base64') : undefined,
+          rateLimitHmacKey: configuration.get<string>('AUTH_RATE_LIMIT_HMAC_KEY'),
+          idleTtlSeconds: configuration.get<number>('AUTH_SESSION_IDLE_TTL_SECONDS') ?? 1_800,
+        });
+      },
+      inject: [MfaRepository, AuthRateLimiter, ConfigService],
+    },
+    {
+      provide: MfaGuard,
+      useFactory: (reflector: Reflector, sessions: SessionService, mfa: MfaService) => new MfaGuard(reflector, sessions, mfa),
+      inject: [Reflector, SessionService, MfaService],
+    },
   ],
+  exports: [MfaGuard, MfaService],
 })
 export class IdentityModule {}

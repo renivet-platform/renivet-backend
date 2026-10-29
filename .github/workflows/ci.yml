@@ -86,7 +86,7 @@ jobs:
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
         run: node --test tests/outbox-inbox.integration.cjs
-      - name: Verify REN2-21 registration and REN2-23 session lifecycle/Postman examples
+      - name: Verify REN2-21 registration and REN2-23/24 session, MFA and Postman examples
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
           RENIVET_TEST_REDIS_URL: redis://127.0.0.1:6379/15
@@ -106,6 +106,14 @@ jobs:
         run: |
           npm run build
           node --test tests/otp-challenges.integration.test.cjs
+      - name: Verify REN2-24 MFA enrollment, session elevation, replay protection and audit
+        env:
+          RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
+          RENIVET_TEST_REDIS_URL: redis://127.0.0.1:6379/15
+          RENIVET_TEST_SERVICES_DISPOSABLE: '1'
+        run: |
+          npm run build
+          node --test tests/mfa-repository.integration.cjs tests/mfa-api.integration.test.cjs
       - name: Rebuild disposable PostgreSQL 16 from a recovery snapshot
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
@@ -176,6 +184,7 @@ jobs:
             --env AUTH_RATE_LIMIT_HMAC_KEY=ci-only-dummy-auth-rate-limit-hmac-key-not-a-secret \
             --env AUTH_CHALLENGE_HMAC_KEY=ci-only-dummy-auth-challenge-hmac-key-not-a-secret \
             --env AUTH_CSRF_HMAC_KEY=ci-only-dummy-auth-csrf-hmac-key-not-a-secret \
+            --env AUTH_MFA_ENCRYPTION_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
             --env AUTH_ALLOWED_ORIGINS=https://renivet.example.test \
             --env TYPESENSE_URL=https://search.invalid:8108 \
             --env TYPESENSE_API_KEY=ci-example-not-a-secret \

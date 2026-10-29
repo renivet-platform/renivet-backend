@@ -13,7 +13,7 @@ const options = {
   sessionTtlSeconds: 1800,
 };
 
-function createService(overrides = {}) {
+function createService(overrides = {}, serviceOptions = options) {
   const calls = { limits: [], registrations: [], lookups: [], sessions: [] };
   const repository = {
     createPendingAccount: async (email, passwordHash) => {
@@ -41,7 +41,7 @@ function createService(overrides = {}) {
       if (overrides.consume) return overrides.consume(...args);
     },
   };
-  return { service: new AuthService(repository, passwords, limiter, options), calls };
+  return { service: new AuthService(repository, passwords, limiter, serviceOptions), calls };
 }
 
 test('registration canonicalizes contact, persists only a hash, and returns a neutral accepted result', async () => {
@@ -101,6 +101,22 @@ test('verified login stores only a digest and returns an opaque cookie secret', 
   assert.notEqual(calls.sessions[0].tokenHash, result.sessionToken);
   assert.match(calls.sessions[0].tokenHash, /^[a-f0-9]{64}$/);
   assert.equal(calls.sessions[0].expiresAt.getTime() - Date.now() <= 1800_000, true);
+});
+
+test('login persists the configured absolute expiry and caps the initial cookie lifetime', async () => {
+  const { service, calls } = createService({
+    findPasswordCredential: async () => ({
+      userId: '18bd5b9a-15ca-4d51-83f1-209d0f202ef1',
+      credentialId: 'd552dc7c-d352-44cc-82d8-8ec7cf649d12',
+      state: 'active', emailVerifiedAt: new Date(), passwordHash: `hash:${password}`,
+    }),
+  }, { ...options, sessionTtlSeconds: 1_800, absoluteSessionTtlSeconds: 900 });
+  const before = Date.now();
+  const result = await service.login({ email: 'buyer@example.test', password }, '127.0.0.1');
+  const session = calls.sessions[0];
+  assert.equal(result.expiresInSeconds, 900);
+  assert.equal(session.expiresAt.getTime(), session.absoluteExpiresAt.getTime());
+  assert.ok(session.absoluteExpiresAt.getTime() >= before + 900_000);
 });
 
 test('throttle and infrastructure errors become safe auth errors', async () => {

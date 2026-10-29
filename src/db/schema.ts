@@ -123,8 +123,10 @@ export const identityUserSessions = identity.table(
     tokenHash: text('token_hash').notNull(),
     deviceHash: text('device_hash'),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    absoluteExpiresAt: timestamp('absolute_expires_at', { withTimezone: true }).default(sql`now() + interval '7 days'`).notNull(),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
     ipHash: text('ip_hash'),
+    mfaVerifiedAt: timestamp('mfa_verified_at', { withTimezone: true }),
   },
   (table) => [
     uniqueIndex('identity_user_sessions_token_hash_uq').on(table.tokenHash),
@@ -135,6 +137,8 @@ export const identityUserSessions = identity.table(
       sql`${table.tokenHash} ~ '^[0-9a-f]{64}$'`,
     ),
     check('identity_user_sessions_expiry_after_creation', sql`${table.expiresAt} > ${table.createdAt}`),
+    check('identity_user_sessions_absolute_expiry_after_creation', sql`${table.absoluteExpiresAt} > ${table.createdAt}`),
+    check('identity_user_sessions_idle_expiry_within_absolute', sql`${table.expiresAt} <= ${table.absoluteExpiresAt}`),
     check(
       'identity_user_sessions_revocation_after_creation',
       sql`${table.revokedAt} is null or ${table.revokedAt} >= ${table.createdAt}`,
@@ -144,6 +148,85 @@ export const identityUserSessions = identity.table(
       'identity_user_sessions_timestamps_ordered',
       sql`${table.updatedAt} >= ${table.createdAt}`,
     ),
+  ],
+);
+
+export const identityMfaFactors = identity.table(
+  'mfa_factors',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+    rowVersion: bigint('row_version', { mode: 'number' }).default(1).notNull(),
+    userId: uuid('user_id').notNull().references(() => identityUsers.id),
+    encryptedSecret: text('encrypted_secret').notNull(),
+    secretIv: text('secret_iv').notNull(),
+    secretTag: text('secret_tag').notNull(),
+    state: text('state').notNull(),
+    pendingExpiresAt: timestamp('pending_expires_at', { withTimezone: true }),
+    activatedAt: timestamp('activated_at', { withTimezone: true }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    lastTotpStep: bigint('last_totp_step', { mode: 'number' }),
+  },
+  (table) => [
+    uniqueIndex('identity_mfa_factors_one_pending_or_active_uq')
+      .on(table.userId)
+      .where(sql`${table.state} IN ('pending', 'active')`),
+    index('identity_mfa_factors_user_created_idx').on(table.userId, table.createdAt),
+    check('identity_mfa_factors_state_valid', sql`${table.state} IN ('pending', 'active', 'revoked')`),
+    check(
+      'identity_mfa_factors_secret_state_valid',
+      sql`(${table.state} = 'revoked' AND ${table.encryptedSecret} = '' AND ${table.secretIv} = '' AND ${table.secretTag} = '') OR (${table.state} IN ('pending', 'active') AND ${table.encryptedSecret} ~ '^[A-Za-z0-9+/]{27}=$' AND ${table.secretIv} ~ '^[A-Za-z0-9+/]{16}$' AND ${table.secretTag} ~ '^[A-Za-z0-9+/]{22}==$')`,
+    ),
+    check(
+      'identity_mfa_factors_lifecycle_valid',
+      sql`(${table.state} = 'pending' AND ${table.pendingExpiresAt} > ${table.createdAt} AND ${table.activatedAt} IS NULL AND ${table.revokedAt} IS NULL) OR (${table.state} = 'active' AND ${table.activatedAt} IS NOT NULL AND ${table.revokedAt} IS NULL) OR (${table.state} = 'revoked' AND ${table.revokedAt} IS NOT NULL)`,
+    ),
+    check('identity_mfa_factors_totp_step_nonnegative', sql`${table.lastTotpStep} IS NULL OR ${table.lastTotpStep} >= 0`),
+    check('identity_mfa_factors_row_version_positive', sql`${table.rowVersion} > 0`),
+    check('identity_mfa_factors_timestamps_ordered', sql`${table.updatedAt} >= ${table.createdAt}`),
+  ],
+);
+
+export const identityMfaRecoveryCodes = identity.table(
+  'mfa_recovery_codes',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    factorId: uuid('factor_id').notNull().references(() => identityMfaFactors.id),
+    codeHash: text('code_hash').notNull(),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('identity_mfa_recovery_codes_factor_hash_uq').on(table.factorId, table.codeHash),
+    index('identity_mfa_recovery_codes_factor_consumed_idx').on(table.factorId, table.consumedAt),
+    check('identity_mfa_recovery_codes_hash_sha256', sql`${table.codeHash} ~ '^[0-9a-f]{64}$'`),
+    check('identity_mfa_recovery_codes_consumed_after_creation', sql`${table.consumedAt} IS NULL OR ${table.consumedAt} >= ${table.createdAt}`),
+  ],
+);
+
+export const identitySecurityAuditEvents = identity.table(
+  'security_audit_events',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    actorUserId: uuid('actor_user_id').references(() => identityUsers.id),
+    sessionId: uuid('session_id').references(() => identityUserSessions.id),
+    factorId: uuid('factor_id').references(() => identityMfaFactors.id),
+    eventName: text('event_name').notNull(),
+    outcome: text('outcome').notNull(),
+    ipHash: text('ip_hash'),
+    metadata: jsonb('metadata').default(sql`'{}'::jsonb`).notNull(),
+  },
+  (table) => [
+    index('identity_security_audit_user_created_idx').on(table.actorUserId, table.createdAt),
+    index('identity_security_audit_event_created_idx').on(table.eventName, table.createdAt),
+    check(
+      'identity_security_audit_event_valid',
+      sql`${table.eventName} IN ('enrollment_started', 'enrollment_activated', 'enrollment_denied', 'step_up_succeeded', 'step_up_denied', 'factor_revoked', 'privileged_access_allowed', 'privileged_access_denied')`,
+    ),
+    check('identity_security_audit_outcome_valid', sql`${table.outcome} IN ('allowed', 'denied')`),
+    check('identity_security_audit_metadata_object', sql`jsonb_typeof(${table.metadata}) = 'object'`),
   ],
 );
 

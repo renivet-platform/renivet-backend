@@ -60,7 +60,7 @@ export class PasswordSessionResponseDto {
 }
 
 export class AuthErrorDto {
-  @ApiProperty({ enum: ['AUTH_INPUT_INVALID', 'AUTHENTICATION_FAILED', 'AUTH_RATE_LIMITED', 'AUTH_SERVICE_UNAVAILABLE', 'AUTH_INTERNAL_ERROR'] })
+  @ApiProperty({ enum: ['AUTH_INPUT_INVALID', 'AUTHENTICATION_FAILED', 'AUTH_RATE_LIMITED', 'AUTH_SERVICE_UNAVAILABLE', 'AUTH_INTERNAL_ERROR', 'AUTH_MFA_PROOF_INVALID', 'AUTH_MFA_STEP_UP_REQUIRED', 'AUTH_MFA_ENROLLMENT_UNAVAILABLE', 'CSRF_VALIDATION_FAILED'] })
   code!: string;
 
   @ApiProperty({ example: 'The request could not be processed.' })

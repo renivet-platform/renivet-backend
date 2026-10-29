@@ -1,6 +1,6 @@
 # Tests
 
-`npm test` runs local unit and HTTP tests without external services. The PostgreSQL 16 CI job applies the checked-in Drizzle migrations to its disposable `renivet_ci` database, verifies identity constraints, foundation transaction behavior, and the REN2-29 outbox/inbox schema. It then clones the migrated database as a disposable recovery snapshot, rebuilds `renivet_ci` from that snapshot, verifies migration replay, and reruns all integration suites after recovery.
+`npm test` runs local unit and HTTP tests without external services. The PostgreSQL 16 CI job applies the checked-in Drizzle migrations to its disposable `renivet_ci` database, verifies identity constraints, foundation transaction behavior, and the REN2-29 outbox/inbox schema. It runs REN2-24 repository and full HTTP integration tests against disposable PostgreSQL and Redis, including invalid/replayed/revoked factors, one-use/exhausted recovery codes, CSRF, session rotation, rate limiting and audit secrecy. It then clones the migrated database as a disposable recovery snapshot, rebuilds `renivet_ci` from that snapshot, verifies migration replay, and reruns all integration suites after recovery.
 
 The recovery test is destructive by design and refuses to run without `RENIVET_ALLOW_DISPOSABLE_DATABASE_REBUILD=1`. It also requires loopback PostgreSQL, database `renivet_ci`, role `renivet_ci`, PostgreSQL 16, and a superuser role. Run it only against an isolated disposable database; never point it at a shared or deployed database.
 
