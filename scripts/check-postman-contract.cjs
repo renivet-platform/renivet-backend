@@ -35,6 +35,9 @@ for (const { collection, apiBasePath, item } of requests) {
   if (!Array.isArray(item.event) || !item.event.some((event) => event.listen === 'test')) {
     throw new Error(`${item.name}: runnable Postman test assertions are required`);
   }
+  if (request.header?.some((header) => header.key.toLowerCase() === 'cookie') && item.protocolProfileBehavior?.disableCookies !== true) {
+    throw new Error(`${item.name}: disable Postman cookie-jar injection when supplying an explicit session Cookie header`);
+  }
 }
 
 for (const operation of operations) {

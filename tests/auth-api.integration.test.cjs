@@ -83,9 +83,9 @@ test('REN2-21 registration and password HTTP acceptance', { skip: enabled ? fals
     const expiredToken = 'E'.repeat(43);
     const absoluteExpiredToken = 'A'.repeat(43);
     await pool.query(
-      `INSERT INTO identity.user_sessions (user_id, token_hash, created_at, expires_at)
-       VALUES ($1, $2, now() - interval '10 days', now() - interval '9 days'),
-              ($1, $3, now() - interval '8 days', now() + interval '1 hour')`,
+      `INSERT INTO identity.user_sessions (user_id, token_hash, created_at, expires_at, absolute_expires_at)
+       VALUES ($1, $2, now() - interval '10 days', now() - interval '9 days', now() - interval '3 days'),
+              ($1, $3, now() - interval '8 days', now() - interval '2 days', now() - interval '1 day')`,
       [userId, require('node:crypto').createHash('sha256').update(expiredToken).digest('hex'), require('node:crypto').createHash('sha256').update(absoluteExpiredToken).digest('hex')],
     );
     const idleExpired = await fetch(`${base}/auth/session`, { headers: { cookie: `__Host-renivet_session=${expiredToken}` } });

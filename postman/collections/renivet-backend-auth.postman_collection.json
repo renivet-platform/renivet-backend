@@ -392,6 +392,7 @@
                 "url": "{{apiBaseUrl}}/auth/mfa",
                 "description": "Purpose: inspect the current user's MFA state and remaining recovery-code count. Linear: REN2-24. Parameters: none. Body: none. Authentication/permissions: authenticated first-party session cookie; no domain role required. Responses: 200 not_enrolled/enrollment_pending/enabled and count; 401 AUTHENTICATION_FAILED; 503 AUTH_SERVICE_UNAVAILABLE; 500 AUTH_INTERNAL_ERROR. Secret, TOTP and recovery codes are never returned. Synthetic account only."
               },
+              "protocolProfileBehavior": { "disableCookies": true },
               "response": [
                 {
                   "name": "Not enrolled",
@@ -422,6 +423,7 @@
                 "url": "{{apiBaseUrl}}/auth/mfa/enrollments",
                 "description": "Purpose: begin a 10-minute TOTP enrollment and return its provisioning URI once. Linear: REN2-24. Parameters: none. Body: none. Authentication/permissions: active session plus exact allowlisted Origin, same-origin fetch metadata and session-bound CSRF proof. Responses: 200 enrollment_pending with one-time otpauth URI and expiry; 401 AUTHENTICATION_FAILED; 403 CSRF_VALIDATION_FAILED; 409 AUTH_MFA_ENROLLMENT_UNAVAILABLE; 429 AUTH_RATE_LIMITED; 503 AUTH_SERVICE_UNAVAILABLE; 500 AUTH_INTERNAL_ERROR. A pending or enabled factor prevents another enrollment. Synthetic test account only."
               },
+              "protocolProfileBehavior": { "disableCookies": true },
               "response": [{
                 "name": "Enrollment started",
                 "originalRequest": { "method": "POST", "url": "{{apiBaseUrl}}/auth/mfa/enrollments" },
@@ -452,6 +454,7 @@
                 "url": "{{apiBaseUrl}}/auth/mfa/enrollments/verify",
                 "description": "Purpose: verify an enrollment TOTP and activate MFA. This negative example sends malformed input and must not activate the factor. Linear: REN2-24. Parameters: none. Body: code must be exactly six decimal digits. Authentication/permissions: active session plus same-origin CSRF protections. Responses: 400 AUTH_INPUT_INVALID; 401 AUTH_MFA_PROOF_INVALID for an invalid/replayed valid-shape code; 403 CSRF_VALIDATION_FAILED; 429 AUTH_RATE_LIMITED; 503 AUTH_SERVICE_UNAVAILABLE; 500 AUTH_INTERNAL_ERROR. Valid activation rotates the session and returns ten recovery codes once. Synthetic invalid example only."
               },
+              "protocolProfileBehavior": { "disableCookies": true },
               "response": [{
                 "name": "Malformed code rejected",
                 "originalRequest": { "method": "POST", "url": "{{apiBaseUrl}}/auth/mfa/enrollments/verify" },
@@ -481,6 +484,7 @@
                 "url": "{{apiBaseUrl}}/auth/mfa/step-up",
                 "description": "Purpose: elevate a session using TOTP or one unused recovery code. This negative example verifies request validation only. Linear: REN2-24. Parameters: none. Body: six-digit TOTP or 26-character base32 recovery code. Authentication/permissions: active session plus same-origin CSRF protections. Responses: 400 AUTH_INPUT_INVALID; 401 AUTH_MFA_PROOF_INVALID for invalid/replayed proofs; 403 CSRF_VALIDATION_FAILED; 429 AUTH_RATE_LIMITED; 503 AUTH_SERVICE_UNAVAILABLE; 500 AUTH_INTERNAL_ERROR. Success rotates the session and returns a fresh CSRF proof. Synthetic invalid example only."
               },
+              "protocolProfileBehavior": { "disableCookies": true },
               "event": [{
                 "listen": "test",
                 "script": { "type": "text/javascript", "exec": [
@@ -501,6 +505,7 @@
                 "url": "{{apiBaseUrl}}/auth/mfa/factor",
                 "description": "Purpose: revoke the active authenticator factor. This negative example runs before any valid MFA step-up and must deny. Linear: REN2-24. Parameters: none. Body: none. Authentication/permissions: active session, exact Origin, same-origin fetch metadata, CSRF proof and MFA step-up no older than 300 seconds. Responses: 200 revoked with cookie expiry; 401 AUTHENTICATION_FAILED; 403 AUTH_MFA_STEP_UP_REQUIRED or CSRF_VALIDATION_FAILED; 429 AUTH_RATE_LIMITED; 503 AUTH_SERVICE_UNAVAILABLE; 500 AUTH_INTERNAL_ERROR. Synthetic test account only."
               },
+              "protocolProfileBehavior": { "disableCookies": true },
               "event": [{
                 "listen": "test",
                 "script": { "type": "text/javascript", "exec": [
