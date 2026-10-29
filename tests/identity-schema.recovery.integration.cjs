@@ -100,6 +100,9 @@ test('W1 disposable PostgreSQL snapshot recovery preserves the migrated schema a
       `);
       assert.deepEqual(objects.rows, [
         { table_schema: 'identity', table_name: 'auth_challenges' },
+        { table_schema: 'identity', table_name: 'mfa_factors' },
+        { table_schema: 'identity', table_name: 'mfa_recovery_codes' },
+        { table_schema: 'identity', table_name: 'security_audit_events' },
         { table_schema: 'identity', table_name: 'user_credentials' },
         { table_schema: 'identity', table_name: 'user_sessions' },
         { table_schema: 'identity', table_name: 'users' },
