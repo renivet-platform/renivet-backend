@@ -20,3 +20,16 @@ test('REN2-21 OpenAPI documents implemented registration and login routes', () =
   assert.equal(session.responses['429'].headers['Retry-After'].schema.example, 900);
   assert.ok(spec.components.securitySchemes.renivetSession);
 });
+
+test('REN2-23 OpenAPI documents authenticated session inspection and CSRF-protected logout', () => {
+  const session = spec.paths['/api/v1/auth/session'];
+  assert.ok(session?.get);
+  assert.ok(session?.delete);
+  assert.equal(session.get.operationId, 'getCurrentSession');
+  assert.equal(session.delete.operationId, 'logoutCurrentSession');
+  assert.ok(session.get.security?.some((entry) => entry.renivetSession));
+  assert.ok(session.delete.security?.some((entry) => entry.renivetSession));
+  assert.ok(session.delete.responses['403']);
+  assert.match(session.delete.description, /X-CSRF-Token/);
+  assert.match(session.delete.description, /same-origin/);
+});

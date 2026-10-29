@@ -5,7 +5,7 @@ const { OtpChallengeService, OtpChallengeError, makeOtpProof } = require('../dis
 function fixture(overrides = {}) {
   const calls = [];
   const repository = {
-    findUnverified: async (channel, destination) => ({ userId: 'user-1', destination }),
+    findChallengeTarget: async (_channel, _purpose, destination) => ({ userId: 'user-1', destination }),
     issue: async (input) => { calls.push(['issue', input]); return true; },
     invalidate: async (id) => calls.push(['invalidate', id]),
     verify: async (input) => { calls.push(['verify', input]); return 'verified'; },
@@ -25,7 +25,7 @@ function fixture(overrides = {}) {
     resendWindowSeconds: 900,
     resendMax: 3,
     ...overrides.options,
-  });
+  }, overrides.passwords ?? { hash: async (password) => `argon2id-synthetic:${password}` });
   return { service, calls };
 }
 
@@ -52,7 +52,7 @@ test('challenge proof binds challenge, owner, channel, purpose, contact and code
 });
 
 test('unknown contacts produce neutral accepted response without sending', async () => {
-  const { service, calls } = fixture({ repository: { findUnverified: async () => null } });
+  const { service, calls } = fixture({ repository: { findChallengeTarget: async () => null } });
   const result = await service.issue({ channel: 'email', purpose: 'email_verification', destination: 'unknown@example.test' }, '127.0.0.1');
   assert.equal(result.status, 'accepted');
   assert.match(result.challengeId, /^[0-9a-f-]{36}$/i);
@@ -87,7 +87,7 @@ test('hung delivery is aborted at its deadline and does not leave a usable chall
 
 test('throttle errors happen before contact lookup or provider side effects', async () => {
   let lookedUp = false;
-  const { service } = fixture({ repository: { findUnverified: async () => { lookedUp = true; return null; } }, limiter: { consume: async () => { throw new Error('limited'); } } });
+  const { service } = fixture({ repository: { findChallengeTarget: async () => { lookedUp = true; return null; } }, limiter: { consume: async () => { throw new Error('limited'); } } });
   await assert.rejects(service.issue({ channel: 'email', purpose: 'email_verification', destination: 'buyer@example.test' }, '127.0.0.1'));
   assert.equal(lookedUp, false);
 });
@@ -110,9 +110,42 @@ test('verification delegates wrong, expired, replayed and purpose-mismatched pro
 
 test('delivery unavailable rejects uniformly before identity lookup', async () => {
   let lookedUp = false;
-  const { service } = fixture({ repository: { findUnverified: async () => { lookedUp = true; return null; } }, delivery: { available: false, send: async () => undefined } });
+  const { service } = fixture({ repository: { findChallengeTarget: async () => { lookedUp = true; return null; } }, delivery: { available: false, send: async () => undefined } });
   await assert.rejects(service.issue({ channel: 'email', purpose: 'email_verification', destination: 'unknown@example.test' }, '127.0.0.1'), (error) => error instanceof OtpChallengeError && error.status === 503);
   assert.equal(lookedUp, false);
+});
+
+test('password recovery hashes the replacement password before purpose-bound proof consumption', async () => {
+  const { service, calls } = fixture();
+  const result = await service.verify({
+    challengeId: '37a7d0bf-8414-4f75-bd11-311c7a442d84',
+    purpose: 'password_recovery', code: '123456', newPassword: 'synthetic replacement passphrase',
+  }, '127.0.0.1');
+  assert.deepEqual(result, { status: 'verified' });
+  const proof = calls.find(([kind]) => kind === 'verify')[1];
+  assert.equal(proof.purpose, 'password_recovery');
+  assert.equal(proof.passwordHash, 'argon2id-synthetic:synthetic replacement passphrase');
+  assert.notEqual(proof.passwordHash, 'synthetic replacement passphrase');
+});
+
+test('recovery proof rejects missing/invalid replacement passphrase and rejects new passwords for other purposes', async () => {
+  const { service, calls } = fixture();
+  await assert.rejects(service.verify({ challengeId: '37a7d0bf-8414-4f75-bd11-311c7a442d84', purpose: 'password_recovery', code: '123456' }, '127.0.0.1'), (error) => error.status === 400);
+  await assert.rejects(service.verify({ challengeId: '37a7d0bf-8414-4f75-bd11-311c7a442d84', purpose: 'email_verification', code: '123456', newPassword: 'synthetic replacement passphrase' }, '127.0.0.1'), (error) => error.status === 400);
+  assert.equal(calls.some(([kind]) => kind === 'verify'), false);
+});
+
+test('recovery rate limit is consumed before expensive password hashing', async () => {
+  let hashed = false;
+  const { service } = fixture({
+    limiter: { consume: async () => { throw new Error('rate limited'); } },
+    passwords: { hash: async () => { hashed = true; return 'unused'; } },
+  });
+  await assert.rejects(service.verify({
+    challengeId: '37a7d0bf-8414-4f75-bd11-311c7a442d84',
+    purpose: 'password_recovery', code: '123456', newPassword: 'synthetic replacement passphrase',
+  }, '127.0.0.1'));
+  assert.equal(hashed, false);
 });
 
 test('Redis outage during verification fails closed before PostgreSQL verification', async () => {

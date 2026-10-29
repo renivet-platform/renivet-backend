@@ -27,7 +27,7 @@ for (const { collection, apiBasePath, item } of requests) {
   if (!url?.startsWith('{{apiBaseUrl}}/')) throw new Error(`${item.name}: URL must use {{apiBaseUrl}}`);
   if (/https?:\/\/(?!\{\{apiBaseUrl\}\})/i.test(url)) throw new Error(`${item.name}: hardcoded URL is not permitted`);
   const path = `${apiBasePath}${url.slice('{{apiBaseUrl}}'.length)}`
-    .replace(/\{\{(?:otpChallengeId|unknownChallengeId)\}\}/g, '{challengeId}')
+    .replace(/\{\{(?:otpChallengeId|unknownChallengeId|recoveryChallengeId)\}\}/g, '{challengeId}')
     .replace(/\{\{[^}]+\}\}/g, 'synthetic');
   const key = `${request.method.toLowerCase()} ${path}`;
   operations.add(key);
@@ -42,11 +42,12 @@ for (const operation of operations) {
   if (!openapi.paths[path]?.[method]) throw new Error(`Postman operation ${operation} is missing from generated OpenAPI`);
 }
 
-for (const path of ['/api/v1/auth/register', '/api/v1/auth/sessions']) {
+for (const path of ['/api/v1/auth/register', '/api/v1/auth/sessions', '/api/v1/auth/session']) {
   if (!openapi.paths[path]) throw new Error(`Expected implemented identity route ${path} is absent from OpenAPI`);
 }
 for (const path of ['/api/v1/auth/challenges', '/api/v1/auth/challenges/{challengeId}/verify']) {
   if (!openapi.paths[path]) throw new Error(`Expected implemented OTP route ${path} is absent from OpenAPI`);
 }
 
-process.stdout.write(`Postman/OpenAPI drift check passed (${requests.length} requests, ${operations.size} unique operations, 4 implemented routes).\n`);
+const implementedRoutes = Object.keys(openapi.paths).filter((path) => path.startsWith('/api/v1/auth/') || path === '/api/v1/health').length;
+process.stdout.write(`Postman/OpenAPI drift check passed (${requests.length} requests, ${operations.size} unique operations, ${implementedRoutes} implemented routes).\n`);

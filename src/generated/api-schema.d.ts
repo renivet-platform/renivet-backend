@@ -60,6 +60,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Inspect the authenticated first-party session
+         * @description Requires a valid opaque session cookie. Returns a minimal user identity and a session-bound CSRF token for same-origin mutations. Idle expiry is extended up to the seven-day absolute limit. Linear: REN2-23.
+         */
+        get: operations["getCurrentSession"];
+        put?: never;
+        post?: never;
+        /**
+         * Revoke the current session
+         * @description Requires a valid session cookie, exact allowlisted Origin, Sec-Fetch-Site: same-origin, and the session-bound X-CSRF-Token returned by GET /auth/session. Revocation is server-side before the cookie is expired. Linear: REN2-23.
+         */
+        delete: operations["logoutCurrentSession"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/challenges": {
         parameters: {
             query?: never;
@@ -70,8 +94,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Request an email or phone verification challenge
-         * @description Public operation with no authentication or permission requirement. Creates a short-lived one-use challenge only for an unverified registered contact. Unknown contacts and transient delivery failures after challenge invalidation receive the same neutral accepted response. Delivery is unavailable by default until a provider has separately passed owner review. Linear: REN2-22; route and DTO remain a proposed D04 contract pending owner approval.
+         * Request an email or phone verification or recovery challenge
+         * @description Public operation with no authentication or permission requirement. Creates a short-lived one-use challenge for an eligible contact and purpose. Password recovery is available only to an active account with verified email and an active password credential; unknown and ineligible contacts receive a neutral accepted response. Recovery proof is purpose-bound and is required to replace the password. Delivery is unavailable by default until a provider has separately passed owner review. Verification: Linear REN2-22; password recovery: REN2-23; candidate routes remain subject to D04 owner approval.
          */
         post: operations["createOtpChallenge"];
         delete?: never;
@@ -90,8 +114,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Verify and consume a one-use email or phone challenge
-         * @description Public operation with no authentication or permission requirement. A successful proof marks only the bound contact as verified; every invalid, expired, wrong-purpose, exhausted, or replayed proof shares one generic denial. No session is issued. Linear: REN2-22; route and DTO remain a proposed D04 contract pending owner approval.
+         * Verify a one-use challenge or reset a password through recovery
+         * @description Public operation with no authentication or permission requirement. A successful verification proof marks only the bound contact as verified and issues no session. A password_recovery proof additionally requires a newPassword, atomically replaces the active Argon2id password credential, increments its version, and revokes every existing session. Invalid, expired, wrong-purpose, exhausted, or replayed proofs share one generic denial. Linear: REN2-22 verification and REN2-23 password recovery; candidate route remains subject to D04 owner approval.
          */
         post: operations["verifyOtpChallenge"];
         delete?: never;
@@ -167,7 +191,7 @@ export interface components {
              * @example email_verification
              * @enum {string}
              */
-            purpose: "email_verification" | "phone_verification";
+            purpose: "email_verification" | "phone_verification" | "password_recovery";
             /**
              * @description Email address or E.164 phone number. The requested channel and purpose must match.
              * @example buyer@example.test
@@ -192,12 +216,17 @@ export interface components {
              * @example email_verification
              * @enum {string}
              */
-            purpose: "email_verification" | "phone_verification";
+            purpose: "email_verification" | "phone_verification" | "password_recovery";
             /**
              * @description Six-digit synthetic example. Real codes are delivered out of band.
              * @example 123456
              */
             code: string;
+            /**
+             * @description Required only for password_recovery; accepted as a passphrase and stored only as an Argon2id hash.
+             * @example synthetic replacement passphrase
+             */
+            newPassword?: string;
         };
         OtpVerifiedDto: {
             /**
@@ -357,6 +386,120 @@ export interface operations {
                 };
             };
             /** @description AUTH_SERVICE_UNAVAILABLE. PostgreSQL or Redis is unavailable; authentication fails closed. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+        };
+    };
+    getCurrentSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Active identity and session-bound CSRF token; refreshes the session cookie to its server-calculated idle expiry, capped by its absolute expiry. */
+            200: {
+                headers: {
+                    /** @description Sensitive session response must not be cached. */
+                    "Cache-Control"?: string;
+                    /** @description Refreshed host-only session cookie, capped at the server-calculated idle/absolute expiry. */
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description AUTHENTICATION_FAILED. Missing, expired, revoked or invalid session. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description AUTH_INTERNAL_ERROR. Unexpected failure with a safe public message. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description AUTH_SERVICE_UNAVAILABLE. Session store or CSRF configuration is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+        };
+    };
+    logoutCurrentSession: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Must equal the session-bound proof returned by GET /auth/session. */
+                "X-CSRF-Token": string;
+                /** @description Must be same-origin. */
+                "Sec-Fetch-Site": string;
+                /** @description Must exactly match one configured AUTH_ALLOWED_ORIGINS origin. */
+                Origin: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Session revoked and host-only cookie expired. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description AUTHENTICATION_FAILED. Session is not active. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description CSRF_VALIDATION_FAILED. Origin, fetch metadata or CSRF evidence is invalid. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description AUTH_INTERNAL_ERROR. Unexpected failure with a safe public message. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description AUTH_SERVICE_UNAVAILABLE. Session store or CSRF configuration is unavailable. */
             503: {
                 headers: {
                     [name: string]: unknown;

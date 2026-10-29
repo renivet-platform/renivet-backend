@@ -1,6 +1,8 @@
 import {
   Body,
   Controller,
+  Delete,
+  Get,
   HttpCode,
   Post,
   Req,
@@ -13,6 +15,8 @@ import {
   ApiAcceptedResponse,
   ApiBadRequestResponse,
   ApiBody,
+  ApiCookieAuth,
+  ApiHeader,
   ApiInternalServerErrorResponse,
   ApiOperation,
   ApiResponse,
@@ -22,6 +26,8 @@ import {
 } from '@nestjs/swagger';
 import { AuthHttpError, AuthService } from './auth.service';
 import { AuthExceptionFilter } from './auth-exception.filter';
+import { CsrfRejectedError, csrfMatches, SessionService } from './session.service';
+import { ConfigService } from '@nestjs/config';
 import {
   AuthErrorDto,
   PasswordSessionRequestDto,
@@ -32,6 +38,7 @@ import {
 
 interface AuthenticatedRequestContext {
   ip: string;
+  headers: Record<string, string | string[] | undefined>;
 }
 
 interface CookieResponse {
@@ -49,7 +56,7 @@ const authRequestValidation = new ValidationPipe({
 @Controller('auth')
 @UseFilters(AuthExceptionFilter)
 export class AuthController {
-  constructor(private readonly authentication: AuthService) {}
+  constructor(private readonly authentication: AuthService, private readonly sessions: SessionService, private readonly configuration: ConfigService) {}
 
   @Post('register')
   @HttpCode(202)
@@ -100,7 +107,8 @@ export class AuthController {
     @Req() context: AuthenticatedRequestContext,
     @Res({ passthrough: true }) response: CookieResponse,
   ): Promise<PasswordSessionResponseDto> {
-    const result = await this.authentication.login(request, context.ip);
+    const result = await this.authentication.login(request, context.ip, this.readSessionCookie(context.headers.cookie));
+    response.header('Cache-Control', 'no-store');
     response.header(
       'Set-Cookie',
       `${sessionCookieName}=${result.sessionToken}; Path=/; Max-Age=${result.expiresInSeconds}; HttpOnly; Secure; SameSite=Lax`,
@@ -109,5 +117,58 @@ export class AuthController {
       authenticationState: 'authenticated',
       user: { id: result.userId },
     };
+  }
+
+  @Get('session')
+  @ApiCookieAuth('renivetSession')
+  @ApiOperation({ operationId: 'getCurrentSession', summary: 'Inspect the authenticated first-party session', description: 'Requires a valid opaque session cookie. Returns a minimal user identity and a session-bound CSRF token for same-origin mutations. Idle expiry is extended up to the seven-day absolute limit. Linear: REN2-23.' })
+  @ApiResponse({ status: 200, description: 'Active identity and session-bound CSRF token; refreshes the session cookie to its server-calculated idle expiry, capped by its absolute expiry.', headers: { 'Cache-Control': { description: 'Sensitive session response must not be cached.', schema: { type: 'string', example: 'no-store' } }, 'Set-Cookie': { description: 'Refreshed host-only session cookie, capped at the server-calculated idle/absolute expiry.', schema: { type: 'string', example: '__Host-renivet_session=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA; Path=/; Max-Age=1800; HttpOnly; Secure; SameSite=Lax' } } }, schema: { example: { authenticationState: 'authenticated', user: { id: '7d785d72-ea2c-44bb-9d82-87b272112b32' }, csrfToken: 'synthetic-csrf-token' } } })
+  @ApiUnauthorizedResponse({ description: 'AUTHENTICATION_FAILED. Missing, expired, revoked or invalid session.', type: AuthErrorDto })
+  @ApiServiceUnavailableResponse({ description: 'AUTH_SERVICE_UNAVAILABLE. Session store or CSRF configuration is unavailable.', type: AuthErrorDto })
+  @ApiInternalServerErrorResponse({ description: 'AUTH_INTERNAL_ERROR. Unexpected failure with a safe public message.', type: AuthErrorDto })
+  async getSession(@Req() context: AuthenticatedRequestContext, @Res({ passthrough: true }) response: CookieResponse): Promise<{ authenticationState: 'authenticated'; user: { id: string }; csrfToken: string }> {
+    const session = await this.sessions.authenticate(this.readSessionCookie(context.headers.cookie));
+    response.header('Cache-Control', 'no-store');
+    const token = this.readSessionCookie(context.headers.cookie)!;
+    response.header(
+      'Set-Cookie',
+      `${sessionCookieName}=${token}; Path=/; Max-Age=${session.expiresInSeconds}; HttpOnly; Secure; SameSite=Lax`,
+    );
+    return { authenticationState: 'authenticated', user: { id: session.userId }, csrfToken: session.csrfToken };
+  }
+
+  @Delete('session')
+  @HttpCode(200)
+  @ApiCookieAuth('renivetSession')
+  @ApiOperation({ operationId: 'logoutCurrentSession', summary: 'Revoke the current session', description: 'Requires a valid session cookie, exact allowlisted Origin, Sec-Fetch-Site: same-origin, and the session-bound X-CSRF-Token returned by GET /auth/session. Revocation is server-side before the cookie is expired. Linear: REN2-23.' })
+  @ApiResponse({ status: 200, description: 'Session revoked and host-only cookie expired.', schema: { example: { status: 'logged_out' } } })
+  @ApiHeader({ name: 'Origin', required: true, description: 'Must exactly match one configured AUTH_ALLOWED_ORIGINS origin.', example: 'https://app.example.test' })
+  @ApiHeader({ name: 'Sec-Fetch-Site', required: true, description: 'Must be same-origin.', example: 'same-origin' })
+  @ApiHeader({ name: 'X-CSRF-Token', required: true, description: 'Must equal the session-bound proof returned by GET /auth/session.' })
+  @ApiUnauthorizedResponse({ description: 'AUTHENTICATION_FAILED. Session is not active.', type: AuthErrorDto })
+  @ApiResponse({ status: 403, description: 'CSRF_VALIDATION_FAILED. Origin, fetch metadata or CSRF evidence is invalid.', type: AuthErrorDto })
+  @ApiServiceUnavailableResponse({ description: 'AUTH_SERVICE_UNAVAILABLE. Session store or CSRF configuration is unavailable.', type: AuthErrorDto })
+  @ApiInternalServerErrorResponse({ description: 'AUTH_INTERNAL_ERROR. Unexpected failure with a safe public message.', type: AuthErrorDto })
+  async logout(@Req() context: AuthenticatedRequestContext, @Res({ passthrough: true }) response: CookieResponse): Promise<{ status: 'logged_out' }> {
+    const token = this.readSessionCookie(context.headers.cookie);
+    if (!token) await this.sessions.authenticate(token);
+    const origins = this.configuration.get<string[]>('AUTH_ALLOWED_ORIGINS') ?? [];
+    if (!csrfMatches(context.headers, origins, this.sessions.expectedCsrf(token!))) {
+      throw new CsrfRejectedError();
+    }
+    await this.sessions.logout(token);
+    response.header('Set-Cookie', `${sessionCookieName}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`);
+    response.header('Cache-Control', 'no-store');
+    return { status: 'logged_out' };
+  }
+
+  private readSessionCookie(header: string | string[] | undefined): string | undefined {
+    if (Array.isArray(header) && header.length !== 1) return undefined;
+    const value = Array.isArray(header) ? header[0] : header;
+    const cookies = value?.split(';').map((part) => part.trim()).filter((part) => part.startsWith(`${sessionCookieName}=`)) ?? [];
+    if (cookies.length !== 1) return undefined;
+    const cookie = cookies[0];
+    const token = cookie?.slice(sessionCookieName.length + 1);
+    return token && /^[A-Za-z0-9_-]{43}$/.test(token) ? token : undefined;
   }
 }

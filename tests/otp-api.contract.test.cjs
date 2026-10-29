@@ -18,7 +18,10 @@ test('REN2-22 HTTP routes use generic responses, validation, and consume success
   const records = new Map();
   const delivered = [];
   const repository = app.get(IdentityRepository);
-  repository.findUnverified = async (channel, destination) => destination.startsWith('known-') || destination === 'known@example.test' ? { userId: 'e1c64e79-8b2e-4e49-8f4b-1e72a7c639f1', destination } : null;
+  repository.findChallengeTarget = async (channel, purpose, destination) =>
+    channel === 'email' && purpose === 'email_verification' && (destination.startsWith('known-') || destination === 'known@example.test')
+      ? { userId: 'e1c64e79-8b2e-4e49-8f4b-1e72a7c639f1', destination }
+      : null;
   repository.issue = async (challenge) => { records.set(challenge.id, { ...challenge, consumed: false }); return true; };
   repository.invalidate = async (id) => { const record = records.get(id); if (record) record.consumed = true; };
   repository.verify = async ({ id, purpose, code, hmacKey, maxAttempts }) => {

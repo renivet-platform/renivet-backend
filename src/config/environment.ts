@@ -82,11 +82,25 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
   const searchKey = optionalString(input, 'TYPESENSE_API_KEY');
   const authRateLimitKey = optionalString(input, 'AUTH_RATE_LIMIT_HMAC_KEY');
   const authChallengeKey = optionalString(input, 'AUTH_CHALLENGE_HMAC_KEY');
+  const authCsrfKey = optionalString(input, 'AUTH_CSRF_HMAC_KEY');
+  const allowedOriginsRaw = optionalString(input, 'AUTH_ALLOWED_ORIGINS');
+  const allowedOrigins = (allowedOriginsRaw ?? '').split(',').map((origin) => origin.trim()).filter(Boolean);
+  for (const origin of allowedOrigins) {
+    let parsed: URL;
+    try { parsed = new URL(origin); } catch { return error('AUTH_ALLOWED_ORIGINS', 'must be a comma-separated list of exact origins'); }
+    if (parsed.origin !== origin || parsed.username || parsed.password || (protectedEnvironment && parsed.protocol !== 'https:')) {
+      error('AUTH_ALLOWED_ORIGINS', protectedEnvironment ? 'must contain exact HTTPS origins without paths or credentials' : 'must contain exact origins without paths or credentials');
+    }
+  }
   if (authRateLimitKey && authRateLimitKey.length < 32) {
     error('AUTH_RATE_LIMIT_HMAC_KEY', 'must contain at least 32 characters');
   }
   if (protectedEnvironment && authRateLimitKey === 'local-only-set-a-random-32-byte-value') {
     error('AUTH_RATE_LIMIT_HMAC_KEY', 'must not use the local example value');
+  }
+  if (protectedEnvironment && authCsrfKey === 'local-only-set-a-random-32-byte-value') error('AUTH_CSRF_HMAC_KEY', 'must not use the local example value');
+  if (authCsrfKey && (authCsrfKey === authRateLimitKey || authCsrfKey === authChallengeKey)) {
+    error('AUTH_CSRF_HMAC_KEY', 'must be distinct from the rate-limit and challenge HMAC keys');
   }
   if (protectedEnvironment && !authRateLimitKey) {
     error('AUTH_RATE_LIMIT_HMAC_KEY', 'is required in staging and production');
@@ -94,12 +108,15 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
   if (authChallengeKey && authChallengeKey.length < 32) {
     error('AUTH_CHALLENGE_HMAC_KEY', 'must contain at least 32 characters');
   }
+  if (authCsrfKey && authCsrfKey.length < 32) error('AUTH_CSRF_HMAC_KEY', 'must contain at least 32 characters');
   if (protectedEnvironment && authChallengeKey === 'local-only-set-a-random-32-byte-value') {
     error('AUTH_CHALLENGE_HMAC_KEY', 'must not use the local example value');
   }
   if (protectedEnvironment && !authChallengeKey) {
     error('AUTH_CHALLENGE_HMAC_KEY', 'is required in staging and production');
   }
+  if (protectedEnvironment && !authCsrfKey) error('AUTH_CSRF_HMAC_KEY', 'is required in staging and production');
+  if (protectedEnvironment && allowedOrigins.length === 0) error('AUTH_ALLOWED_ORIGINS', 'is required in staging and production');
   if (protectedEnvironment) {
     if (!searchKey) error('TYPESENSE_API_KEY', 'is required in staging and production');
     if (searchKey === 'local-typesense-do-not-deploy') {
@@ -122,12 +139,16 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
     TYPESENSE_API_KEY: searchKey,
     AUTH_RATE_LIMIT_HMAC_KEY: authRateLimitKey,
     AUTH_CHALLENGE_HMAC_KEY: authChallengeKey,
+    AUTH_CSRF_HMAC_KEY: authCsrfKey,
+    AUTH_ALLOWED_ORIGINS: allowedOrigins,
     AUTH_RATE_LIMIT_WINDOW_SECONDS: positiveInteger(input, 'AUTH_RATE_LIMIT_WINDOW_SECONDS', 900, 86_400),
     AUTH_REGISTER_ACCOUNT_LIMIT: positiveInteger(input, 'AUTH_REGISTER_ACCOUNT_LIMIT', 5, 10_000),
     AUTH_REGISTER_IP_LIMIT: positiveInteger(input, 'AUTH_REGISTER_IP_LIMIT', 30, 100_000),
     AUTH_LOGIN_ACCOUNT_LIMIT: positiveInteger(input, 'AUTH_LOGIN_ACCOUNT_LIMIT', 5, 10_000),
     AUTH_LOGIN_IP_LIMIT: positiveInteger(input, 'AUTH_LOGIN_IP_LIMIT', 60, 100_000),
     AUTH_SESSION_TTL_SECONDS: positiveInteger(input, 'AUTH_SESSION_TTL_SECONDS', 1_800, 604_800),
+    AUTH_SESSION_IDLE_TTL_SECONDS: positiveInteger(input, 'AUTH_SESSION_IDLE_TTL_SECONDS', 1_800, 1_800),
+    AUTH_SESSION_ABSOLUTE_TTL_SECONDS: positiveInteger(input, 'AUTH_SESSION_ABSOLUTE_TTL_SECONDS', 604_800, 604_800),
     AUTH_CHALLENGE_TTL_SECONDS: positiveInteger(input, 'AUTH_CHALLENGE_TTL_SECONDS', 300, 3_600),
     AUTH_CHALLENGE_MAX_ATTEMPTS: positiveInteger(input, 'AUTH_CHALLENGE_MAX_ATTEMPTS', 5, 20),
     AUTH_CHALLENGE_RESEND_COOLDOWN_SECONDS: positiveInteger(input, 'AUTH_CHALLENGE_RESEND_COOLDOWN_SECONDS', 60, 3_600),

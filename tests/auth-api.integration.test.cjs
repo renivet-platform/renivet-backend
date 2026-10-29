@@ -34,6 +34,8 @@ test('REN2-21 registration and password HTTP acceptance', { skip: enabled ? fals
   process.env.DATABASE_URL = databaseUrl;
   process.env.REDIS_URL = redisUrl;
   process.env.AUTH_RATE_LIMIT_HMAC_KEY = 'synthetic-integration-rate-key-not-a-secret-00000000';
+  process.env.AUTH_CSRF_HMAC_KEY = 'synthetic-integration-csrf-key-not-a-secret-00000000';
+  process.env.AUTH_ALLOWED_ORIGINS = 'http://127.0.0.1:3000';
 
   const { NestFactory } = require('@nestjs/core');
   const { FastifyAdapter } = require('@nestjs/platform-fastify');
@@ -76,6 +78,19 @@ test('REN2-21 registration and password HTTP acceptance', { skip: enabled ? fals
     app.setGlobalPrefix('api/v1');
     await app.listen(port, '127.0.0.1');
     const base = `http://127.0.0.1:${port}/api/v1`;
+
+    const expiredToken = 'E'.repeat(43);
+    const absoluteExpiredToken = 'A'.repeat(43);
+    await pool.query(
+      `INSERT INTO identity.user_sessions (user_id, token_hash, created_at, expires_at)
+       VALUES ($1, $2, now() - interval '10 days', now() - interval '9 days'),
+              ($1, $3, now() - interval '8 days', now() + interval '1 hour')`,
+      [userId, require('node:crypto').createHash('sha256').update(expiredToken).digest('hex'), require('node:crypto').createHash('sha256').update(absoluteExpiredToken).digest('hex')],
+    );
+    const idleExpired = await fetch(`${base}/auth/session`, { headers: { cookie: `__Host-renivet_session=${expiredToken}` } });
+    const absoluteExpired = await fetch(`${base}/auth/session`, { headers: { cookie: `__Host-renivet_session=${absoluteExpiredToken}` } });
+    assert.equal(idleExpired.status, 401, 'idle-expired session must not authenticate');
+    assert.equal(absoluteExpired.status, 401, 'absolute-expired session must not authenticate');
 
     const registerPayload = { email: ` ${registrationEmail.toUpperCase()} `, password: registerPassword };
     const [firstRegistration, concurrentRegistration] = await Promise.all([
@@ -149,12 +164,50 @@ test('REN2-21 registration and password HTTP acceptance', { skip: enabled ? fals
     assert.deepEqual(await validLogin.json(), { authenticationState: 'authenticated', user: { id: userId } });
     const cookie = validLogin.headers.get('set-cookie');
     assert.match(cookie, /^__Host-renivet_session=[A-Za-z0-9_-]{43}; Path=\/; Max-Age=1800; HttpOnly; Secure; SameSite=Lax$/);
-    const sessionToken = cookie.split(';', 1)[0].split('=', 2)[1];
+    let sessionToken = cookie.split(';', 1)[0].split('=', 2)[1];
     const persistedSession = await pool.query('SELECT token_hash, ip_hash FROM identity.user_sessions WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1', [userId]);
     assert.equal(persistedSession.rowCount, 1);
     assert.match(persistedSession.rows[0].token_hash, /^[a-f0-9]{64}$/);
     assert.notEqual(persistedSession.rows[0].token_hash, sessionToken);
     assert.match(persistedSession.rows[0].ip_hash, /^[a-f0-9]{64}$/);
+
+    const priorToken = sessionToken;
+    const rotatedLogin = await fetch(`${base}/auth/sessions`, {
+      method: 'POST', headers: { 'content-type': 'application/json', cookie: `__Host-renivet_session=${priorToken}` },
+      body: JSON.stringify({ email: verifiedEmail, password: verifiedPassword }),
+    });
+    assert.equal(rotatedLogin.status, 200);
+    sessionToken = rotatedLogin.headers.get('set-cookie').split(';', 1)[0].split('=', 2)[1];
+    assert.notEqual(sessionToken, priorToken, 'login must rotate rather than reuse a presented session token');
+    const staleSession = await fetch(`${base}/auth/session`, { headers: { cookie: `__Host-renivet_session=${priorToken}` } });
+    assert.equal(staleSession.status, 401, 'rotated session secret must no longer authenticate');
+    const activeSession = await fetch(`${base}/auth/session`, { headers: { cookie: `__Host-renivet_session=${sessionToken}` } });
+    assert.equal(activeSession.status, 200);
+    const refreshedCookie = activeSession.headers.get('set-cookie');
+    assert.match(refreshedCookie, /^__Host-renivet_session=[A-Za-z0-9_-]{43}; Path=\/; Max-Age=(?:[1-9]\d{0,2}|1[0-7]\d{2}|1800); HttpOnly; Secure; SameSite=Lax$/);
+    const csrfToken = (await activeSession.json()).csrfToken;
+    const crossSiteLogout = await fetch(`${base}/auth/session`, {
+      method: 'DELETE', headers: {
+        cookie: `__Host-renivet_session=${sessionToken}`, origin: 'https://attacker.example.test',
+        'sec-fetch-site': 'cross-site', 'x-csrf-token': csrfToken,
+      },
+    });
+    assert.equal(crossSiteLogout.status, 403);
+    assert.equal((await crossSiteLogout.json()).code, 'CSRF_VALIDATION_FAILED');
+    const stillActive = await fetch(`${base}/auth/session`, { headers: { cookie: `__Host-renivet_session=${sessionToken}` } });
+    assert.equal(stillActive.status, 200, 'CSRF denial must not revoke a valid session');
+    const logout = await fetch(`${base}/auth/session`, {
+      method: 'DELETE', headers: {
+        cookie: `__Host-renivet_session=${sessionToken}`, origin: 'http://127.0.0.1:3000',
+        'sec-fetch-site': 'same-origin', 'x-csrf-token': csrfToken,
+      },
+    });
+    assert.equal(logout.status, 200, await logout.clone().text());
+    assert.match(logout.headers.get('set-cookie'), /^__Host-renivet_session=; Path=\/; Max-Age=0; HttpOnly; Secure; SameSite=Lax$/);
+    const loggedOutSession = await fetch(`${base}/auth/session`, { headers: { cookie: `__Host-renivet_session=${sessionToken}` } });
+    assert.equal(loggedOutSession.status, 401, 'server-revoked logout cookie must no longer authenticate');
+    const revoked = await pool.query('SELECT revoked_at FROM identity.user_sessions WHERE token_hash = $1', [require('node:crypto').createHash('sha256').update(sessionToken).digest('hex')]);
+    assert.ok(revoked.rows[0].revoked_at);
 
     const postmanEnvironment = { ...process.env };
     delete postmanEnvironment.POSTMAN_API_KEY;
@@ -172,6 +225,7 @@ test('REN2-21 registration and password HTTP acceptance', { skip: enabled ? fals
       '--env-var', `verifiedPassword=${verifiedPassword}`,
       '--env-var', `wrongPassword=${registerPassword}`,
       '--env-var', `unknownEmail=unknown-${namespace}@example.test`,
+      '--env-var', 'allowedOrigin=http://127.0.0.1:3000',
       '--reporters', 'cli',
       '--report-events=false',
       '--timeout-request', '10000',
@@ -203,20 +257,55 @@ test('REN2-21 registration and password HTTP acceptance', { skip: enabled ? fals
     assert.equal(postmanRun.code, 0, `Postman CLI collection failed:\n${postmanRun.stdout}\n${postmanRun.stderr}`);
     assert.match(postmanRun.stdout, /assertions/i);
 
-    for (let attempt = 0; attempt < 1; attempt += 1) {
+    const rateLimitEmail = `rate-limit-${namespace}@example.test`;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
       const denied = await fetch(`${base}/auth/sessions`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email: verifiedEmail, password: registerPassword }),
+        body: JSON.stringify({ email: rateLimitEmail, password: registerPassword }),
       });
       assert.equal(denied.status, 401);
     }
     const limited = await fetch(`${base}/auth/sessions`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ email: verifiedEmail, password: registerPassword }),
+      body: JSON.stringify({ email: rateLimitEmail, password: registerPassword }),
     });
     assert.equal(limited.status, 429);
     assert.equal((await limited.json()).code, 'AUTH_RATE_LIMITED');
     assert.ok(limited.headers.get('retry-after'));
+
+    const { IdentityRepository } = require('../dist/modules/identity/identity.repository');
+    const raceCredential = await pool.query('SELECT id, password_hash FROM identity.user_credentials WHERE user_id = $1 AND disabled_at IS NULL', [userId]);
+    const recoveryLock = await pool.connect();
+    await recoveryLock.query('BEGIN');
+    const lockPid = (await recoveryLock.query('SELECT pg_backend_pid() AS pid')).rows[0].pid;
+    await recoveryLock.query('SELECT id FROM identity.users WHERE id = $1 FOR UPDATE', [userId]);
+    const raceTokenHash = require('node:crypto').createHash('sha256').update(`synthetic-login-race-${namespace}`).digest('hex');
+    const racingLogin = new IdentityRepository({ pool }).createSession({
+      userId,
+      credentialId: raceCredential.rows[0].id,
+      expectedPasswordHash: raceCredential.rows[0].password_hash,
+      tokenHash: raceTokenHash,
+      expiresAt: new Date(Date.now() + 1_800_000),
+      ipHash: '0'.repeat(64),
+    });
+    let recoveryBlockedLogin = false;
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      const waiting = await pool.query('SELECT count(*)::integer AS count FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))', [lockPid]);
+      if (waiting.rows[0].count > 0) { recoveryBlockedLogin = true; break; }
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    assert.equal(recoveryBlockedLogin, true, 'login session creation must wait behind a recovery user-row lock');
+    const replacementHash = await new PasswordHashService().hash('synthetic password after recovery');
+    await recoveryLock.query(
+      `UPDATE identity.user_credentials SET password_hash = $2, credential_version = credential_version + 1, updated_at = now()
+        WHERE user_id = $1 AND disabled_at IS NULL`,
+      [userId, replacementHash],
+    );
+    await recoveryLock.query('UPDATE identity.user_sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL', [userId]);
+    await recoveryLock.query('COMMIT');
+    recoveryLock.release();
+    assert.equal(await racingLogin, false, 'login verified before recovery must not create a session after recovery commits');
+    assert.equal((await pool.query('SELECT 1 FROM identity.user_sessions WHERE token_hash = $1', [raceTokenHash])).rowCount, 0);
   } finally {
     await app?.close();
     await pool.query('DELETE FROM identity.user_sessions WHERE user_id IN (SELECT id FROM identity.users WHERE email = ANY($1::text[]))', [[registrationEmail, postmanEmail, verifiedEmail]]).catch(() => {});

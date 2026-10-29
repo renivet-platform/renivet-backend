@@ -1,14 +1,21 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsIn, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsIn, IsString, Matches, MaxLength, MinLength, Validate, ValidateIf, ValidatorConstraint } from 'class-validator';
 import { OtpChannel, OtpPurpose } from './otp-challenge.service';
+import { isPasswordAllowed, PASSWORD_MAX_LENGTH } from './passwords';
+
+@ValidatorConstraint({ name: 'recoveryPassword', async: false })
+class RecoveryPasswordConstraint {
+  validate(value: unknown): boolean { return isPasswordAllowed(value); }
+  defaultMessage(): string { return 'The request could not be processed.'; }
+}
 
 export class OtpIssueRequestDto {
   @ApiProperty({ enum: ['email', 'phone'], example: 'email' })
   @IsIn(['email', 'phone'])
   channel!: OtpChannel;
 
-  @ApiProperty({ enum: ['email_verification', 'phone_verification'], example: 'email_verification' })
-  @IsIn(['email_verification', 'phone_verification'])
+  @ApiProperty({ enum: ['email_verification', 'phone_verification', 'password_recovery'], example: 'email_verification' })
+  @IsIn(['email_verification', 'phone_verification', 'password_recovery'])
   purpose!: OtpPurpose;
 
   @ApiProperty({ example: 'buyer@example.test', description: 'Email address or E.164 phone number. The requested channel and purpose must match.' })
@@ -19,14 +26,21 @@ export class OtpIssueRequestDto {
 }
 
 export class OtpVerifyRequestDto {
-  @ApiProperty({ enum: ['email_verification', 'phone_verification'], example: 'email_verification' })
-  @IsIn(['email_verification', 'phone_verification'])
+  @ApiProperty({ enum: ['email_verification', 'phone_verification', 'password_recovery'], example: 'email_verification' })
+  @IsIn(['email_verification', 'phone_verification', 'password_recovery'])
   purpose!: OtpPurpose;
 
   @ApiProperty({ pattern: '^[0-9]{6}$', example: '123456', description: 'Six-digit synthetic example. Real codes are delivered out of band.' })
   @IsString()
   @Matches(/^[0-9]{6}$/)
   code!: string;
+
+  @ApiPropertyOptional({ type: 'string', minLength: 15, maxLength: PASSWORD_MAX_LENGTH, example: 'synthetic replacement passphrase', description: 'Required only for password_recovery; accepted as a passphrase and stored only as an Argon2id hash.' })
+  @ValidateIf((request: OtpVerifyRequestDto) => request.purpose === 'password_recovery')
+  @IsString()
+  @MaxLength(PASSWORD_MAX_LENGTH * 2)
+  @Validate(RecoveryPasswordConstraint)
+  newPassword?: string;
 }
 
 export class OtpAcceptedDto {

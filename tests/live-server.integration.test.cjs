@@ -30,6 +30,8 @@ test('staging HTTP server is live while Swagger and unfinished commerce routes s
       PYTHON_SERVICE_URL: 'http://localhost:8000',
       AUTH_RATE_LIMIT_HMAC_KEY: 'stage-test-rate-limit-key-not-a-real-secret-000000',
       AUTH_CHALLENGE_HMAC_KEY: 'stage-test-challenge-proof-key-not-a-real-secret-000000',
+      AUTH_CSRF_HMAC_KEY: 'stage-test-csrf-proof-key-not-a-real-secret-00000000',
+      AUTH_ALLOWED_ORIGINS: 'https://app.example.test',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
