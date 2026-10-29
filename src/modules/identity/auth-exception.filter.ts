@@ -1,4 +1,4 @@
-import { ArgumentsHost, Catch, ExceptionFilter } from '@nestjs/common';
+import { ArgumentsHost, Catch, ExceptionFilter, HttpException } from '@nestjs/common';
 import { AuthHttpError } from './auth.service';
 import { AuthRateLimitExceededError, AuthRateLimitUnavailableError } from './rate-limiter';
 
@@ -11,6 +11,13 @@ interface FastifyAuthReply {
   header(name: string, value: string): FastifyAuthReply;
   send(payload: unknown): void;
 }
+
+const safeNestAuthErrors: Record<string, { status: number; message: string }> = {
+  AUTHENTICATION_FAILED: { status: 401, message: 'The session could not be verified.' },
+  AUTH_MFA_STEP_UP_REQUIRED: { status: 403, message: 'A recent MFA step-up is required.' },
+  AUTH_SERVICE_UNAVAILABLE: { status: 503, message: 'Authentication is temporarily unavailable.' },
+  AUTH_POLICY_CONFIGURATION_ERROR: { status: 500, message: 'The operation could not be authorized.' },
+};
 
 @Catch()
 export class AuthExceptionFilter implements ExceptionFilter {
@@ -38,6 +45,17 @@ export class AuthExceptionFilter implements ExceptionFilter {
       status = 503;
       code = 'AUTH_SERVICE_UNAVAILABLE';
       message = 'Authentication is temporarily unavailable.';
+    } else if (exception instanceof HttpException) {
+      const response = exception.getResponse();
+      const candidateCode = typeof response === 'object' && response !== null && 'code' in response
+        ? (response as { code?: unknown }).code
+        : undefined;
+      const safe = typeof candidateCode === 'string' ? safeNestAuthErrors[candidateCode] : undefined;
+      if (safe && exception.getStatus() === safe.status) {
+        status = safe.status;
+        code = candidateCode as string;
+        message = safe.message;
+      }
     }
 
     reply.status(status).send({ code, message, requestId: request.id ?? 'unavailable' });
