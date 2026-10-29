@@ -42,6 +42,8 @@ test('staging and production refuse known local credentials', () => {
     TYPESENSE_API_KEY: 'real-deployment-key',
     AUTH_RATE_LIMIT_HMAC_KEY: 'synthetic-not-a-real-deployment-key-0000000000000000',
     AUTH_CHALLENGE_HMAC_KEY: 'synthetic-challenge-not-a-deployment-key-0000000000',
+    AUTH_CSRF_HMAC_KEY: 'synthetic-csrf-not-a-deployment-key-00000000000000',
+    AUTH_ALLOWED_ORIGINS: 'https://app.example.test',
   };
   assert.throws(() => validateEnvironment(environment), /DATABASE_URL/);
   environment.DATABASE_URL = 'postgres://app:different-password@db.internal:5432/renivet';
@@ -59,6 +61,8 @@ test('protected environments require a private rate-limit HMAC key and bounded a
     TYPESENSE_URL: 'https://search.internal:8108',
     TYPESENSE_API_KEY: 'deployment-only-typesense-key',
     PYTHON_SERVICE_URL: 'https://ai.internal:8000',
+    AUTH_CSRF_HMAC_KEY: 'synthetic-csrf-not-a-deployment-key-00000000000000',
+    AUTH_ALLOWED_ORIGINS: 'https://app.example.test',
   };
   assert.throws(() => validateEnvironment(environment), /AUTH_RATE_LIMIT_HMAC_KEY/);
   environment.AUTH_RATE_LIMIT_HMAC_KEY = 'short';
@@ -103,10 +107,41 @@ test('staging and production require a dedicated OTP challenge HMAC key', () => 
     TYPESENSE_API_KEY: 'deployment-only-typesense-key',
     PYTHON_SERVICE_URL: 'https://ai.internal:8000',
     AUTH_RATE_LIMIT_HMAC_KEY: 'synthetic-not-a-real-deployment-key-0000000000000000',
+    AUTH_CSRF_HMAC_KEY: 'synthetic-csrf-not-a-deployment-key-00000000000000',
+    AUTH_ALLOWED_ORIGINS: 'https://app.example.test',
   };
   assert.throws(() => validateEnvironment(env), /AUTH_CHALLENGE_HMAC_KEY/);
   env.AUTH_CHALLENGE_HMAC_KEY = 'dedicated-not-a-real-deployment-key-0000000000000';
   assert.equal(validateEnvironment(env).AUTH_CHALLENGE_HMAC_KEY, env.AUTH_CHALLENGE_HMAC_KEY);
   env.AUTH_CHALLENGE_HMAC_KEY = 'local-only-set-a-random-32-byte-value';
   assert.throws(() => validateEnvironment(env), /AUTH_CHALLENGE_HMAC_KEY/);
+});
+
+test('session CSRF origin configuration requires exact HTTPS origins and a dedicated HMAC key in protected environments', () => {
+  const environment = {
+    NODE_ENV: 'production',
+    DATABASE_URL: 'postgres://app:deployment-only@db.internal:5432/renivet',
+    REDIS_URL: 'redis://cache.internal:6379',
+    TYPESENSE_URL: 'https://search.internal:8108',
+    TYPESENSE_API_KEY: 'deployment-only-typesense-key',
+    PYTHON_SERVICE_URL: 'https://ai.internal:8000',
+    AUTH_RATE_LIMIT_HMAC_KEY: 'synthetic-rate-limit-key-not-a-real-deployment-value-0000',
+    AUTH_CHALLENGE_HMAC_KEY: 'synthetic-challenge-key-not-a-real-deployment-value-000',
+    AUTH_CSRF_HMAC_KEY: 'synthetic-csrf-key-not-a-real-deployment-value-00000000',
+  };
+  assert.throws(() => validateEnvironment(environment), /AUTH_ALLOWED_ORIGINS/);
+  environment.AUTH_ALLOWED_ORIGINS = 'http://app.example.test';
+  assert.throws(() => validateEnvironment(environment), /AUTH_ALLOWED_ORIGINS/);
+  environment.AUTH_ALLOWED_ORIGINS = 'https://app.example.test/path';
+  assert.throws(() => validateEnvironment(environment), /AUTH_ALLOWED_ORIGINS/);
+  environment.AUTH_ALLOWED_ORIGINS = 'https://app.example.test';
+  assert.deepEqual(validateEnvironment(environment).AUTH_ALLOWED_ORIGINS, ['https://app.example.test']);
+  environment.AUTH_CSRF_HMAC_KEY = environment.AUTH_RATE_LIMIT_HMAC_KEY;
+  assert.throws(() => validateEnvironment(environment), /AUTH_CSRF_HMAC_KEY/);
+});
+
+test('session idle expiry cannot exceed the approved 30-minute limit', () => {
+  assert.equal(validateEnvironment({}).AUTH_SESSION_IDLE_TTL_SECONDS, 1_800);
+  assert.equal(validateEnvironment({ AUTH_SESSION_IDLE_TTL_SECONDS: '1200' }).AUTH_SESSION_IDLE_TTL_SECONDS, 1_200);
+  assert.throws(() => validateEnvironment({ AUTH_SESSION_IDLE_TTL_SECONDS: '1801' }), /AUTH_SESSION_IDLE_TTL_SECONDS/);
 });

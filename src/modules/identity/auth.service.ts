@@ -16,10 +16,14 @@ export interface IdentityRepositoryPort {
   createSession(session: {
     userId: string;
     credentialId: string;
+    expectedPasswordHash: string;
     tokenHash: string;
     expiresAt: Date;
     ipHash: string;
+    previousTokenHash?: string;
   }): Promise<boolean>;
+  revokeSession(tokenHash: string): Promise<boolean>;
+  revokeUserSessions(userId: string): Promise<void>;
 }
 
 export interface AuthServiceOptions {
@@ -99,7 +103,7 @@ export class AuthService {
     return { status: 'accepted' };
   }
 
-  async login(request: LoginRequest, ip: string): Promise<LoginResult> {
+  async login(request: LoginRequest, ip: string, previousSessionToken?: string): Promise<LoginResult> {
     const email = normalizeEmail(request.email);
     if (!email || !isPasswordAllowed(request.password)) {
       throw new AuthHttpError(400, 'AUTH_INPUT_INVALID', 'The request could not be processed.');
@@ -143,9 +147,13 @@ export class AuthService {
       created = await this.repository.createSession({
         userId: credential.userId,
         credentialId: credential.credentialId,
+        expectedPasswordHash: credential.passwordHash!,
         tokenHash,
         expiresAt,
         ipHash,
+        previousTokenHash: previousSessionToken && /^[A-Za-z0-9_-]{43}$/.test(previousSessionToken)
+          ? createHash('sha256').update(previousSessionToken).digest('hex')
+          : undefined,
       });
     } catch {
       throw GENERIC_INFRASTRUCTURE_FAILURE;

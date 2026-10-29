@@ -77,15 +77,38 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
   async createSession(session: {
     userId: string;
     credentialId: string;
+    expectedPasswordHash: string;
     tokenHash: string;
     expiresAt: Date;
     ipHash: string;
+    previousTokenHash?: string;
   }): Promise<boolean> {
     const pool = this.requirePool();
     let client: PoolClient | undefined;
     try {
       client = await pool.connect();
       await client.query('BEGIN');
+      const owner = await client.query(
+        `SELECT u.id
+           FROM identity.users AS u
+           JOIN identity.user_credentials AS c ON c.user_id = u.id
+          WHERE u.id = $1 AND u.state = 'active' AND u.email_verified_at IS NOT NULL
+            AND c.id = $2 AND c.password_hash = $3 AND c.disabled_at IS NULL
+          FOR UPDATE OF u, c`,
+        [session.userId, session.credentialId, session.expectedPasswordHash],
+      );
+      if (owner.rowCount !== 1) {
+        await client.query('ROLLBACK');
+        return false;
+      }
+      if (session.previousTokenHash) {
+        await client.query(
+          `UPDATE identity.user_sessions
+              SET revoked_at = clock_timestamp(), updated_at = clock_timestamp(), row_version = row_version + 1
+            WHERE token_hash = $1 AND user_id = $2 AND revoked_at IS NULL`,
+          [session.previousTokenHash, session.userId],
+        );
+      }
       const inserted = await client.query(
         `INSERT INTO identity.user_sessions (user_id, token_hash, expires_at, ip_hash)
          SELECT u.id, $3, $4, $5
@@ -95,10 +118,10 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
             AND u.email_verified_at IS NOT NULL
             AND EXISTS (
               SELECT 1 FROM identity.user_credentials AS c
-               WHERE c.id = $2 AND c.user_id = u.id AND c.disabled_at IS NULL
+               WHERE c.id = $2 AND c.user_id = u.id AND c.password_hash = $6 AND c.disabled_at IS NULL
             )
          RETURNING id`,
-        [session.userId, session.credentialId, session.tokenHash, session.expiresAt, session.ipHash],
+        [session.userId, session.credentialId, session.tokenHash, session.expiresAt, session.ipHash, session.expectedPasswordHash],
       );
       if (inserted.rowCount !== 1) {
         await client.query('ROLLBACK');
@@ -120,21 +143,58 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
     }
   }
 
-  async findUnverified(channel: OtpChannel, destination: string): Promise<{ userId: string; destination: string } | null> {
+  async findAndTouchSession(tokenHash: string, idleTtlSeconds: number, absoluteTtlSeconds: number): Promise<{ userId: string; expiresAt: Date } | null> {
+    const result = await this.requirePool().query<{ user_id: string; expires_at: Date }>(
+      `UPDATE identity.user_sessions AS session
+          SET expires_at = LEAST(clock_timestamp() + ($2::integer * interval '1 second'), created_at + ($3::integer * interval '1 second')),
+              updated_at = clock_timestamp(), row_version = row_version + 1
+        WHERE token_hash = $1 AND revoked_at IS NULL
+          AND expires_at > clock_timestamp()
+          AND created_at + ($3::integer * interval '1 second') > clock_timestamp()
+          AND EXISTS (SELECT 1 FROM identity.users AS account WHERE account.id = session.user_id AND account.state = 'active')
+        RETURNING user_id, expires_at`,
+      [tokenHash, idleTtlSeconds, absoluteTtlSeconds],
+    );
+    return result.rows[0] ? { userId: result.rows[0].user_id, expiresAt: result.rows[0].expires_at } : null;
+  }
+
+  async revokeSession(tokenHash: string): Promise<boolean> {
+    const result = await this.requirePool().query(
+      `UPDATE identity.user_sessions
+          SET revoked_at = clock_timestamp(), updated_at = clock_timestamp(), row_version = row_version + 1
+        WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > clock_timestamp()
+          AND created_at + interval '7 days' > clock_timestamp()`,
+      [tokenHash],
+    );
+    return (result.rowCount ?? 0) === 1;
+  }
+
+  async revokeUserSessions(userId: string, exceptTokenHash?: string): Promise<void> {
+    await this.requirePool().query(
+      `UPDATE identity.user_sessions
+          SET revoked_at = clock_timestamp(), updated_at = clock_timestamp(), row_version = row_version + 1
+        WHERE user_id = $1 AND revoked_at IS NULL AND ($2::text IS NULL OR token_hash <> $2)`,
+      [userId, exceptTokenHash ?? null],
+    );
+  }
+
+  async findChallengeTarget(channel: OtpChannel, purpose: OtpPurpose, destination: string): Promise<{ userId: string; destination: string } | null> {
     const column = channel === 'email' ? 'email' : 'phone';
     const verifiedColumn = channel === 'email' ? 'email_verified_at' : 'phone_verified_at';
+    const recovery = purpose === 'password_recovery';
     const result = await this.requirePool().query<{ id: string; destination: string }>(
       `SELECT id, ${column} AS destination
          FROM identity.users
         WHERE ${channel === 'email' ? 'lower(btrim(email))' : 'phone'} = $1
-          AND ${verifiedColumn} IS NULL
+          AND ${verifiedColumn} IS ${recovery ? 'NOT ' : ''}NULL
+          AND ($2::boolean = false OR (state = 'active' AND EXISTS (SELECT 1 FROM identity.user_credentials c WHERE c.user_id = identity.users.id AND c.disabled_at IS NULL)))
         LIMIT 1`,
-      [destination],
+      [destination, recovery],
     );
     return result.rows[0] ? { userId: result.rows[0].id, destination: result.rows[0].destination } : null;
   }
 
-  async issue(input: { id: string; userId: string; kind: string; codeHash: string; expiresAt: Date; destination: string }): Promise<boolean> {
+  async issue(input: { id: string; userId: string; kind: string; codeHash: string; expiresAt: Date; destination: string; purpose?: OtpPurpose }): Promise<boolean> {
     const pool = this.requirePool();
     const client = await pool.connect();
     try {
@@ -149,9 +209,13 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
       const channel = input.kind.startsWith('email:') ? 'email' : 'phone';
       const contactColumn = channel === 'email' ? 'email' : 'phone';
       const verifiedColumn = channel === 'email' ? 'email_verified_at' : 'phone_verified_at';
+      const recovery = input.kind === 'email:password_recovery';
       const current = await client.query(
-        `SELECT id FROM identity.users WHERE id = $1 AND ${contactColumn} = $2 AND ${verifiedColumn} IS NULL FOR UPDATE`,
-        [input.userId, input.destination],
+        `SELECT id FROM identity.users
+          WHERE id = $1 AND ${contactColumn} = $2 AND ${verifiedColumn} IS ${recovery ? 'NOT ' : ''}NULL
+            AND ($3::boolean = false OR (state = 'active' AND EXISTS (SELECT 1 FROM identity.user_credentials c WHERE c.user_id = identity.users.id AND c.disabled_at IS NULL)))
+          FOR UPDATE`,
+        [input.userId, input.destination, recovery],
       );
       if (!current.rowCount) { await client.query('ROLLBACK'); return false; }
       await client.query(
@@ -182,7 +246,7 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
     );
   }
 
-  async verify(input: { id: string; purpose: OtpPurpose; code: string; hmacKey: string; maxAttempts: number }): Promise<'verified' | 'denied'> {
+  async verify(input: { id: string; purpose: OtpPurpose; code: string; hmacKey: string; maxAttempts: number; passwordHash?: string }): Promise<'verified' | 'denied'> {
     const client = await this.requirePool().connect();
     try {
       await client.query('BEGIN');
@@ -203,17 +267,21 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
       const ownerResult = await client.query<{
         email: string | null; phone: string | null;
         email_verified_at: Date | null; phone_verified_at: Date | null;
+        state: string;
       }>(
-        `SELECT email, phone, email_verified_at, phone_verified_at
+        `SELECT email, phone, email_verified_at, phone_verified_at, state
            FROM identity.users WHERE id=$1 FOR UPDATE`,
         [challenge.user_id],
       );
       const owner = ownerResult.rows[0];
       if (!owner) { await client.query('ROLLBACK'); return 'denied'; }
-      const channel: OtpChannel = input.purpose === 'email_verification' ? 'email' : 'phone';
+      const channel: OtpChannel = input.purpose === 'phone_verification' ? 'phone' : 'email';
       const expectedKind = `${channel}:${input.purpose}`;
       const destination = channel === 'email' ? owner.email : owner.phone;
-      if (challenge.kind !== expectedKind || !destination || (channel === 'email' ? owner.email_verified_at : owner.phone_verified_at)) {
+      const eligible = input.purpose === 'password_recovery'
+        ? owner.email_verified_at !== null && owner.state === 'active' && Boolean(input.passwordHash)
+        : !(channel === 'email' ? owner.email_verified_at : owner.phone_verified_at);
+      if (challenge.kind !== expectedKind || !destination || !eligible) {
         await client.query('ROLLBACK'); return 'denied';
       }
       const proof = createHmac('sha256', input.hmacKey)
@@ -234,15 +302,33 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
         );
         await client.query('COMMIT'); return 'denied';
       }
-      const verifiedColumn = channel === 'email' ? 'email_verified_at' : 'phone_verified_at';
-      await client.query(
-        `UPDATE identity.users
-            SET ${verifiedColumn} = now(),
-                state = CASE WHEN $2 = 'email' AND state = 'pending_verification' THEN 'active' ELSE state END,
-                updated_at = clock_timestamp(), row_version = row_version + 1
-          WHERE id = $1`,
-        [challenge.user_id, channel],
-      );
+      if (input.purpose === 'password_recovery') {
+        const credentialUpdate = await client.query(
+          `UPDATE identity.user_credentials
+              SET password_hash = $2,
+                  credential_version = (SELECT COALESCE(MAX(versioned.credential_version), 0) + 1 FROM identity.user_credentials versioned WHERE versioned.user_id = $1),
+                  updated_at = clock_timestamp(), row_version = row_version + 1
+            WHERE user_id = $1 AND disabled_at IS NULL`,
+          [challenge.user_id, input.passwordHash],
+        );
+        if (credentialUpdate.rowCount !== 1) { await client.query('ROLLBACK'); return 'denied'; }
+        await client.query(
+          `UPDATE identity.user_sessions
+              SET revoked_at = clock_timestamp(), updated_at = clock_timestamp(), row_version = row_version + 1
+            WHERE user_id = $1 AND revoked_at IS NULL`,
+          [challenge.user_id],
+        );
+      } else {
+        const verifiedColumn = channel === 'email' ? 'email_verified_at' : 'phone_verified_at';
+        await client.query(
+          `UPDATE identity.users
+              SET ${verifiedColumn} = now(),
+                  state = CASE WHEN $2 = 'email' AND state = 'pending_verification' THEN 'active' ELSE state END,
+                  updated_at = clock_timestamp(), row_version = row_version + 1
+            WHERE id = $1`,
+          [challenge.user_id, channel],
+        );
+      }
       await client.query(
         `UPDATE identity.auth_challenges
             SET consumed_at = clock_timestamp(), updated_at = clock_timestamp(), row_version = row_version + 1

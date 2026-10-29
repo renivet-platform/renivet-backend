@@ -1,16 +1,56 @@
 {
   "info": {
     "_postman_id": "a1b9d7ec-2d7a-4c12-94b3-6c405e8f4422",
-    "name": "Renivet Backend — OTP Challenges (REN2-22)",
-    "description": "Runnable functional documentation for the implemented email and phone OTP challenge operations. NestJS-generated OpenAPI is the contract source of truth. All examples are synthetic. The default application provider is intentionally unavailable; CI injects an in-memory fake delivery adapter. No Postman Cloud sync is performed. Linear: REN2-22.",
+    "name": "Renivet Backend - OTP Verification and Account Recovery (REN2-22/23)",
+    "description": "Version-controlled verification and password recovery workflows. Synthetic examples only; in-memory fake delivery runs only in disposable CI. No Postman Cloud sync. Linear: REN2-22/23.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "apiBaseUrl", "value": "http://127.0.0.1:4000/api/v1", "type": "string" },
-    { "key": "otpDestination", "value": "buyer@example.test", "type": "string" },
-    { "key": "otpChallengeId", "value": "", "type": "string" },
-    { "key": "otpCode", "value": "123456", "type": "string" },
-    { "key": "unknownChallengeId", "value": "00000000-0000-4000-8000-000000000000", "type": "string" }
+    {
+      "key": "apiBaseUrl",
+      "value": "http://127.0.0.1:4000/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "otpDestination",
+      "value": "buyer@example.test",
+      "type": "string"
+    },
+    {
+      "key": "otpChallengeId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "otpCode",
+      "value": "123456",
+      "type": "string"
+    },
+    {
+      "key": "unknownChallengeId",
+      "value": "00000000-0000-4000-8000-000000000000",
+      "type": "string"
+    },
+    {
+      "key": "recoveryEmail",
+      "value": "recovery@example.test",
+      "type": "string"
+    },
+    {
+      "key": "recoveryPassword",
+      "value": "synthetic replacement passphrase",
+      "type": "string"
+    },
+    {
+      "key": "recoveryChallengeId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "unknownRecoveryEmail",
+      "value": "unknown-recovery@example.test",
+      "type": "string"
+    }
   ],
   "item": [
     {
@@ -21,49 +61,397 @@
           "name": "Request email verification challenge",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"channel\": \"email\",\n  \"purpose\": \"email_verification\",\n  \"destination\": \"{{otpDestination}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"email\",\n  \"purpose\": \"email_verification\",\n  \"destination\": \"{{otpDestination}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
             "url": "{{apiBaseUrl}}/auth/challenges",
             "description": "Purpose: request a short-lived six-digit email verification challenge. Linear: REN2-22. Parameters: none. Body: channel=email, purpose=email_verification, destination=synthetic email. Authentication/permissions: public, none. Responses: 202 accepted (neutral for unknown/already-verified contacts and transient delivery failures after challenge invalidation); 400 AUTH_INPUT_INVALID; 429 AUTH_RATE_LIMITED; 503 AUTH_SERVICE_UNAVAILABLE when proof configuration or the globally configured provider is unavailable; 500 AUTH_INTERNAL_ERROR. Example uses synthetic data."
           },
-          "response": [{ "name": "Neutral accepted", "originalRequest": { "method": "POST", "url": "{{apiBaseUrl}}/auth/challenges" }, "status": "Accepted", "code": 202, "header": [{ "key": "Content-Type", "value": "application/json; charset=utf-8" }], "body": "{\n  \"status\": \"accepted\",\n  \"challengeId\": \"37a7d0bf-8414-4f75-bd11-311c7a442d84\"\n}" }],
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('challenge request is neutral 202', function () { pm.response.to.have.status(202); const body = pm.response.json(); pm.expect(body.status).to.eql('accepted'); pm.expect(body.challengeId).to.match(/^[0-9a-f-]{36}$/i); pm.collectionVariables.set('otpChallengeId', body.challengeId); });"] } }]
+          "response": [
+            {
+              "name": "Neutral accepted",
+              "originalRequest": {
+                "method": "POST",
+                "url": "{{apiBaseUrl}}/auth/challenges"
+              },
+              "status": "Accepted",
+              "code": 202,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "body": "{\n  \"status\": \"accepted\",\n  \"challengeId\": \"37a7d0bf-8414-4f75-bd11-311c7a442d84\"\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('challenge request is neutral 202', function () { pm.response.to.have.status(202); const body = pm.response.json(); pm.expect(body.status).to.eql('accepted'); pm.expect(body.challengeId).to.match(/^[0-9a-f-]{36}$/i); pm.collectionVariables.set('otpChallengeId', body.challengeId); });"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Verify correct email challenge",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"purpose\": \"email_verification\",\n  \"code\": \"{{otpCode}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"purpose\": \"email_verification\",\n  \"code\": \"{{otpCode}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
             "url": "{{apiBaseUrl}}/auth/challenges/{{otpChallengeId}}/verify",
             "description": "Purpose: consume a correct, unexpired email verification challenge. Linear: REN2-22. Parameters: challengeId UUID path parameter. Body: email_verification purpose and six-digit synthetic code. Authentication/permissions: public, none. Responses: 200 verified; 400 AUTH_INPUT_INVALID; 401 AUTHENTICATION_FAILED; 429 AUTH_RATE_LIMITED; 503 AUTH_SERVICE_UNAVAILABLE; 500 AUTH_INTERNAL_ERROR. The disposable test adapter uses only synthetic data."
           },
-          "response": [{ "name": "Verified", "originalRequest": { "method": "POST", "url": "{{apiBaseUrl}}/auth/challenges/{{otpChallengeId}}/verify" }, "status": "OK", "code": 200, "header": [{ "key": "Content-Type", "value": "application/json; charset=utf-8" }], "body": "{\n  \"status\": \"verified\"\n}" }],
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('correct proof verifies once', function () { pm.response.to.have.status(200); pm.expect(pm.response.json()).to.eql({ status: 'verified' }); });"] } }]
+          "response": [
+            {
+              "name": "Verified",
+              "originalRequest": {
+                "method": "POST",
+                "url": "{{apiBaseUrl}}/auth/challenges/{{otpChallengeId}}/verify"
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "body": "{\n  \"status\": \"verified\"\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('correct proof verifies once', function () { pm.response.to.have.status(200); pm.expect(pm.response.json()).to.eql({ status: 'verified' }); });"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Reject unknown or replayed challenge",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"purpose\": \"email_verification\",\n  \"code\": \"000000\"\n}", "options": { "raw": { "language": "json" } } },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"purpose\": \"email_verification\",\n  \"code\": \"000000\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
             "url": "{{apiBaseUrl}}/auth/challenges/{{unknownChallengeId}}/verify",
             "description": "Negative authorization/state example: an unknown challenge is denied with the same generic response used for expired, wrong-purpose, exhausted, wrong-code and replayed challenges. Linear: REN2-22. Parameters: synthetic UUID. Body: synthetic wrong code. Authentication/permissions: public, none. Expected: 401 AUTHENTICATION_FAILED; no contact, code or account state is returned."
           },
-          "response": [{ "name": "Generic denial", "originalRequest": { "method": "POST", "url": "{{apiBaseUrl}}/auth/challenges/{{unknownChallengeId}}/verify" }, "status": "Unauthorized", "code": 401, "header": [{ "key": "Content-Type", "value": "application/json; charset=utf-8" }], "body": "{\n  \"code\": \"AUTHENTICATION_FAILED\",\n  \"message\": \"The challenge could not be verified.\",\n  \"requestId\": \"req-1\"\n}" }],
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('unknown proof gets generic denial', function () { pm.response.to.have.status(401); pm.expect(pm.response.json().code).to.eql('AUTHENTICATION_FAILED'); pm.expect(pm.response.text()).not.to.include('buyer@example.test'); });"] } }]
+          "response": [
+            {
+              "name": "Generic denial",
+              "originalRequest": {
+                "method": "POST",
+                "url": "{{apiBaseUrl}}/auth/challenges/{{unknownChallengeId}}/verify"
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "body": "{\n  \"code\": \"AUTHENTICATION_FAILED\",\n  \"message\": \"The challenge could not be verified.\",\n  \"requestId\": \"req-1\"\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('unknown proof gets generic denial', function () { pm.response.to.have.status(401); pm.expect(pm.response.json().code).to.eql('AUTHENTICATION_FAILED'); pm.expect(pm.response.text()).not.to.include('buyer@example.test'); });"
+                ]
+              }
+            }
+          ]
         },
         {
           "name": "Reject mismatched channel and purpose",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"channel\": \"email\",\n  \"purpose\": \"phone_verification\",\n  \"destination\": \"buyer@example.test\"\n}", "options": { "raw": { "language": "json" } } },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"email\",\n  \"purpose\": \"phone_verification\",\n  \"destination\": \"buyer@example.test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
             "url": "{{apiBaseUrl}}/auth/challenges",
             "description": "Negative validation example: channel and purpose must be a matching pair. Linear: REN2-22. Body uses only synthetic data. Authentication/permissions: public, none. Expected: 400 AUTH_INPUT_INVALID."
           },
-          "response": [{ "name": "Invalid input", "originalRequest": { "method": "POST", "url": "{{apiBaseUrl}}/auth/challenges" }, "status": "Bad Request", "code": 400, "header": [{ "key": "Content-Type", "value": "application/json; charset=utf-8" }], "body": "{\n  \"code\": \"AUTH_INPUT_INVALID\",\n  \"message\": \"The request could not be processed.\",\n  \"requestId\": \"req-1\"\n}" }],
-          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('mismatched channel and purpose are rejected safely', function () { pm.response.to.have.status(400); pm.expect(pm.response.json().code).to.eql('AUTH_INPUT_INVALID'); });"] } }]
+          "response": [
+            {
+              "name": "Invalid input",
+              "originalRequest": {
+                "method": "POST",
+                "url": "{{apiBaseUrl}}/auth/challenges"
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "body": "{\n  \"code\": \"AUTH_INPUT_INVALID\",\n  \"message\": \"The request could not be processed.\",\n  \"requestId\": \"req-1\"\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('mismatched channel and purpose are rejected safely', function () { pm.response.to.have.status(400); pm.expect(pm.response.json().code).to.eql('AUTH_INPUT_INVALID'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Unknown email gets same neutral recovery response (REN2-23)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"email\",\n  \"purpose\": \"password_recovery\",\n  \"destination\": \"{{unknownRecoveryEmail}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{apiBaseUrl}}/auth/challenges",
+            "description": "Negative enumeration test. Linear: REN2-23. Body uses a synthetic unknown email. Authentication/permissions: public. Expected neutral 202 with the same status and fields as an eligible account; the opaque challenge is unusable."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('unknown recovery identity receives a neutral accepted shape', function () { pm.response.to.have.status(202); pm.expect(pm.response.json().status).to.eql('accepted'); pm.collectionVariables.set('recoveryNeutralShape', Object.keys(pm.response.json()).sort().join(',')); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Request email password recovery challenge (REN2-23)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"email\",\n  \"purpose\": \"password_recovery\",\n  \"destination\": \"{{recoveryEmail}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{apiBaseUrl}}/auth/challenges",
+            "description": "Purpose: request neutral email password recovery. Linear: REN2-23. Parameters: none. Body: channel=email, purpose=password_recovery, synthetic email. Authentication/permissions: public; eligible account must have verified email and active password. Responses: 202 accepted regardless of account eligibility; 400 AUTH_INPUT_INVALID; 429 AUTH_RATE_LIMITED; 503 AUTH_SERVICE_UNAVAILABLE; 500 AUTH_INTERNAL_ERROR."
+          },
+          "response": [
+            {
+              "name": "Neutral accepted",
+              "originalRequest": {
+                "method": "POST",
+                "url": "{{apiBaseUrl}}/auth/challenges"
+              },
+              "status": "Accepted",
+              "code": 202,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                }
+              ],
+              "body": "{\n  \"status\": \"accepted\",\n  \"challengeId\": \"37a7d0bf-8414-4f75-bd11-311c7a442d84\"\n}"
+            }
+          ],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('known recovery identity receives the same neutral accepted shape', function () { pm.response.to.have.status(202); pm.expect(pm.response.json().status).to.eql('accepted'); pm.expect(Object.keys(pm.response.json()).sort().join(',')).to.eql(pm.collectionVariables.get('recoveryNeutralShape')); pm.collectionVariables.set('recoveryChallengeId', pm.response.json().challengeId); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject invalid replacement passphrase (REN2-23)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"purpose\": \"password_recovery\",\n  \"code\": \"{{otpCode}}\",\n  \"newPassword\": \"too-short\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{apiBaseUrl}}/auth/challenges/{{recoveryChallengeId}}/verify",
+            "description": "Negative validation case. Linear: REN2-23. Parameters: challengeId UUID. Body has the synthetic valid recovery code and an invalid replacement passphrase. Authentication/permissions: public challenge proof. Expected: 400 AUTH_INPUT_INVALID; challenge remains available for a corrected password."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('invalid recovery passphrase is rejected without consuming proof', function () { pm.response.to.have.status(400); pm.expect(pm.response.json().code).to.eql('AUTH_INPUT_INVALID'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consume recovery proof, replace password and revoke sessions (REN2-23)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"purpose\": \"password_recovery\",\n  \"code\": \"{{otpCode}}\",\n  \"newPassword\": \"{{recoveryPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{apiBaseUrl}}/auth/challenges/{{recoveryChallengeId}}/verify",
+            "description": "Purpose: consume purpose-bound proof and atomically replace the Argon2id password and revoke prior sessions. Linear: REN2-23. Parameters: challengeId UUID. Body: synthetic six-digit recovery code and new passphrase. Authentication/permissions: public challenge-bound proof. Responses: 200 verified; 400 AUTH_INPUT_INVALID; 401 AUTHENTICATION_FAILED for invalid, expired, wrong-purpose or replayed proof; 429 AUTH_RATE_LIMITED; 503 AUTH_SERVICE_UNAVAILABLE; 500 AUTH_INTERNAL_ERROR."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('recovery proof resets password and returns no secret', function () { pm.response.to.have.status(200); pm.expect(pm.response.json()).to.eql({status:'verified'}); pm.expect(pm.response.text()).not.to.include(pm.environment.get('recoveryPassword')); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reject replayed account recovery proof (REN2-23)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"purpose\": \"password_recovery\",\n  \"code\": \"{{otpCode}}\",\n  \"newPassword\": \"{{recoveryPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{apiBaseUrl}}/auth/challenges/{{recoveryChallengeId}}/verify",
+            "description": "Negative replay test: a consumed recovery proof must not reset credentials again. Linear: REN2-23. Parameters: synthetic challenge UUID. Body: synthetic recovery proof. Authentication/permissions: public challenge-bound proof. Expected: 401 AUTHENTICATION_FAILED."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('consumed recovery proof cannot be replayed', function () { pm.response.to.have.status(401); pm.expect(pm.response.json().code).to.eql('AUTHENTICATION_FAILED'); pm.expect(pm.response.text()).not.to.include(pm.environment.get('recoveryPassword')); });"
+                ]
+              }
+            }
+          ]
         }
       ]
     }

@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const contract = require('../openapi/renivet.openapi.json');
 
-test('REN2-22 OpenAPI exposes only the implemented issue and verify contracts', () => {
+test('REN2-22/23 OpenAPI documents challenge verification and purpose-bound password recovery', () => {
   const issuePath = contract.paths['/api/v1/auth/challenges']?.post;
   const verifyPath = contract.paths['/api/v1/auth/challenges/{challengeId}/verify']?.post;
   assert.ok(issuePath);
@@ -14,7 +14,9 @@ test('REN2-22 OpenAPI exposes only the implemented issue and verify contracts', 
   assert.match(issuePath.description, /REN2-22/);
   assert.match(verifyPath.description, /REN2-22/);
   assert.match(issuePath.description, /no authentication or permission/);
-  assert.match(verifyPath.description, /No session is issued/);
+  assert.match(verifyPath.description, /issues no session/);
+  assert.match(verifyPath.description, /password_recovery/);
+  assert.match(verifyPath.requestBody.content['application/json'].schema.$ref, /OtpVerifyRequestDto/);
   for (const status of ['202', '400', '429', '500', '503']) assert.ok(issuePath.responses[status], `issue response ${status} is documented`);
   for (const status of ['200', '400', '401', '429', '500', '503']) assert.ok(verifyPath.responses[status], `verify response ${status} is documented`);
   assert.deepEqual(verifyPath.parameters.find((parameter) => parameter.name === 'challengeId')?.schema, {

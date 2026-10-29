@@ -28,8 +28,8 @@ export class OtpController {
   @UsePipes(otpValidation)
   @ApiOperation({
     operationId: 'createOtpChallenge',
-    summary: 'Request an email or phone verification challenge',
-    description: 'Public operation with no authentication or permission requirement. Creates a short-lived one-use challenge only for an unverified registered contact. Unknown contacts and transient delivery failures after challenge invalidation receive the same neutral accepted response. Delivery is unavailable by default until a provider has separately passed owner review. Linear: REN2-22; route and DTO remain a proposed D04 contract pending owner approval.',
+    summary: 'Request an email or phone verification or recovery challenge',
+    description: 'Public operation with no authentication or permission requirement. Creates a short-lived one-use challenge for an eligible contact and purpose. Password recovery is available only to an active account with verified email and an active password credential; unknown and ineligible contacts receive a neutral accepted response. Recovery proof is purpose-bound and is required to replace the password. Delivery is unavailable by default until a provider has separately passed owner review. Verification: Linear REN2-22; password recovery: REN2-23; candidate routes remain subject to D04 owner approval.',
   })
   @ApiBody({ type: OtpIssueRequestDto })
   @ApiAcceptedResponse({ description: 'Neutral accepted result; does not reveal contact registration or delivery state.', type: OtpAcceptedDto })
@@ -46,8 +46,8 @@ export class OtpController {
   @UsePipes(otpValidation)
   @ApiOperation({
     operationId: 'verifyOtpChallenge',
-    summary: 'Verify and consume a one-use email or phone challenge',
-    description: 'Public operation with no authentication or permission requirement. A successful proof marks only the bound contact as verified; every invalid, expired, wrong-purpose, exhausted, or replayed proof shares one generic denial. No session is issued. Linear: REN2-22; route and DTO remain a proposed D04 contract pending owner approval.',
+    summary: 'Verify a one-use challenge or reset a password through recovery',
+    description: 'Public operation with no authentication or permission requirement. A successful verification proof marks only the bound contact as verified and issues no session. A password_recovery proof additionally requires a newPassword, atomically replaces the active Argon2id password credential, increments its version, and revokes every existing session. Invalid, expired, wrong-purpose, exhausted, or replayed proofs share one generic denial. Linear: REN2-22 verification and REN2-23 password recovery; candidate route remains subject to D04 owner approval.',
   })
   @ApiBody({ type: OtpVerifyRequestDto })
   @ApiParam({ name: 'challengeId', required: true, description: 'Opaque UUID returned by the challenge request operation.', schema: { type: 'string', format: 'uuid', example: '37a7d0bf-8414-4f75-bd11-311c7a442d84' } })

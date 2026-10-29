@@ -19,22 +19,26 @@ function assertLoopback(url, expectedPath, expectedUser) {
   if (expectedUser) assert.equal(parsed.username, expectedUser);
 }
 
-test('REN2-22 purpose-bound OTP challenge HTTP and PostgreSQL acceptance', { skip: enabled ? false : 'requires explicitly declared disposable PostgreSQL 16 and Redis services', timeout: 120000 }, async () => {
+test('REN2-22/23 OTP verification and account recovery HTTP/PostgreSQL/Postman acceptance', { skip: enabled ? false : 'requires explicitly declared disposable PostgreSQL 16 and Redis services', timeout: 120000 }, async () => {
   assertLoopback(databaseUrl, '/renivet_ci', 'renivet_ci');
   assertLoopback(redisUrl, '/15');
   process.env.DATABASE_URL = databaseUrl;
   process.env.REDIS_URL = redisUrl;
   process.env.AUTH_RATE_LIMIT_HMAC_KEY = 'synthetic-otp-integration-rate-key-not-a-secret-0000';
+  process.env.AUTH_CSRF_HMAC_KEY = 'synthetic-otp-integration-csrf-key-not-a-secret-00000000';
+  process.env.AUTH_ALLOWED_ORIGINS = 'http://127.0.0.1:3000';
   process.env.AUTH_CHALLENGE_HMAC_KEY = 'synthetic-otp-integration-proof-key-not-a-secret-0000';
 
   const { NestFactory } = require('@nestjs/core');
   const { FastifyAdapter } = require('@nestjs/platform-fastify');
   const { AppModule } = require('../dist/app.module');
     const { OtpChallengeService, makeOtpProof } = require('../dist/modules/identity/otp-challenge.service');
+    const { PasswordHashService } = require('../dist/modules/identity/passwords');
   const pool = new Pool({ connectionString: databaseUrl });
   const redis = new Redis(redisUrl, { maxRetriesPerRequest: 1, connectTimeout: 1_000 });
   const token = randomUUID();
   const emails = ['postman', 'wrong', 'expired', 'changed', 'concurrent', 'provider'].map((label) => `${label}-${token}@example.test`);
+  const recoveryEmail = `recovery-${token}@example.test`;
   const sent = [];
   let providerFails = false;
   const fakeDelivery = {
@@ -61,6 +65,19 @@ test('REN2-22 purpose-bound OTP challenge HTTP and PostgreSQL acceptance', { ski
       [emails],
     );
     userIds = seeded.rows.map((row) => row.id);
+    const recoverySeed = await pool.query(
+      `INSERT INTO identity.users (email, state, email_verified_at) VALUES ($1, 'active', now()) RETURNING id`,
+      [recoveryEmail],
+    );
+    const recoveryUserId = recoverySeed.rows[0].id;
+    userIds.push(recoveryUserId);
+    const oldPassword = 'synthetic old recovery passphrase';
+    const newPassword = 'synthetic replacement passphrase';
+    const oldPasswordHash = await new PasswordHashService().hash(oldPassword);
+    await pool.query(`INSERT INTO identity.user_credentials (user_id, password_hash, credential_version) VALUES ($1, $2, 1)`, [recoveryUserId, oldPasswordHash]);
+    const existingRecoverySession = 'R'.repeat(43);
+    const oldSessionHash = require('node:crypto').createHash('sha256').update(existingRecoverySession).digest('hex');
+    await pool.query(`INSERT INTO identity.user_sessions (user_id, token_hash, expires_at) VALUES ($1, $2, now() + interval '1 hour')`, [recoveryUserId, oldSessionHash]);
     const phone = `+1415${token.replace(/\D/g, '').padEnd(10, '0').slice(0, 10)}`;
     const phoneSeed = await pool.query("INSERT INTO identity.users (phone,state) VALUES ($1,'pending_verification') RETURNING id", [phone]);
     userIds.push(phoneSeed.rows[0].id);
@@ -102,6 +119,9 @@ test('REN2-22 purpose-bound OTP challenge HTTP and PostgreSQL acceptance', { ski
       '--env-var', `apiBaseUrl=${base}`,
       '--env-var', `otpDestination=${emails[0]}`,
       '--env-var', 'otpCode=123456',
+      '--env-var', `recoveryEmail=${recoveryEmail}`,
+      '--env-var', `recoveryPassword=${newPassword}`,
+      '--env-var', `unknownRecoveryEmail=unknown-recovery-${token}@example.test`,
       '--reporters', 'cli', '--report-events=false', '--timeout-request', '10000', '--timeout', '45000',
     ];
     const postmanRun = await new Promise((resolve, reject) => {
@@ -119,6 +139,11 @@ test('REN2-22 purpose-bound OTP challenge HTTP and PostgreSQL acceptance', { ski
     const postmanUser = await pool.query('SELECT email_verified_at, state FROM identity.users WHERE id=$1', [userIds[0]]);
     assert.ok(postmanUser.rows[0].email_verified_at);
     assert.equal(postmanUser.rows[0].state, 'active');
+    const recoveredCredential = await pool.query(`SELECT password_hash FROM identity.user_credentials WHERE user_id=$1 AND disabled_at IS NULL`, [recoveryUserId]);
+    assert.equal(await require('argon2').verify(recoveredCredential.rows[0].password_hash, newPassword), true, 'recovery must replace the Argon2id credential');
+    assert.equal(await require('argon2').verify(recoveredCredential.rows[0].password_hash, oldPassword), false, 'old password must stop working after recovery');
+    const recoveredSession = await pool.query('SELECT revoked_at FROM identity.user_sessions WHERE token_hash=$1', [oldSessionHash]);
+    assert.ok(recoveredSession.rows[0].revoked_at, 'recovery must revoke every prior session');
     const storedProof = await pool.query('SELECT code_hash FROM identity.auth_challenges WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1', [userIds[0]]);
     assert.match(storedProof.rows[0].code_hash, /^[a-f0-9]{64}$/);
     assert.notEqual(storedProof.rows[0].code_hash, '123456', 'PostgreSQL must not store the raw OTP');
@@ -248,6 +273,7 @@ test('REN2-22 purpose-bound OTP challenge HTTP and PostgreSQL acceptance', { ski
     await app?.close();
     if (userIds.length) {
       await pool.query('DELETE FROM identity.auth_challenges WHERE user_id = ANY($1::uuid[])', [userIds]).catch(() => {});
+      await pool.query('DELETE FROM identity.user_sessions WHERE user_id = ANY($1::uuid[])', [userIds]).catch(() => {});
       await pool.query('DELETE FROM identity.user_credentials WHERE user_id = ANY($1::uuid[])', [userIds]).catch(() => {});
       await pool.query('DELETE FROM identity.users WHERE id = ANY($1::uuid[])', [userIds]).catch(() => {});
     }

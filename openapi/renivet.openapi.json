@@ -206,9 +206,187 @@
         ]
       }
     },
+    "/api/v1/auth/session": {
+      "get": {
+        "description": "Requires a valid opaque session cookie. Returns a minimal user identity and a session-bound CSRF token for same-origin mutations. Idle expiry is extended up to the seven-day absolute limit. Linear: REN2-23.",
+        "operationId": "getCurrentSession",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Active identity and session-bound CSRF token; refreshes the session cookie to its server-calculated idle expiry, capped by its absolute expiry.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Sensitive session response must not be cached.",
+                "schema": {
+                  "type": "string",
+                  "example": "no-store"
+                }
+              },
+              "Set-Cookie": {
+                "description": "Refreshed host-only session cookie, capped at the server-calculated idle/absolute expiry.",
+                "schema": {
+                  "type": "string",
+                  "example": "__Host-renivet_session=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA; Path=/; Max-Age=1800; HttpOnly; Secure; SameSite=Lax"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "authenticationState": "authenticated",
+                    "user": {
+                      "id": "7d785d72-ea2c-44bb-9d82-87b272112b32"
+                    },
+                    "csrfToken": "synthetic-csrf-token"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "AUTHENTICATION_FAILED. Missing, expired, revoked or invalid session.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorDto"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "AUTH_INTERNAL_ERROR. Unexpected failure with a safe public message.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AUTH_SERVICE_UNAVAILABLE. Session store or CSRF configuration is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "Inspect the authenticated first-party session",
+        "tags": [
+          "Auth"
+        ]
+      },
+      "delete": {
+        "description": "Requires a valid session cookie, exact allowlisted Origin, Sec-Fetch-Site: same-origin, and the session-bound X-CSRF-Token returned by GET /auth/session. Revocation is server-side before the cookie is expired. Linear: REN2-23.",
+        "operationId": "logoutCurrentSession",
+        "parameters": [
+          {
+            "name": "X-CSRF-Token",
+            "in": "header",
+            "description": "Must equal the session-bound proof returned by GET /auth/session.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Sec-Fetch-Site",
+            "in": "header",
+            "description": "Must be same-origin.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "same-origin"
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "description": "Must exactly match one configured AUTH_ALLOWED_ORIGINS origin.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "https://app.example.test"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session revoked and host-only cookie expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "example": {
+                    "status": "logged_out"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "AUTHENTICATION_FAILED. Session is not active.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF_VALIDATION_FAILED. Origin, fetch metadata or CSRF evidence is invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorDto"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "AUTH_INTERNAL_ERROR. Unexpected failure with a safe public message.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AUTH_SERVICE_UNAVAILABLE. Session store or CSRF configuration is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "Revoke the current session",
+        "tags": [
+          "Auth"
+        ]
+      }
+    },
     "/api/v1/auth/challenges": {
       "post": {
-        "description": "Public operation with no authentication or permission requirement. Creates a short-lived one-use challenge only for an unverified registered contact. Unknown contacts and transient delivery failures after challenge invalidation receive the same neutral accepted response. Delivery is unavailable by default until a provider has separately passed owner review. Linear: REN2-22; route and DTO remain a proposed D04 contract pending owner approval.",
+        "description": "Public operation with no authentication or permission requirement. Creates a short-lived one-use challenge for an eligible contact and purpose. Password recovery is available only to an active account with verified email and an active password credential; unknown and ineligible contacts receive a neutral accepted response. Recovery proof is purpose-bound and is required to replace the password. Delivery is unavailable by default until a provider has separately passed owner review. Verification: Linear REN2-22; password recovery: REN2-23; candidate routes remain subject to D04 owner approval.",
         "operationId": "createOtpChallenge",
         "parameters": [],
         "requestBody": {
@@ -273,7 +451,7 @@
             }
           }
         },
-        "summary": "Request an email or phone verification challenge",
+        "summary": "Request an email or phone verification or recovery challenge",
         "tags": [
           "Otp"
         ]
@@ -281,7 +459,7 @@
     },
     "/api/v1/auth/challenges/{challengeId}/verify": {
       "post": {
-        "description": "Public operation with no authentication or permission requirement. A successful proof marks only the bound contact as verified; every invalid, expired, wrong-purpose, exhausted, or replayed proof shares one generic denial. No session is issued. Linear: REN2-22; route and DTO remain a proposed D04 contract pending owner approval.",
+        "description": "Public operation with no authentication or permission requirement. A successful verification proof marks only the bound contact as verified and issues no session. A password_recovery proof additionally requires a newPassword, atomically replaces the active Argon2id password credential, increments its version, and revokes every existing session. Invalid, expired, wrong-purpose, exhausted, or replayed proofs share one generic denial. Linear: REN2-22 verification and REN2-23 password recovery; candidate route remains subject to D04 owner approval.",
         "operationId": "verifyOtpChallenge",
         "parameters": [
           {
@@ -368,7 +546,7 @@
             }
           }
         },
-        "summary": "Verify and consume a one-use email or phone challenge",
+        "summary": "Verify a one-use challenge or reset a password through recovery",
         "tags": [
           "Otp"
         ]
@@ -527,7 +705,8 @@
             "type": "string",
             "enum": [
               "email_verification",
-              "phone_verification"
+              "phone_verification",
+              "password_recovery"
             ],
             "example": "email_verification"
           },
@@ -572,7 +751,8 @@
             "type": "string",
             "enum": [
               "email_verification",
-              "phone_verification"
+              "phone_verification",
+              "password_recovery"
             ],
             "example": "email_verification"
           },
@@ -581,6 +761,13 @@
             "pattern": "^[0-9]{6}$",
             "example": "123456",
             "description": "Six-digit synthetic example. Real codes are delivered out of band."
+          },
+          "newPassword": {
+            "type": "string",
+            "minLength": 15,
+            "maxLength": 128,
+            "example": "synthetic replacement passphrase",
+            "description": "Required only for password_recovery; accepted as a passphrase and stored only as an Argon2id hash."
           }
         },
         "required": [
