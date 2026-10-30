@@ -31,4 +31,5 @@ test('failure details normalize to a safe code without preserving raw exception 
 test('operator recovery fails closed when no authorization policy is configured', async () => {
   const worker = new DurableWorker({}, [{ consumerId: 'test-consumer', eventTypes: ['test.event'], async handle() {} }]);
   await assert.rejects(worker.recoverDeadLetter('case-id', 'actor-id', 'OPERATOR_RETRY'), /not authorized/);
+  await assert.rejects(worker.runOnce('unregistered-consumer'), /not registered/);
 });

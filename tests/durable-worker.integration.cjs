@@ -21,10 +21,7 @@ test('REN2-30 claims, dedupes, retries and recovers durable work safely', { time
   const pool = new Pool({ connectionString: disposableUrl(), max: 8, connectionTimeoutMillis: 5000 });
   const prefix = `ren2-30-${randomUUID()}`;
   const outboxIds = [];
-  const jobIds = [];
   const effectNames = [];
-  const userIds = [];
-  const caseIds = [];
   const logs = [];
   const failedOnce = new Set();
   let recoveryAuthorized = true;
@@ -75,15 +72,14 @@ test('REN2-30 claims, dedupes, retries and recovers durable work safely', { time
     const job = await pool.query(
       `SELECT id FROM platform.durable_jobs WHERE job_kind = 'test-consumer' AND business_key = $1`, [basicEventId],
     );
-    jobIds.push(job.rows[0].id);
+    assert.ok(job.rows[0].id);
     const [claimA, claimB] = await Promise.all([
       worker.claim('test-consumer', `${prefix}:worker-a`, 1),
       worker.claim('test-consumer', `${prefix}:worker-b`, 1),
     ]);
     assert.equal(claimA.length + claimB.length, 1, 'two claimers must not own the same job concurrently');
     const claimed = claimA[0] ?? claimB[0];
-    const owner = claimA.length ? `${prefix}:worker-a` : `${prefix}:worker-b`;
-    assert.equal(await worker.process(claimed, owner), 'processed');
+    assert.equal(await worker.process(claimed), 'processed');
 
     // Replaying the same delivery after commit is a no-op because its receipt committed with the effect.
     await pool.query(
@@ -91,7 +87,7 @@ test('REN2-30 claims, dedupes, retries and recovers durable work safely', { time
        WHERE id = $1`, [claimed.id],
     );
     const replay = (await worker.claim('test-consumer', `${prefix}:replay`, 1))[0];
-    assert.equal(await worker.process(replay, `${prefix}:replay`), 'duplicate');
+    assert.equal(await worker.process(replay), 'duplicate');
     const effectCount = await pool.query('SELECT count(*)::int AS count FROM system_events WHERE event_name = $1', [`${prefix}:${basicEventId}:effect`]);
     assert.equal(effectCount.rows[0].count, 1);
 
@@ -99,49 +95,60 @@ test('REN2-30 claims, dedupes, retries and recovers durable work safely', { time
     const retryEventId = await createEvent('retry', { failOnce: true });
     await worker.enqueueOutboxBatch();
     const retryJob = await pool.query(`SELECT id FROM platform.durable_jobs WHERE job_kind = 'test-consumer' AND business_key = $1`, [retryEventId]);
-    jobIds.push(retryJob.rows[0].id);
+    assert.ok(retryJob.rows[0].id);
     const firstAttempt = (await worker.claim('test-consumer', `${prefix}:retry-a`, 1))[0];
-    assert.equal(await worker.process(firstAttempt, `${prefix}:retry-a`), 'retry');
+    assert.equal(await worker.process(firstAttempt), 'retry');
     const rolledBack = await pool.query('SELECT count(*)::int AS count FROM system_events WHERE event_name = $1', [`${prefix}:${retryEventId}:effect`]);
     assert.equal(rolledBack.rows[0].count, 0);
     await pool.query('UPDATE platform.durable_jobs SET scheduled_for = now() - interval \'1 second\' WHERE id = $1', [firstAttempt.id]);
     const secondAttempt = (await worker.claim('test-consumer', `${prefix}:retry-b`, 1))[0];
-    assert.equal(await worker.process(secondAttempt, `${prefix}:retry-b`), 'processed');
+    assert.equal(await worker.process(secondAttempt), 'processed');
+
+    // A later runOnce poll discovers already-committed work after a missed wakeup.
+    await createEvent('missed-wakeup', { marker: 'synthetic' });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.deepEqual(await worker.runOnce('test-consumer', `${prefix}:poll`, 1), {
+      enqueuedEvents: 1,
+      claimed: 1,
+      processed: 1,
+      duplicate: 0,
+      retry: 0,
+      deadLetter: 0,
+      leaseLost: 0,
+    });
 
     // Expired leases are reclaimable after a worker crash.
     const leaseEventId = await createEvent('lease', { marker: 'lease' });
     await worker.enqueueOutboxBatch();
     const leaseJob = await pool.query(`SELECT id FROM platform.durable_jobs WHERE job_kind = 'test-consumer' AND business_key = $1`, [leaseEventId]);
-    jobIds.push(leaseJob.rows[0].id);
-    const abandoned = (await worker.claim('test-consumer', `${prefix}:crashed`, 1))[0];
+    assert.ok(leaseJob.rows[0].id);
+    const reusedWorkerId = `${prefix}:reused-worker`;
+    const abandoned = (await worker.claim('test-consumer', reusedWorkerId, 1))[0];
     await pool.query(
       `UPDATE platform.durable_jobs
        SET lease_started_at = now() - interval '3 seconds', lease_until = now() - interval '1 second'
        WHERE id = $1`, [abandoned.id],
     );
-    const takenOver = (await worker.claim('test-consumer', `${prefix}:restarted`, 1))[0];
+    const takenOver = (await worker.claim('test-consumer', reusedWorkerId, 1))[0];
     assert.equal(takenOver.id, abandoned.id);
-    assert.equal(await worker.process(abandoned, `${prefix}:crashed`), 'lease_lost');
-    assert.equal(await worker.process(takenOver, `${prefix}:restarted`), 'processed');
+    assert.notEqual(takenOver.leaseToken, abandoned.leaseToken, 'a takeover must issue a fresh fencing token even when the worker ID is reused');
+    assert.equal(await worker.process(abandoned), 'lease_lost');
+    assert.equal(await worker.process(takenOver), 'processed');
 
     // Poison work is quarantined, visible, denied to unauthorized operators and auditable when requeued.
     const actorId = randomUUID();
-    userIds.push(actorId);
     await pool.query(`INSERT INTO identity.users (id, state) VALUES ($1, 'active')`, [actorId]);
     const poisonEventId = await createEvent('poison', { poison: true, marker: 'synthetic' });
     await worker.enqueueOutboxBatch();
     const poisonJob = await pool.query(`SELECT id FROM platform.durable_jobs WHERE job_kind = 'test-consumer' AND business_key = $1`, [poisonEventId]);
     jobIds.push(poisonJob.rows[0].id);
-    for (const attemptName of ['poison-a', 'poison-b']) {
-      const poison = (await worker.claim('test-consumer', `${prefix}:${attemptName}`, 1))[0];
-      const result = await worker.process(poison, `${prefix}:${attemptName}`);
-      assert.equal(result, attemptName === 'poison-a' ? 'retry' : 'dead_letter');
-      if (attemptName === 'poison-a') await pool.query('UPDATE platform.durable_jobs SET scheduled_for = now() - interval \'1 second\' WHERE id = $1', [poison.id]);
-    }
+    await pool.query('UPDATE platform.durable_jobs SET max_attempts = 1 WHERE id = $1', [poisonJob.rows[0].id]);
+    const poison = (await worker.claim('test-consumer', `${prefix}:poison`, 1))[0];
+    const stalePoisonData = { ...poison, attemptCount: 0, maxAttempts: 5 };
+    assert.equal(await worker.process(stalePoisonData), 'dead_letter', 'retry decisions must use the stored final attempt count');
     const visible = await worker.listDeadLetters();
     const recoveryCase = visible.find((item) => item.jobId === poisonJob.rows[0].id);
     assert.ok(recoveryCase);
-    caseIds.push(recoveryCase.id);
     recoveryAuthorized = false;
     await assert.rejects(worker.recoverDeadLetter(recoveryCase.id, actorId, 'OPERATOR_RETRY'), /not authorized/);
     await assert.rejects(
@@ -168,14 +175,10 @@ test('REN2-30 claims, dedupes, retries and recovers durable work safely', { time
     assert.doesNotMatch(serializedLogs, /123456|raw sensitive provider response|session token|bank account/i);
     assert.ok(logs.some((entry) => entry.event === 'worker.job.failed' && entry.code === 'EAI_AGAIN'));
   } finally {
-    if (caseIds.length) await pool.query('DELETE FROM platform.dead_letter_recovery_audit WHERE case_id = ANY($1::uuid[])', [caseIds]).catch(() => undefined);
-    if (caseIds.length) await pool.query('DELETE FROM platform.dead_letter_cases WHERE id = ANY($1::uuid[])', [caseIds]).catch(() => undefined);
-    if (jobIds.length) await pool.query('DELETE FROM platform.dead_letter_cases WHERE job_id = ANY($1::uuid[])', [jobIds]).catch(() => undefined);
-    if (jobIds.length) await pool.query('DELETE FROM platform.durable_jobs WHERE id = ANY($1::uuid[])', [jobIds]).catch(() => undefined);
+    // The append-only audit intentionally keeps its synthetic actor, case and job in this disposable DB.
     if (outboxIds.length) await pool.query('DELETE FROM platform.inbox_receipts WHERE message_id = ANY($1::uuid[])', [outboxIds]).catch(() => undefined);
     if (outboxIds.length) await pool.query('DELETE FROM platform.outbox_events WHERE id = ANY($1::uuid[])', [outboxIds]).catch(() => undefined);
     if (effectNames.length) await pool.query('DELETE FROM system_events WHERE event_name = ANY($1::text[])', [effectNames]).catch(() => undefined);
-    if (userIds.length) await pool.query('DELETE FROM identity.users WHERE id = ANY($1::uuid[])', [userIds]).catch(() => undefined);
     await pool.end();
   }
 });

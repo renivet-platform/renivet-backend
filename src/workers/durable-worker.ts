@@ -51,6 +51,7 @@ export type DurableJob = {
   businessKey: string;
   attemptCount: number;
   maxAttempts: number;
+  leaseToken: string;
 };
 
 export type EventHandler = {
@@ -62,6 +63,16 @@ export type EventHandler = {
 export type WorkerLog = (entry: Readonly<Record<string, string | number>>) => void;
 
 export type RecoveryAuthorizer = (actorId: string, caseId: string) => Promise<boolean>;
+
+export type WorkerBatchSummary = {
+  enqueuedEvents: number;
+  claimed: number;
+  processed: number;
+  duplicate: number;
+  retry: number;
+  deadLetter: number;
+  leaseLost: number;
+};
 
 export class DurableWorker {
   constructor(
@@ -155,7 +166,7 @@ export class DurableWorker {
            UPDATE platform.durable_jobs AS job
            SET state = 'dead_letter', lease_until = NULL, lease_owner = NULL,
                lease_started_at = NULL, updated_at = now(), row_version = row_version + 1,
-               last_error_code = COALESCE(last_error_code, 'LEASE_EXPIRED')
+               last_error_code = 'LEASE_EXPIRED'
            FROM exhausted WHERE job.id = exhausted.id
            RETURNING job.id, job.last_error_code
          )
@@ -172,12 +183,13 @@ export class DurableWorker {
            LIMIT $2 FOR UPDATE SKIP LOCKED
          )
          UPDATE platform.durable_jobs AS job
-         SET state = 'leased', lease_owner = $3, lease_started_at = now(),
+         SET state = 'leased', lease_owner = $3 || ':' || gen_random_uuid()::text, lease_started_at = now(),
              lease_until = now() + ($4::integer * interval '1 second'),
              attempt_count = attempt_count + 1, updated_at = now(), row_version = row_version + 1
          FROM candidates WHERE job.id = candidates.id
          RETURNING job.id, job.job_kind AS "jobKind", job.business_key AS "businessKey",
-                   job.attempt_count AS "attemptCount", job.max_attempts AS "maxAttempts"`,
+                   job.attempt_count AS "attemptCount", job.max_attempts AS "maxAttempts",
+                   job.lease_owner AS "leaseToken"`,
         [consumerId, limit, workerId, this.options.leaseSeconds ?? 60],
       );
       await client.query('COMMIT');
@@ -190,7 +202,34 @@ export class DurableWorker {
     }
   }
 
-  async process(job: DurableJob, workerId: string): Promise<'processed' | 'duplicate' | 'lease_lost' | 'retry' | 'dead_letter'> {
+  /** Run one bounded polling cycle; callers decide when to wake the dormant worker. */
+  async runOnce(consumerId: string, workerId = randomUUID(), limit = 10): Promise<WorkerBatchSummary> {
+    if (!this.handlers.some((handler) => handler.consumerId === consumerId)) {
+      throw new TypeError('consumerId is not registered');
+    }
+    const enqueuedEvents = await this.enqueueOutboxBatch();
+    const jobs = await this.claim(consumerId, workerId, limit);
+    const summary: WorkerBatchSummary = {
+      enqueuedEvents,
+      claimed: jobs.length,
+      processed: 0,
+      duplicate: 0,
+      retry: 0,
+      deadLetter: 0,
+      leaseLost: 0,
+    };
+    for (const job of jobs) {
+      const result = await this.process(job);
+      if (result === 'processed') summary.processed += 1;
+      else if (result === 'duplicate') summary.duplicate += 1;
+      else if (result === 'retry') summary.retry += 1;
+      else if (result === 'dead_letter') summary.deadLetter += 1;
+      else summary.leaseLost += 1;
+    }
+    return summary;
+  }
+
+  async process(job: DurableJob): Promise<'processed' | 'duplicate' | 'lease_lost' | 'retry' | 'dead_letter'> {
     const handler = this.handlers.find((item) => item.consumerId === job.jobKind);
     if (!handler) throw new TypeError('job kind is not registered');
     const client = await this.pool.connect();
@@ -200,7 +239,7 @@ export class DurableWorker {
       const current = await client.query(
         `SELECT id, business_key, attempt_count FROM platform.durable_jobs
          WHERE id = $1 AND job_kind = $2 AND state = 'leased' AND lease_owner = $3 AND lease_until > now()
-         FOR UPDATE`, [job.id, job.jobKind, workerId],
+         FOR UPDATE`, [job.id, job.jobKind, job.leaseToken],
       );
       if (current.rowCount === 1) {
         const event = await client.query<DurableEvent>(
@@ -218,7 +257,7 @@ export class DurableWorker {
         const completed = await client.query(
           `UPDATE platform.durable_jobs SET state = 'succeeded', lease_until = NULL,
              lease_owner = NULL, lease_started_at = NULL, updated_at = now(), row_version = row_version + 1
-           WHERE id = $1 AND state = 'leased' AND lease_owner = $2 RETURNING id`, [job.id, workerId],
+           WHERE id = $1 AND state = 'leased' AND lease_owner = $2 RETURNING id`, [job.id, job.leaseToken],
         );
         if (completed.rowCount === 1) outcome = receipt.rowCount === 1 ? 'processed' : 'duplicate';
       }
@@ -227,21 +266,33 @@ export class DurableWorker {
       return outcome;
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
-      const state = await this.recordFailure(job, workerId, error);
-      this.options.log?.({ event: 'worker.job.failed', jobId: job.id, jobKind: job.jobKind, attempt: job.attemptCount, code: safeFailureCode(error), state });
-      return state;
+      const failure = await this.recordFailure(job, error);
+      this.options.log?.({ event: 'worker.job.failed', jobId: job.id, jobKind: job.jobKind, code: safeFailureCode(error), state: failure });
+      return failure;
     } finally {
       client.release();
     }
   }
 
-  private async recordFailure(job: DurableJob, workerId: string, error: unknown): Promise<'lease_lost' | 'retry' | 'dead_letter'> {
+  private async recordFailure(job: DurableJob, error: unknown): Promise<'lease_lost' | 'retry' | 'dead_letter'> {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
       const code = safeFailureCode(error);
-      const retry = job.attemptCount < job.maxAttempts;
-      const delayMs = retry ? calculateRetryDelayMs(job.attemptCount, {
+      const current = await client.query(
+        `SELECT attempt_count AS "attemptCount", max_attempts AS "maxAttempts"
+         FROM platform.durable_jobs
+         WHERE id = $1 AND state = 'leased' AND lease_owner = $2 AND lease_until > now()
+         FOR UPDATE`, [job.id, job.leaseToken],
+      );
+      if (current.rowCount !== 1) {
+        await client.query('ROLLBACK');
+        return 'lease_lost';
+      }
+      const attemptCount = current.rows[0].attemptCount as number;
+      const maxAttempts = current.rows[0].maxAttempts as number;
+      const retry = attemptCount < maxAttempts;
+      const delayMs = retry ? calculateRetryDelayMs(attemptCount, {
         baseDelayMs: this.options.baseRetryDelayMs,
         maxDelayMs: this.options.maxRetryDelayMs,
         jitterMs: this.options.jitterMs,
@@ -253,7 +304,7 @@ export class DurableWorker {
            lease_until = NULL, lease_owner = NULL, lease_started_at = NULL,
            last_error_code = $5, updated_at = now(), row_version = row_version + 1
          WHERE id = $1 AND state = 'leased' AND lease_owner = $2 AND lease_until > now()
-         RETURNING id`, [job.id, workerId, retry ? 'pending' : 'dead_letter', delayMs, code],
+         RETURNING id`, [job.id, job.leaseToken, retry ? 'pending' : 'dead_letter', delayMs, code],
       );
       if (result.rowCount !== 1) {
         await client.query('ROLLBACK');
