@@ -20,7 +20,7 @@ function disposableUrl() {
 test('REN2-30 claims, dedupes, retries and recovers durable work safely', { timeout: 30_000 }, async () => {
   const pool = new Pool({ connectionString: disposableUrl(), max: 8, connectionTimeoutMillis: 5000 });
   const prefix = `ren2-30-${randomUUID()}`;
-  const consumerId = `${prefix}:consumer`;
+  const consumerId = `test_consumer_${randomUUID().replaceAll('-', '')}`;
   const outboxIds = [];
   const effectNames = [];
   const logs = [];
