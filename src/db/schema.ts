@@ -387,3 +387,21 @@ export const platformDeadLetterCases = platform.table(
     check('platform_dead_letter_cases_timestamps_ordered', sql`${table.updatedAt} >= ${table.createdAt}`),
   ],
 );
+
+export const platformDeadLetterRecoveryAudit = platform.table(
+  'dead_letter_recovery_audit',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    caseId: uuid('case_id').notNull().references(() => platformDeadLetterCases.id),
+    actorId: uuid('actor_id').notNull().references(() => identityUsers.id),
+    reasonCode: text('reason_code').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    check(
+      'platform_dead_letter_recovery_audit_reason_code_safe',
+      sql`${table.reasonCode} in ('OPERATOR_RETRY', 'DATA_CORRECTED', 'DEPENDENCY_RESTORED')`,
+    ),
+    index('platform_dead_letter_recovery_audit_case_idx').on(table.caseId, table.createdAt),
+  ],
+);
