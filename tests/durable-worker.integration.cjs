@@ -20,13 +20,14 @@ function disposableUrl() {
 test('REN2-30 claims, dedupes, retries and recovers durable work safely', { timeout: 30_000 }, async () => {
   const pool = new Pool({ connectionString: disposableUrl(), max: 8, connectionTimeoutMillis: 5000 });
   const prefix = `ren2-30-${randomUUID()}`;
+  const consumerId = `${prefix}:consumer`;
   const outboxIds = [];
   const effectNames = [];
   const logs = [];
   const failedOnce = new Set();
   let recoveryAuthorized = true;
   const handler = {
-    consumerId: 'test-consumer',
+    consumerId,
     eventTypes: ['test.worker.created'],
     async handle(event, transaction) {
       const effect = `${prefix}:${event.id}:effect`;
@@ -70,12 +71,12 @@ test('REN2-30 claims, dedupes, retries and recovers durable work safely', { time
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.equal(await worker.enqueueOutboxBatch(), 1);
     const job = await pool.query(
-      `SELECT id FROM platform.durable_jobs WHERE job_kind = 'test-consumer' AND business_key = $1`, [basicEventId],
+      `SELECT id FROM platform.durable_jobs WHERE job_kind = $1 AND business_key = $2`, [consumerId, basicEventId],
     );
     assert.ok(job.rows[0].id);
     const [claimA, claimB] = await Promise.all([
-      worker.claim('test-consumer', `${prefix}:worker-a`, 1),
-      worker.claim('test-consumer', `${prefix}:worker-b`, 1),
+      worker.claim(consumerId, `${prefix}:worker-a`, 1),
+      worker.claim(consumerId, `${prefix}:worker-b`, 1),
     ]);
     assert.equal(claimA.length + claimB.length, 1, 'two claimers must not own the same job concurrently');
     const claimed = claimA[0] ?? claimB[0];
@@ -86,7 +87,7 @@ test('REN2-30 claims, dedupes, retries and recovers durable work safely', { time
       `UPDATE platform.durable_jobs SET state = 'pending', attempt_count = 0, scheduled_for = now()
        WHERE id = $1`, [claimed.id],
     );
-    const replay = (await worker.claim('test-consumer', `${prefix}:replay`, 1))[0];
+    const replay = (await worker.claim(consumerId, `${prefix}:replay`, 1))[0];
     assert.equal(await worker.process(replay), 'duplicate');
     const effectCount = await pool.query('SELECT count(*)::int AS count FROM system_events WHERE event_name = $1', [`${prefix}:${basicEventId}:effect`]);
     assert.equal(effectCount.rows[0].count, 1);
@@ -94,20 +95,20 @@ test('REN2-30 claims, dedupes, retries and recovers durable work safely', { time
     // A failure after the synthetic effect write rolls the effect and receipt back; retry safely applies it once.
     const retryEventId = await createEvent('retry', { failOnce: true });
     await worker.enqueueOutboxBatch();
-    const retryJob = await pool.query(`SELECT id FROM platform.durable_jobs WHERE job_kind = 'test-consumer' AND business_key = $1`, [retryEventId]);
+    const retryJob = await pool.query(`SELECT id FROM platform.durable_jobs WHERE job_kind = $1 AND business_key = $2`, [consumerId, retryEventId]);
     assert.ok(retryJob.rows[0].id);
-    const firstAttempt = (await worker.claim('test-consumer', `${prefix}:retry-a`, 1))[0];
+    const firstAttempt = (await worker.claim(consumerId, `${prefix}:retry-a`, 1))[0];
     assert.equal(await worker.process(firstAttempt), 'retry');
     const rolledBack = await pool.query('SELECT count(*)::int AS count FROM system_events WHERE event_name = $1', [`${prefix}:${retryEventId}:effect`]);
     assert.equal(rolledBack.rows[0].count, 0);
     await pool.query('UPDATE platform.durable_jobs SET scheduled_for = now() - interval \'1 second\' WHERE id = $1', [firstAttempt.id]);
-    const secondAttempt = (await worker.claim('test-consumer', `${prefix}:retry-b`, 1))[0];
+    const secondAttempt = (await worker.claim(consumerId, `${prefix}:retry-b`, 1))[0];
     assert.equal(await worker.process(secondAttempt), 'processed');
 
     // A later runOnce poll discovers already-committed work after a missed wakeup.
     await createEvent('missed-wakeup', { marker: 'synthetic' });
     await new Promise((resolve) => setTimeout(resolve, 20));
-    assert.deepEqual(await worker.runOnce('test-consumer', `${prefix}:poll`, 1), {
+    assert.deepEqual(await worker.runOnce(consumerId, `${prefix}:poll`, 1), {
       enqueuedEvents: 1,
       claimed: 1,
       processed: 1,
@@ -120,16 +121,16 @@ test('REN2-30 claims, dedupes, retries and recovers durable work safely', { time
     // Expired leases are reclaimable after a worker crash.
     const leaseEventId = await createEvent('lease', { marker: 'lease' });
     await worker.enqueueOutboxBatch();
-    const leaseJob = await pool.query(`SELECT id FROM platform.durable_jobs WHERE job_kind = 'test-consumer' AND business_key = $1`, [leaseEventId]);
+    const leaseJob = await pool.query(`SELECT id FROM platform.durable_jobs WHERE job_kind = $1 AND business_key = $2`, [consumerId, leaseEventId]);
     assert.ok(leaseJob.rows[0].id);
     const reusedWorkerId = `${prefix}:reused-worker`;
-    const abandoned = (await worker.claim('test-consumer', reusedWorkerId, 1))[0];
+    const abandoned = (await worker.claim(consumerId, reusedWorkerId, 1))[0];
     await pool.query(
       `UPDATE platform.durable_jobs
        SET lease_started_at = now() - interval '3 seconds', lease_until = now() - interval '1 second'
        WHERE id = $1`, [abandoned.id],
     );
-    const takenOver = (await worker.claim('test-consumer', reusedWorkerId, 1))[0];
+    const takenOver = (await worker.claim(consumerId, reusedWorkerId, 1))[0];
     assert.equal(takenOver.id, abandoned.id);
     assert.notEqual(takenOver.leaseToken, abandoned.leaseToken, 'a takeover must issue a fresh fencing token even when the worker ID is reused');
     assert.equal(await worker.process(abandoned), 'lease_lost');
@@ -140,9 +141,9 @@ test('REN2-30 claims, dedupes, retries and recovers durable work safely', { time
     await pool.query(`INSERT INTO identity.users (id, state) VALUES ($1, 'active')`, [actorId]);
     const poisonEventId = await createEvent('poison', { poison: true, marker: 'synthetic' });
     await worker.enqueueOutboxBatch();
-    const poisonJob = await pool.query(`SELECT id FROM platform.durable_jobs WHERE job_kind = 'test-consumer' AND business_key = $1`, [poisonEventId]);
+    const poisonJob = await pool.query(`SELECT id FROM platform.durable_jobs WHERE job_kind = $1 AND business_key = $2`, [consumerId, poisonEventId]);
     await pool.query('UPDATE platform.durable_jobs SET max_attempts = 1 WHERE id = $1', [poisonJob.rows[0].id]);
-    const poison = (await worker.claim('test-consumer', `${prefix}:poison`, 1))[0];
+    const poison = (await worker.claim(consumerId, `${prefix}:poison`, 1))[0];
     const stalePoisonData = { ...poison, attemptCount: 0, maxAttempts: 5 };
     assert.equal(await worker.process(stalePoisonData), 'dead_letter', 'retry decisions must use the stored final attempt count');
     const visible = await worker.listDeadLetters();
