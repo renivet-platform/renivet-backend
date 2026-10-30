@@ -141,7 +141,6 @@ test('REN2-30 claims, dedupes, retries and recovers durable work safely', { time
     const poisonEventId = await createEvent('poison', { poison: true, marker: 'synthetic' });
     await worker.enqueueOutboxBatch();
     const poisonJob = await pool.query(`SELECT id FROM platform.durable_jobs WHERE job_kind = 'test-consumer' AND business_key = $1`, [poisonEventId]);
-    jobIds.push(poisonJob.rows[0].id);
     await pool.query('UPDATE platform.durable_jobs SET max_attempts = 1 WHERE id = $1', [poisonJob.rows[0].id]);
     const poison = (await worker.claim('test-consumer', `${prefix}:poison`, 1))[0];
     const stalePoisonData = { ...poison, attemptCount: 0, maxAttempts: 5 };
