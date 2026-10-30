@@ -35,6 +35,7 @@ test('REN2-21 registration and password HTTP acceptance', { skip: enabled ? fals
   process.env.REDIS_URL = redisUrl;
   process.env.AUTH_RATE_LIMIT_HMAC_KEY = 'synthetic-integration-rate-key-not-a-secret-00000000';
   process.env.AUTH_CSRF_HMAC_KEY = 'synthetic-integration-csrf-key-not-a-secret-00000000';
+  process.env.AUTH_MFA_ENCRYPTION_KEY = Buffer.alloc(32, 0x44).toString('base64');
   process.env.AUTH_ALLOWED_ORIGINS = 'http://127.0.0.1:3000';
 
   const { NestFactory } = require('@nestjs/core');
@@ -82,9 +83,9 @@ test('REN2-21 registration and password HTTP acceptance', { skip: enabled ? fals
     const expiredToken = 'E'.repeat(43);
     const absoluteExpiredToken = 'A'.repeat(43);
     await pool.query(
-      `INSERT INTO identity.user_sessions (user_id, token_hash, created_at, expires_at)
-       VALUES ($1, $2, now() - interval '10 days', now() - interval '9 days'),
-              ($1, $3, now() - interval '8 days', now() + interval '1 hour')`,
+      `INSERT INTO identity.user_sessions (user_id, token_hash, created_at, expires_at, absolute_expires_at)
+       VALUES ($1, $2, now() - interval '10 days', now() - interval '9 days', now() - interval '3 days'),
+              ($1, $3, now() - interval '8 days', now() - interval '2 days', now() - interval '1 day')`,
       [userId, require('node:crypto').createHash('sha256').update(expiredToken).digest('hex'), require('node:crypto').createHash('sha256').update(absoluteExpiredToken).digest('hex')],
     );
     const idleExpired = await fetch(`${base}/auth/session`, { headers: { cookie: `__Host-renivet_session=${expiredToken}` } });
@@ -308,6 +309,9 @@ test('REN2-21 registration and password HTTP acceptance', { skip: enabled ? fals
     assert.equal((await pool.query('SELECT 1 FROM identity.user_sessions WHERE token_hash = $1', [raceTokenHash])).rowCount, 0);
   } finally {
     await app?.close();
+    await pool.query('DELETE FROM identity.security_audit_events WHERE actor_user_id IN (SELECT id FROM identity.users WHERE email = ANY($1::text[]))', [[registrationEmail, postmanEmail, verifiedEmail]]).catch(() => {});
+    await pool.query('DELETE FROM identity.mfa_recovery_codes WHERE factor_id IN (SELECT factor.id FROM identity.mfa_factors AS factor JOIN identity.users AS account ON account.id = factor.user_id WHERE account.email = ANY($1::text[]))', [[registrationEmail, postmanEmail, verifiedEmail]]).catch(() => {});
+    await pool.query('DELETE FROM identity.mfa_factors WHERE user_id IN (SELECT id FROM identity.users WHERE email = ANY($1::text[]))', [[registrationEmail, postmanEmail, verifiedEmail]]).catch(() => {});
     await pool.query('DELETE FROM identity.user_sessions WHERE user_id IN (SELECT id FROM identity.users WHERE email = ANY($1::text[]))', [[registrationEmail, postmanEmail, verifiedEmail]]).catch(() => {});
     await pool.query('DELETE FROM identity.user_credentials WHERE user_id IN (SELECT id FROM identity.users WHERE email = ANY($1::text[]))', [[registrationEmail, postmanEmail, verifiedEmail]]).catch(() => {});
     await pool.query('DELETE FROM identity.users WHERE email = ANY($1::text[])', [[registrationEmail, postmanEmail, verifiedEmail]]).catch(() => {});

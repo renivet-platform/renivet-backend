@@ -80,6 +80,7 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
     expectedPasswordHash: string;
     tokenHash: string;
     expiresAt: Date;
+    absoluteExpiresAt?: Date;
     ipHash: string;
     previousTokenHash?: string;
   }): Promise<boolean> {
@@ -110,8 +111,8 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
         );
       }
       const inserted = await client.query(
-        `INSERT INTO identity.user_sessions (user_id, token_hash, expires_at, ip_hash)
-         SELECT u.id, $3, $4, $5
+        `INSERT INTO identity.user_sessions (user_id, token_hash, expires_at, ip_hash, absolute_expires_at)
+         SELECT u.id, $3, $4, $5, COALESCE($7::timestamptz, clock_timestamp() + interval '7 days')
            FROM identity.users AS u
           WHERE u.id = $1
             AND u.state = 'active'
@@ -121,7 +122,7 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
                WHERE c.id = $2 AND c.user_id = u.id AND c.password_hash = $6 AND c.disabled_at IS NULL
             )
          RETURNING id`,
-        [session.userId, session.credentialId, session.tokenHash, session.expiresAt, session.ipHash, session.expectedPasswordHash],
+        [session.userId, session.credentialId, session.tokenHash, session.expiresAt, session.ipHash, session.expectedPasswordHash, session.absoluteExpiresAt ?? null],
       );
       if (inserted.rowCount !== 1) {
         await client.query('ROLLBACK');
@@ -143,19 +144,24 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
     }
   }
 
-  async findAndTouchSession(tokenHash: string, idleTtlSeconds: number, absoluteTtlSeconds: number): Promise<{ userId: string; expiresAt: Date } | null> {
-    const result = await this.requirePool().query<{ user_id: string; expires_at: Date }>(
+  async findAndTouchSession(tokenHash: string, idleTtlSeconds: number): Promise<{ sessionId: string; userId: string; expiresAt: Date; mfaVerifiedAt: Date | null } | null> {
+    const result = await this.requirePool().query<{ id: string; user_id: string; expires_at: Date; mfa_verified_at: Date | null }>(
       `UPDATE identity.user_sessions AS session
-          SET expires_at = LEAST(clock_timestamp() + ($2::integer * interval '1 second'), created_at + ($3::integer * interval '1 second')),
+          SET expires_at = LEAST(clock_timestamp() + ($2::integer * interval '1 second'), absolute_expires_at),
               updated_at = clock_timestamp(), row_version = row_version + 1
         WHERE token_hash = $1 AND revoked_at IS NULL
           AND expires_at > clock_timestamp()
-          AND created_at + ($3::integer * interval '1 second') > clock_timestamp()
+          AND absolute_expires_at > clock_timestamp()
           AND EXISTS (SELECT 1 FROM identity.users AS account WHERE account.id = session.user_id AND account.state = 'active')
-        RETURNING user_id, expires_at`,
-      [tokenHash, idleTtlSeconds, absoluteTtlSeconds],
+        RETURNING id, user_id, expires_at, mfa_verified_at`,
+      [tokenHash, idleTtlSeconds],
     );
-    return result.rows[0] ? { userId: result.rows[0].user_id, expiresAt: result.rows[0].expires_at } : null;
+    return result.rows[0] ? {
+      sessionId: result.rows[0].id,
+      userId: result.rows[0].user_id,
+      expiresAt: result.rows[0].expires_at,
+      mfaVerifiedAt: result.rows[0].mfa_verified_at,
+    } : null;
   }
 
   async revokeSession(tokenHash: string): Promise<boolean> {
@@ -163,7 +169,7 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
       `UPDATE identity.user_sessions
           SET revoked_at = clock_timestamp(), updated_at = clock_timestamp(), row_version = row_version + 1
         WHERE token_hash = $1 AND revoked_at IS NULL AND expires_at > clock_timestamp()
-          AND created_at + interval '7 days' > clock_timestamp()`,
+          AND absolute_expires_at > clock_timestamp()`,
       [tokenHash],
     );
     return (result.rowCount ?? 0) === 1;

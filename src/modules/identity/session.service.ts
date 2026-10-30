@@ -2,7 +2,7 @@ import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { AuthHttpError } from './auth.service';
 
 export interface SessionRepositoryPort {
-  findAndTouchSession(tokenHash: string, idleTtlSeconds: number, absoluteTtlSeconds: number): Promise<{ userId: string; expiresAt: Date } | null>;
+  findAndTouchSession(tokenHash: string, idleTtlSeconds: number, absoluteTtlSeconds: number): Promise<{ sessionId: string; userId: string; expiresAt: Date; mfaVerifiedAt: Date | null } | null>;
   revokeSession(tokenHash: string): Promise<boolean>;
 }
 
@@ -49,11 +49,11 @@ export class SessionService {
     private readonly absoluteTtlSeconds = 604_800,
   ) {}
 
-  async authenticate(sessionToken: string | undefined): Promise<{ userId: string; csrfToken: string; expiresInSeconds: number }> {
+  async authenticate(sessionToken: string | undefined): Promise<{ sessionId: string; userId: string; csrfToken: string; expiresInSeconds: number; mfaVerifiedAt: Date | null }> {
     if (!sessionToken || !/^[A-Za-z0-9_-]{43}$/.test(sessionToken) || !this.csrfKey || this.csrfKey.length < 32) {
       throw new SessionDeniedError();
     }
-    let session: { userId: string; expiresAt: Date } | null;
+    let session: { sessionId: string; userId: string; expiresAt: Date; mfaVerifiedAt: Date | null } | null;
     try {
       session = await this.repository.findAndTouchSession(hashSessionToken(sessionToken), this.idleTtlSeconds, this.absoluteTtlSeconds);
     } catch {
@@ -61,7 +61,13 @@ export class SessionService {
     }
     if (!session) throw new SessionDeniedError();
     const expiresInSeconds = Math.max(0, Math.ceil((session.expiresAt.getTime() - Date.now()) / 1_000));
-    return { userId: session.userId, csrfToken: deriveCsrfToken(sessionToken, this.csrfKey), expiresInSeconds };
+    return {
+      sessionId: session.sessionId,
+      userId: session.userId,
+      csrfToken: deriveCsrfToken(sessionToken, this.csrfKey),
+      expiresInSeconds,
+      mfaVerifiedAt: session.mfaVerifiedAt,
+    };
   }
 
   async logout(sessionToken: string | undefined): Promise<void> {

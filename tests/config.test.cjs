@@ -43,6 +43,7 @@ test('staging and production refuse known local credentials', () => {
     AUTH_RATE_LIMIT_HMAC_KEY: 'synthetic-not-a-real-deployment-key-0000000000000000',
     AUTH_CHALLENGE_HMAC_KEY: 'synthetic-challenge-not-a-deployment-key-0000000000',
     AUTH_CSRF_HMAC_KEY: 'synthetic-csrf-not-a-deployment-key-00000000000000',
+    AUTH_MFA_ENCRYPTION_KEY: Buffer.alloc(32, 0x5a).toString('base64'),
     AUTH_ALLOWED_ORIGINS: 'https://app.example.test',
   };
   assert.throws(() => validateEnvironment(environment), /DATABASE_URL/);
@@ -62,6 +63,7 @@ test('protected environments require a private rate-limit HMAC key and bounded a
     TYPESENSE_API_KEY: 'deployment-only-typesense-key',
     PYTHON_SERVICE_URL: 'https://ai.internal:8000',
     AUTH_CSRF_HMAC_KEY: 'synthetic-csrf-not-a-deployment-key-00000000000000',
+    AUTH_MFA_ENCRYPTION_KEY: Buffer.alloc(32, 0x5a).toString('base64'),
     AUTH_ALLOWED_ORIGINS: 'https://app.example.test',
   };
   assert.throws(() => validateEnvironment(environment), /AUTH_RATE_LIMIT_HMAC_KEY/);
@@ -108,6 +110,7 @@ test('staging and production require a dedicated OTP challenge HMAC key', () => 
     PYTHON_SERVICE_URL: 'https://ai.internal:8000',
     AUTH_RATE_LIMIT_HMAC_KEY: 'synthetic-not-a-real-deployment-key-0000000000000000',
     AUTH_CSRF_HMAC_KEY: 'synthetic-csrf-not-a-deployment-key-00000000000000',
+    AUTH_MFA_ENCRYPTION_KEY: Buffer.alloc(32, 0x5a).toString('base64'),
     AUTH_ALLOWED_ORIGINS: 'https://app.example.test',
   };
   assert.throws(() => validateEnvironment(env), /AUTH_CHALLENGE_HMAC_KEY/);
@@ -128,6 +131,7 @@ test('session CSRF origin configuration requires exact HTTPS origins and a dedic
     AUTH_RATE_LIMIT_HMAC_KEY: 'synthetic-rate-limit-key-not-a-real-deployment-value-0000',
     AUTH_CHALLENGE_HMAC_KEY: 'synthetic-challenge-key-not-a-real-deployment-value-000',
     AUTH_CSRF_HMAC_KEY: 'synthetic-csrf-key-not-a-real-deployment-value-00000000',
+    AUTH_MFA_ENCRYPTION_KEY: Buffer.alloc(32, 0x5a).toString('base64'),
   };
   assert.throws(() => validateEnvironment(environment), /AUTH_ALLOWED_ORIGINS/);
   environment.AUTH_ALLOWED_ORIGINS = 'http://app.example.test';
@@ -144,4 +148,26 @@ test('session idle expiry cannot exceed the approved 30-minute limit', () => {
   assert.equal(validateEnvironment({}).AUTH_SESSION_IDLE_TTL_SECONDS, 1_800);
   assert.equal(validateEnvironment({ AUTH_SESSION_IDLE_TTL_SECONDS: '1200' }).AUTH_SESSION_IDLE_TTL_SECONDS, 1_200);
   assert.throws(() => validateEnvironment({ AUTH_SESSION_IDLE_TTL_SECONDS: '1801' }), /AUTH_SESSION_IDLE_TTL_SECONDS/);
+});
+
+test('protected environments require a dedicated canonical 32-byte MFA encryption key', () => {
+  const environment = {
+    NODE_ENV: 'production',
+    DATABASE_URL: 'postgres://app:deployment-only@db.internal:5432/renivet',
+    REDIS_URL: 'redis://cache.internal:6379',
+    TYPESENSE_URL: 'https://search.internal:8108',
+    TYPESENSE_API_KEY: 'deployment-only-typesense-key',
+    PYTHON_SERVICE_URL: 'https://ai.internal:8000',
+    AUTH_RATE_LIMIT_HMAC_KEY: 'synthetic-rate-limit-key-not-a-real-deployment-value-000000',
+    AUTH_CHALLENGE_HMAC_KEY: 'synthetic-challenge-key-not-a-real-deployment-value-0000000',
+    AUTH_CSRF_HMAC_KEY: 'synthetic-csrf-key-not-a-real-deployment-value-00000000000',
+    AUTH_ALLOWED_ORIGINS: 'https://app.example.test',
+  };
+  assert.throws(() => validateEnvironment(environment), /AUTH_MFA_ENCRYPTION_KEY.*required/);
+  environment.AUTH_MFA_ENCRYPTION_KEY = Buffer.alloc(32, 0x5a).toString('base64');
+  assert.equal(validateEnvironment(environment).AUTH_MFA_ENCRYPTION_KEY, environment.AUTH_MFA_ENCRYPTION_KEY);
+  environment.AUTH_MFA_ENCRYPTION_KEY = Buffer.alloc(31, 0x5a).toString('base64');
+  assert.throws(() => validateEnvironment(environment), /AUTH_MFA_ENCRYPTION_KEY.*32 bytes/);
+  environment.AUTH_MFA_ENCRYPTION_KEY = 'not-base64';
+  assert.throws(() => validateEnvironment(environment), /AUTH_MFA_ENCRYPTION_KEY.*base64/);
 });

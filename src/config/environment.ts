@@ -83,6 +83,7 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
   const authRateLimitKey = optionalString(input, 'AUTH_RATE_LIMIT_HMAC_KEY');
   const authChallengeKey = optionalString(input, 'AUTH_CHALLENGE_HMAC_KEY');
   const authCsrfKey = optionalString(input, 'AUTH_CSRF_HMAC_KEY');
+  const authMfaEncryptionKey = optionalString(input, 'AUTH_MFA_ENCRYPTION_KEY');
   const allowedOriginsRaw = optionalString(input, 'AUTH_ALLOWED_ORIGINS');
   const allowedOrigins = (allowedOriginsRaw ?? '').split(',').map((origin) => origin.trim()).filter(Boolean);
   for (const origin of allowedOrigins) {
@@ -116,6 +117,18 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
     error('AUTH_CHALLENGE_HMAC_KEY', 'is required in staging and production');
   }
   if (protectedEnvironment && !authCsrfKey) error('AUTH_CSRF_HMAC_KEY', 'is required in staging and production');
+  if (authMfaEncryptionKey !== undefined) {
+    const validBase64Shape = /^[A-Za-z0-9+/]{43}=$/.test(authMfaEncryptionKey);
+    const decoded = validBase64Shape ? Buffer.from(authMfaEncryptionKey, 'base64') : Buffer.alloc(0);
+    if (!validBase64Shape || decoded.length !== 32 || decoded.toString('base64') !== authMfaEncryptionKey) {
+      error('AUTH_MFA_ENCRYPTION_KEY', 'must be canonical base64 encoding of exactly 32 bytes');
+    }
+    if ([authRateLimitKey, authChallengeKey, authCsrfKey].includes(authMfaEncryptionKey)) {
+      error('AUTH_MFA_ENCRYPTION_KEY', 'must be distinct from other authentication keys');
+    }
+  } else if (protectedEnvironment) {
+    error('AUTH_MFA_ENCRYPTION_KEY', 'is required in staging and production');
+  }
   if (protectedEnvironment && allowedOrigins.length === 0) error('AUTH_ALLOWED_ORIGINS', 'is required in staging and production');
   if (protectedEnvironment) {
     if (!searchKey) error('TYPESENSE_API_KEY', 'is required in staging and production');
@@ -140,6 +153,7 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
     AUTH_RATE_LIMIT_HMAC_KEY: authRateLimitKey,
     AUTH_CHALLENGE_HMAC_KEY: authChallengeKey,
     AUTH_CSRF_HMAC_KEY: authCsrfKey,
+    AUTH_MFA_ENCRYPTION_KEY: authMfaEncryptionKey,
     AUTH_ALLOWED_ORIGINS: allowedOrigins,
     AUTH_RATE_LIMIT_WINDOW_SECONDS: positiveInteger(input, 'AUTH_RATE_LIMIT_WINDOW_SECONDS', 900, 86_400),
     AUTH_REGISTER_ACCOUNT_LIMIT: positiveInteger(input, 'AUTH_REGISTER_ACCOUNT_LIMIT', 5, 10_000),

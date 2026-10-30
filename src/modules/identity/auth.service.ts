@@ -19,6 +19,7 @@ export interface IdentityRepositoryPort {
     expectedPasswordHash: string;
     tokenHash: string;
     expiresAt: Date;
+    absoluteExpiresAt?: Date;
     ipHash: string;
     previousTokenHash?: string;
   }): Promise<boolean>;
@@ -34,6 +35,7 @@ export interface AuthServiceOptions {
   loginAccountLimit: number;
   loginIpLimit: number;
   sessionTtlSeconds: number;
+  absoluteSessionTtlSeconds?: number;
 }
 
 export interface RegisterRequest {
@@ -137,7 +139,11 @@ export class AuthService {
 
     const sessionToken = randomBytes(32).toString('base64url');
     const tokenHash = createHash('sha256').update(sessionToken).digest('hex');
-    const expiresAt = new Date(Date.now() + this.options.sessionTtlSeconds * 1_000);
+    const now = Date.now();
+    const absoluteSessionTtlSeconds = this.options.absoluteSessionTtlSeconds ?? 604_800;
+    const expiresInSeconds = Math.min(this.options.sessionTtlSeconds, absoluteSessionTtlSeconds);
+    const expiresAt = new Date(now + expiresInSeconds * 1_000);
+    const absoluteExpiresAt = new Date(now + absoluteSessionTtlSeconds * 1_000);
     const ipHash = this.options.hmacKey
       ? createHmac('sha256', this.options.hmacKey).update(ip).digest('hex')
       : '';
@@ -150,6 +156,7 @@ export class AuthService {
         expectedPasswordHash: credential.passwordHash!,
         tokenHash,
         expiresAt,
+        absoluteExpiresAt,
         ipHash,
         previousTokenHash: previousSessionToken && /^[A-Za-z0-9_-]{43}$/.test(previousSessionToken)
           ? createHash('sha256').update(previousSessionToken).digest('hex')
@@ -163,7 +170,7 @@ export class AuthService {
     return {
       userId: credential.userId,
       sessionToken,
-      expiresInSeconds: this.options.sessionTtlSeconds,
+      expiresInSeconds,
     };
   }
 

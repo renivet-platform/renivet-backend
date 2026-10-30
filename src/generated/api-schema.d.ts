@@ -124,6 +124,106 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/mfa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Inspect the authenticated account MFA status
+         * @description Requires the first-party session cookie. Returns factor state and remaining recovery-code count only; it never returns an authenticator secret, TOTP, or recovery code. Linear: REN2-24.
+         */
+        get: operations["getMfaStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/mfa/enrollments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Begin authenticator-app MFA enrollment
+         * @description Requires an authenticated session, exact allowlisted Origin, Sec-Fetch-Site: same-origin, and session-bound X-CSRF-Token. Creates one short-lived pending TOTP factor and returns its provisioning URI once. One active or unexpired pending factor is allowed. Linear: REN2-24.
+         */
+        post: operations["beginMfaEnrollment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/mfa/enrollments/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm the authenticator factor and reveal recovery codes
+         * @description Requires an authenticated session, exact allowlisted Origin, same-origin fetch metadata, and session-bound CSRF proof. A valid TOTP activates the pending factor, rotates the session, and returns ten 128-bit recovery codes once. TOTP enrollment proof cannot be replayed. Linear: REN2-24.
+         */
+        post: operations["confirmMfaEnrollment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/mfa/step-up": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Elevate the current session with TOTP or a recovery code
+         * @description Requires an authenticated session and the same-origin CSRF protections. Valid TOTP or an unused recovery code is consumed atomically, the opaque session is rotated, and only the new server-side session receives an MFA verification timestamp. Elevation is fresh for 300 seconds. Linear: REN2-24.
+         */
+        post: operations["stepUpWithMfa"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/mfa/factor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke the current authenticator factor
+         * @description Requires an authenticated session, same-origin CSRF protections, and a successful step-up no older than 300 seconds. Revocation erases encrypted factor material, consumes remaining recovery codes, revokes all user sessions, and expires the current cookie. There is no support bypass. Linear: REN2-24.
+         */
+        delete: operations["revokeMfaFactor"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -150,7 +250,7 @@ export interface components {
         };
         AuthErrorDto: {
             /** @enum {string} */
-            code: "AUTH_INPUT_INVALID" | "AUTHENTICATION_FAILED" | "AUTH_RATE_LIMITED" | "AUTH_SERVICE_UNAVAILABLE" | "AUTH_INTERNAL_ERROR";
+            code: "AUTH_INPUT_INVALID" | "AUTHENTICATION_FAILED" | "AUTH_RATE_LIMITED" | "AUTH_SERVICE_UNAVAILABLE" | "AUTH_INTERNAL_ERROR" | "AUTH_MFA_PROOF_INVALID" | "AUTH_MFA_STEP_UP_REQUIRED" | "AUTH_MFA_ENROLLMENT_UNAVAILABLE" | "CSRF_VALIDATION_FAILED";
             /** @example The request could not be processed. */
             message: string;
             /** @example req-1 */
@@ -234,6 +334,76 @@ export interface components {
              * @enum {string}
              */
             status: "verified";
+        };
+        MfaStatusResponseDto: {
+            /**
+             * @example not_enrolled
+             * @enum {string}
+             */
+            state: "not_enrolled" | "enrollment_pending" | "enabled";
+            /** @example 0 */
+            recoveryCodesRemaining: number;
+        };
+        MfaEnrollmentResponseDto: {
+            /**
+             * @example enrollment_pending
+             * @enum {string}
+             */
+            state: "enrollment_pending";
+            /**
+             * Format: uri
+             * @description Contains the authenticator secret. Shown only in the start response and never returned by status or retries.
+             * @example otpauth://totp/Renivet:00000000-0000-4000-8000-000000000000?secret=JBSWY3DPEHPK3PXP&issuer=Renivet&algorithm=SHA1&digits=6&period=30
+             */
+            provisioningUri: string;
+            /** @example 600 */
+            expiresInSeconds: number;
+        };
+        MfaEnrollmentCodeRequestDto: {
+            /**
+             * @description Six-digit TOTP from the authenticator app. Synthetic example only.
+             * @example 123456
+             */
+            code: string;
+        };
+        MfaEnabledResponseDto: {
+            /**
+             * @example enabled
+             * @enum {string}
+             */
+            state: "enabled";
+            /**
+             * @description One-time recovery codes. Save them now; the API stores only SHA-256 digests and never returns them again.
+             * @example [
+             *       "JBSWY3DPEHPK3PXPJBSWY3DPEH"
+             *     ]
+             */
+            recoveryCodes: string[];
+            /** @example synthetic-csrf-proof-for-rotated-session */
+            csrfToken: string;
+        };
+        MfaStepUpRequestDto: {
+            /**
+             * @description Six-digit TOTP or one 26-character recovery code. Synthetic example only.
+             * @example 123456
+             */
+            code: string;
+        };
+        MfaStepUpResponseDto: {
+            /**
+             * @example elevated
+             * @enum {string}
+             */
+            authenticationState: "elevated";
+            /** @example synthetic-csrf-proof-for-rotated-session */
+            csrfToken: string;
+        };
+        MfaRevocationResponseDto: {
+            /**
+             * @example revoked
+             * @enum {string}
+             */
+            status: "revoked";
         };
     };
     responses: never;
@@ -632,6 +802,383 @@ export interface operations {
                 };
             };
             /** @description AUTH_SERVICE_UNAVAILABLE. Redis, PostgreSQL, or OTP proof configuration is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+        };
+    };
+    getMfaStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current MFA enrollment state without factor material. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaStatusResponseDto"];
+                };
+            };
+            /** @description AUTHENTICATION_FAILED. The session is missing, expired, revoked, or invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description AUTH_INTERNAL_ERROR. Unexpected failure with a safe public message. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description AUTH_SERVICE_UNAVAILABLE. The identity store is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+        };
+    };
+    beginMfaEnrollment: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound proof returned by GET /auth/session. */
+                "X-CSRF-Token": string;
+                /** @description Must be same-origin. */
+                "Sec-Fetch-Site": string;
+                /** @description Must exactly match a configured AUTH_ALLOWED_ORIGINS origin. */
+                Origin: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One-time authenticator provisioning URI, expiring after 10 minutes. */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaEnrollmentResponseDto"];
+                };
+            };
+            /** @description AUTHENTICATION_FAILED. The session is not active. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description CSRF_VALIDATION_FAILED. Origin, fetch metadata, or CSRF evidence is invalid. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description AUTH_MFA_ENROLLMENT_UNAVAILABLE. A factor is already pending or enabled. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description AUTH_RATE_LIMITED. Enrollment request limit exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description AUTH_INTERNAL_ERROR. Unexpected failure with a safe public message. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description AUTH_SERVICE_UNAVAILABLE. MFA encryption key, Redis, PostgreSQL or audit storage is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+        };
+    };
+    confirmMfaEnrollment: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound proof returned by GET /auth/session. */
+                "X-CSRF-Token": string;
+                /** @description Must be same-origin. */
+                "Sec-Fetch-Site": string;
+                /** @description Must exactly match a configured AUTH_ALLOWED_ORIGINS origin. */
+                Origin: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaEnrollmentCodeRequestDto"];
+            };
+        };
+        responses: {
+            /** @description Activated factor, one-time recovery codes, rotated secure session cookie, and fresh CSRF proof. */
+            200: {
+                headers: {
+                    "Set-Cookie"?: string;
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaEnabledResponseDto"];
+                };
+            };
+            /** @description AUTH_INPUT_INVALID. Code is not a six-digit TOTP. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description AUTHENTICATION_FAILED or AUTH_MFA_PROOF_INVALID. Session/factor proof is invalid, expired, or replayed. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description CSRF_VALIDATION_FAILED. Origin, fetch metadata, or CSRF evidence is invalid. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description AUTH_RATE_LIMITED. Enrollment verification limit exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description AUTH_INTERNAL_ERROR. Unexpected failure with a safe public message. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description AUTH_SERVICE_UNAVAILABLE. MFA encryption key, Redis, PostgreSQL or audit storage is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+        };
+    };
+    stepUpWithMfa: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound proof returned by GET /auth/session. */
+                "X-CSRF-Token": string;
+                /** @description Must be same-origin. */
+                "Sec-Fetch-Site": string;
+                /** @description Must exactly match a configured AUTH_ALLOWED_ORIGINS origin. */
+                Origin: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaStepUpRequestDto"];
+            };
+        };
+        responses: {
+            /** @description Elevated session cookie and fresh CSRF proof. */
+            200: {
+                headers: {
+                    "Set-Cookie"?: string;
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaStepUpResponseDto"];
+                };
+            };
+            /** @description AUTH_INPUT_INVALID. Proof is neither a six-digit TOTP nor a 26-character recovery code. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description AUTHENTICATION_FAILED or AUTH_MFA_PROOF_INVALID. Session, factor, or one-time recovery proof is invalid or replayed. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description CSRF_VALIDATION_FAILED. Origin, fetch metadata, or CSRF evidence is invalid. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description AUTH_RATE_LIMITED. MFA verification limit exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description AUTH_INTERNAL_ERROR. Unexpected failure with a safe public message. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description AUTH_SERVICE_UNAVAILABLE. MFA encryption key, Redis, PostgreSQL or audit storage is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+        };
+    };
+    revokeMfaFactor: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound proof returned by GET /auth/session or the latest MFA response. */
+                "X-CSRF-Token": string;
+                /** @description Must be same-origin. */
+                "Sec-Fetch-Site": string;
+                /** @description Must exactly match a configured AUTH_ALLOWED_ORIGINS origin. */
+                Origin: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Factor revoked and current secure session cookie expired. */
+            200: {
+                headers: {
+                    "Set-Cookie"?: string;
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaRevocationResponseDto"];
+                };
+            };
+            /** @description AUTHENTICATION_FAILED. The session is not active. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description CSRF_VALIDATION_FAILED or AUTH_MFA_STEP_UP_REQUIRED. CSRF or fresh MFA evidence is invalid. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description AUTH_RATE_LIMITED. Authentication limit exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description AUTH_INTERNAL_ERROR. Unexpected failure with a safe public message. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description AUTH_SERVICE_UNAVAILABLE. PostgreSQL or audit storage is unavailable. */
             503: {
                 headers: {
                     [name: string]: unknown;

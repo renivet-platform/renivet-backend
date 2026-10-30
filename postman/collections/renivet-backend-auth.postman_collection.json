@@ -1,8 +1,8 @@
 {
   "info": {
     "_postman_id": "4f1980e8-d7f5-44ea-9433-7b88144e153a",
-    "name": "Renivet Backend - Identity, Authentication and Sessions (REN2-21/23)",
-    "description": "Version-controlled functional docs for implemented identity, password, session and logout routes. NestJS-generated OpenAPI is authoritative; tests remain handwritten. Synthetic data only; no cloud sync. Linear: REN2-21 and REN2-23.",
+    "name": "Renivet Backend - Identity, Authentication, Sessions and MFA (REN2-21/23/24)",
+    "description": "Version-controlled functional docs for implemented identity, password, session, MFA and logout routes. NestJS-generated OpenAPI is authoritative; tests remain handwritten. Synthetic data only; no cloud sync. Linear: REN2-21, REN2-23 and REN2-24.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -377,6 +377,143 @@
           "protocolProfileBehavior": {
             "disableCookies": true
           }
+        },
+        {
+          "name": "02 — MFA and Privileged Authentication (REN2-24)",
+          "description": "Authenticator enrollment, session elevation and revocation. TOTP and recovery proofs are never reused as checkout OTP. All mutations require the active session cookie, exact Origin, same-origin fetch metadata and session-bound X-CSRF-Token. These runnable CI examples cover status, provisioning start, malformed proof and insufficient-step-up denial; full positive TOTP/recovery flows run in the disposable PostgreSQL API integration test.",
+          "item": [
+            {
+              "name": "Inspect MFA status without revealing factor material (REN2-24)",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Cookie", "value": "__Host-renivet_session={{sessionCookie}}" }
+                ],
+                "url": "{{apiBaseUrl}}/auth/mfa",
+                "description": "Purpose: inspect the current user's MFA state and remaining recovery-code count. Linear: REN2-24. Parameters: none. Body: none. Authentication/permissions: authenticated first-party session cookie; no domain role required. Responses: 200 not_enrolled/enrollment_pending/enabled and count; 401 AUTHENTICATION_FAILED; 503 AUTH_SERVICE_UNAVAILABLE; 500 AUTH_INTERNAL_ERROR. Secret, TOTP and recovery codes are never returned. Synthetic account only."
+              },
+              "protocolProfileBehavior": { "disableCookies": true },
+              "response": [
+                {
+                  "name": "Not enrolled",
+                  "originalRequest": { "method": "GET", "url": "{{apiBaseUrl}}/auth/mfa" },
+                  "status": "OK",
+                  "code": 200,
+                  "header": [{ "key": "Cache-Control", "value": "no-store" }],
+                  "body": "{\n  \"state\": \"not_enrolled\",\n  \"recoveryCodesRemaining\": 0\n}"
+                }
+              ],
+              "event": [{
+                "listen": "test",
+                "script": { "type": "text/javascript", "exec": [
+                  "pm.test('MFA status is private and contains no factor material', function () { pm.response.to.have.status(200); const body = pm.response.json(); pm.expect(body.state).to.eql('not_enrolled'); pm.expect(body.recoveryCodesRemaining).to.eql(0); pm.expect(pm.response.headers.get('Cache-Control')).to.eql('no-store'); pm.expect(body).not.to.have.property('secret'); pm.expect(body).not.to.have.property('recoveryCodes'); });"
+                ] }
+              }]
+            },
+            {
+              "name": "Begin authenticator enrollment (REN2-24)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Cookie", "value": "__Host-renivet_session={{sessionCookie}}" },
+                  { "key": "Origin", "value": "{{allowedOrigin}}" },
+                  { "key": "Sec-Fetch-Site", "value": "same-origin" },
+                  { "key": "X-CSRF-Token", "value": "{{sessionCsrf}}" }
+                ],
+                "url": "{{apiBaseUrl}}/auth/mfa/enrollments",
+                "description": "Purpose: begin a 10-minute TOTP enrollment and return its provisioning URI once. Linear: REN2-24. Parameters: none. Body: none. Authentication/permissions: active session plus exact allowlisted Origin, same-origin fetch metadata and session-bound CSRF proof. Responses: 200 enrollment_pending with one-time otpauth URI and expiry; 401 AUTHENTICATION_FAILED; 403 CSRF_VALIDATION_FAILED; 409 AUTH_MFA_ENROLLMENT_UNAVAILABLE; 429 AUTH_RATE_LIMITED; 503 AUTH_SERVICE_UNAVAILABLE; 500 AUTH_INTERNAL_ERROR. A pending or enabled factor prevents another enrollment. Synthetic test account only."
+              },
+              "protocolProfileBehavior": { "disableCookies": true },
+              "response": [{
+                "name": "Enrollment started",
+                "originalRequest": { "method": "POST", "url": "{{apiBaseUrl}}/auth/mfa/enrollments" },
+                "status": "OK",
+                "code": 200,
+                "header": [{ "key": "Cache-Control", "value": "no-store" }],
+                "body": "{\n  \"state\": \"enrollment_pending\",\n  \"provisioningUri\": \"otpauth://totp/Renivet:synthetic-user?secret=JBSWY3DPEHPK3PXP&issuer=Renivet&algorithm=SHA1&digits=6&period=30\",\n  \"expiresInSeconds\": 600\n}"
+              }],
+              "event": [{
+                "listen": "test",
+                "script": { "type": "text/javascript", "exec": [
+                  "pm.test('enrollment creates a one-time, short-lived authenticator setup response', function () { pm.response.to.have.status(200); const body = pm.response.json(); pm.expect(body.state).to.eql('enrollment_pending'); pm.expect(body.provisioningUri.startsWith('otpauth://totp/')).to.eql(true); pm.expect(body.expiresInSeconds).to.eql(600); pm.expect(pm.response.headers.get('Cache-Control')).to.eql('no-store'); });"
+                ] }
+              }]
+            },
+            {
+              "name": "Reject malformed enrollment proof (REN2-24)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Cookie", "value": "__Host-renivet_session={{sessionCookie}}" },
+                  { "key": "Origin", "value": "{{allowedOrigin}}" },
+                  { "key": "Sec-Fetch-Site", "value": "same-origin" },
+                  { "key": "X-CSRF-Token", "value": "{{sessionCsrf}}" }
+                ],
+                "body": { "mode": "raw", "raw": "{\n  \"code\": \"ABCDEF\"\n}", "options": { "raw": { "language": "json" } } },
+                "url": "{{apiBaseUrl}}/auth/mfa/enrollments/verify",
+                "description": "Purpose: verify an enrollment TOTP and activate MFA. This negative example sends malformed input and must not activate the factor. Linear: REN2-24. Parameters: none. Body: code must be exactly six decimal digits. Authentication/permissions: active session plus same-origin CSRF protections. Responses: 400 AUTH_INPUT_INVALID; 401 AUTH_MFA_PROOF_INVALID for an invalid/replayed valid-shape code; 403 CSRF_VALIDATION_FAILED; 429 AUTH_RATE_LIMITED; 503 AUTH_SERVICE_UNAVAILABLE; 500 AUTH_INTERNAL_ERROR. Valid activation rotates the session and returns ten recovery codes once. Synthetic invalid example only."
+              },
+              "protocolProfileBehavior": { "disableCookies": true },
+              "response": [{
+                "name": "Malformed code rejected",
+                "originalRequest": { "method": "POST", "url": "{{apiBaseUrl}}/auth/mfa/enrollments/verify" },
+                "status": "Bad Request",
+                "code": 400,
+                "body": "{\n  \"code\": \"AUTH_INPUT_INVALID\",\n  \"message\": \"The request could not be processed.\",\n  \"requestId\": \"synthetic-request-id\"\n}"
+              }],
+              "event": [{
+                "listen": "test",
+                "script": { "type": "text/javascript", "exec": [
+                  "pm.test('malformed enrollment proof is rejected without activation', function () { pm.response.to.have.status(400); pm.expect(pm.response.json().code).to.eql('AUTH_INPUT_INVALID'); });"
+                ] }
+              }]
+            },
+            {
+              "name": "Reject malformed MFA step-up proof (REN2-24)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Cookie", "value": "__Host-renivet_session={{sessionCookie}}" },
+                  { "key": "Origin", "value": "{{allowedOrigin}}" },
+                  { "key": "Sec-Fetch-Site", "value": "same-origin" },
+                  { "key": "X-CSRF-Token", "value": "{{sessionCsrf}}" }
+                ],
+                "body": { "mode": "raw", "raw": "{\n  \"code\": \"not-a-factor\"\n}", "options": { "raw": { "language": "json" } } },
+                "url": "{{apiBaseUrl}}/auth/mfa/step-up",
+                "description": "Purpose: elevate a session using TOTP or one unused recovery code. This negative example verifies request validation only. Linear: REN2-24. Parameters: none. Body: six-digit TOTP or 26-character base32 recovery code. Authentication/permissions: active session plus same-origin CSRF protections. Responses: 400 AUTH_INPUT_INVALID; 401 AUTH_MFA_PROOF_INVALID for invalid/replayed proofs; 403 CSRF_VALIDATION_FAILED; 429 AUTH_RATE_LIMITED; 503 AUTH_SERVICE_UNAVAILABLE; 500 AUTH_INTERNAL_ERROR. Success rotates the session and returns a fresh CSRF proof. Synthetic invalid example only."
+              },
+              "protocolProfileBehavior": { "disableCookies": true },
+              "event": [{
+                "listen": "test",
+                "script": { "type": "text/javascript", "exec": [
+                  "pm.test('malformed step-up proof is rejected', function () { pm.response.to.have.status(400); pm.expect(pm.response.json().code).to.eql('AUTH_INPUT_INVALID'); });"
+                ] }
+              }]
+            },
+            {
+              "name": "Reject factor revocation without fresh MFA (REN2-24)",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  { "key": "Cookie", "value": "__Host-renivet_session={{sessionCookie}}" },
+                  { "key": "Origin", "value": "{{allowedOrigin}}" },
+                  { "key": "Sec-Fetch-Site", "value": "same-origin" },
+                  { "key": "X-CSRF-Token", "value": "{{sessionCsrf}}" }
+                ],
+                "url": "{{apiBaseUrl}}/auth/mfa/factor",
+                "description": "Purpose: revoke the active authenticator factor. This negative example runs before any valid MFA step-up and must deny. Linear: REN2-24. Parameters: none. Body: none. Authentication/permissions: active session, exact Origin, same-origin fetch metadata, CSRF proof and MFA step-up no older than 300 seconds. Responses: 200 revoked with cookie expiry; 401 AUTHENTICATION_FAILED; 403 AUTH_MFA_STEP_UP_REQUIRED or CSRF_VALIDATION_FAILED; 429 AUTH_RATE_LIMITED; 503 AUTH_SERVICE_UNAVAILABLE; 500 AUTH_INTERNAL_ERROR. Synthetic test account only."
+              },
+              "protocolProfileBehavior": { "disableCookies": true },
+              "event": [{
+                "listen": "test",
+                "script": { "type": "text/javascript", "exec": [
+                  "pm.test('factor revocation requires a recent server-side MFA step-up', function () { pm.response.to.have.status(403); pm.expect(pm.response.json().code).to.eql('AUTH_MFA_STEP_UP_REQUIRED'); });"
+                ] }
+              }]
+            }
+          ]
         },
         {
           "name": "Reject cross-site logout (REN2-23)",
