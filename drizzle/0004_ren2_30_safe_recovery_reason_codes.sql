@@ -1,0 +1,2 @@
+ALTER TABLE "platform"."dead_letter_recovery_audit" DROP CONSTRAINT "platform_dead_letter_recovery_audit_reason_code_safe";--> statement-breakpoint
+ALTER TABLE "platform"."dead_letter_recovery_audit" ADD CONSTRAINT "platform_dead_letter_recovery_audit_reason_code_safe" CHECK ("platform"."dead_letter_recovery_audit"."reason_code" in ('OPERATOR_RETRY', 'DATA_CORRECTED', 'DEPENDENCY_RESTORED'));

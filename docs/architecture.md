@@ -8,7 +8,7 @@ HTTP (Fastify) -> NestJS AppModule -> HealthModule -> HealthController
                     ConfigModule
 ```
 
-All proposed identity/commerce Nest modules have **empty decorators only** and are deliberately *not* registered. No route, worker, provider adapter or irreversible data mutation is implemented for these domains.
+`HealthModule` and the implemented `IdentityModule` are registered. Commerce modules remain placeholders and are not registered. The PostgreSQL `DurableWorker` processing primitives are implemented but are not registered or activated at startup; no scheduled worker, provider adapter or production job handler runs by default.
 
 ## Future domain module convention
 

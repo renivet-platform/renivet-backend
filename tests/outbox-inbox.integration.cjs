@@ -46,8 +46,8 @@ test('REN2-29 platform event schema enforces atomicity, inbox dedupe and bounded
     `);
     assert.deepEqual(
       tables.rows.map((row) => row.table_name),
-      ['dead_letter_cases', 'durable_jobs', 'inbox_receipts', 'outbox_events', 'webhook_inbox'],
-      'REN2-29 must add only the reviewed event, webhook, consumer receipt and worker state tables',
+      ['dead_letter_cases', 'dead_letter_recovery_audit', 'durable_jobs', 'inbox_receipts', 'outbox_events', 'webhook_inbox'],
+      'platform must contain the reviewed event, webhook, receipt, job and recovery audit tables',
     );
 
     const columns = await pool.query(`
@@ -58,6 +58,7 @@ test('REN2-29 platform event schema enforces atomicity, inbox dedupe and bounded
     `);
     const expectedColumns = {
       dead_letter_cases: ['id', 'created_at', 'updated_at', 'row_version', 'job_id', 'event_id', 'reason_code', 'state', 'assigned_to_id', 'resolved_at'],
+      dead_letter_recovery_audit: ['id', 'case_id', 'actor_id', 'reason_code', 'created_at'],
       durable_jobs: ['id', 'created_at', 'updated_at', 'row_version', 'job_kind', 'business_key', 'state', 'scheduled_for', 'lease_until', 'attempt_count', 'max_attempts', 'lease_owner', 'lease_started_at', 'last_error_code'],
       inbox_receipts: ['id', 'created_at', 'consumer_id', 'message_id', 'event_version', 'processed_at'],
       outbox_events: ['id', 'created_at', 'updated_at', 'row_version', 'aggregate_type', 'aggregate_id', 'event_type', 'event_version', 'event_payload', 'event_key', 'occurred_at', 'delivered_at'],
@@ -79,6 +80,7 @@ test('REN2-29 platform event schema enforces atomicity, inbox dedupe and bounded
     `);
     const expectedIndexes = {
       platform_dead_letter_cases_open_idx: /USING btree \(created_at, id\) WHERE \(state = 'open'::text\)$/i,
+      platform_dead_letter_recovery_audit_case_idx: /USING btree \(case_id, created_at\)$/i,
       platform_durable_jobs_business_key_uq: /CREATE UNIQUE INDEX .*USING btree \(job_kind, business_key\)$/i,
       platform_durable_jobs_expired_lease_idx: /USING btree \(lease_until, id\) WHERE \(state = 'leased'::text\)$/i,
       platform_durable_jobs_pending_claim_idx: /USING btree \(scheduled_for, id\) WHERE \(state = 'pending'::text\)$/i,
@@ -91,7 +93,7 @@ test('REN2-29 platform event schema enforces atomicity, inbox dedupe and bounded
     assert.deepEqual(
       indexRows.rows.map((row) => row.indexname).filter((name) => name.startsWith('platform_')),
       Object.keys(expectedIndexes).sort(),
-      'REN2-29 must create exactly the reviewed event claim and dedupe indexes',
+      'platform must retain the reviewed event claim, dedupe and recovery indexes',
     );
     const definitions = new Map(indexRows.rows.map((row) => [row.indexname, row.indexdef]));
     for (const [indexName, definition] of Object.entries(expectedIndexes)) {

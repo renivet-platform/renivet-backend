@@ -11,6 +11,7 @@ const expected = [
   ['openapi/renivet.openapi.json', join(scratch, 'renivet.openapi.json')],
   ['src/generated/api-schema.d.ts', join(scratch, 'api-schema.d.ts')],
 ];
+const normalizeLineEndings = (value) => value.replace(/\r\n/g, '\n');
 
 function run(command, args) {
   const result = spawnSync(command, args, { cwd: root, encoding: 'utf8', shell: process.platform === 'win32' });
@@ -29,8 +30,8 @@ try {
   ]);
 
   for (const [trackedRelativePath, generatedPath] of expected) {
-    const tracked = readFileSync(join(root, trackedRelativePath), 'utf8');
-    const generated = readFileSync(generatedPath, 'utf8');
+    const tracked = normalizeLineEndings(readFileSync(join(root, trackedRelativePath), 'utf8'));
+    const generated = normalizeLineEndings(readFileSync(generatedPath, 'utf8'));
     if (tracked !== generated) {
       process.stderr.write(`${trackedRelativePath} is out of date. Run npm run api:generate and review the diff.\n`);
       process.exitCode = 1;
