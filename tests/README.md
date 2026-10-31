@@ -29,4 +29,22 @@ Do not point migration or integration commands at a shared, staging or productio
 
 To run the REN2-29 schema test locally, use an isolated PostgreSQL 16 database named `renivet_ci` on loopback with role `renivet_ci`, then set `RENIVET_TEST_DATABASE_URL` and run `node --test tests/outbox-inbox.integration.cjs`. The test checks schema-qualified tables, reviewed claim and dedupe indexes, bounded lease/attempt metadata, transaction rollback and concurrent receipt deduplication. It cleans up its synthetic fixtures.
 
-To run the REN2-30 worker test locally, first build the app, then use that same isolated database URL and run `node --test tests/durable-worker.integration.cjs`. It checks concurrent claims, missed-poll discovery, receipt/effect atomicity, replay, retry after rollback, lease takeover, poison-job quarantine, redacted logs and authorized/audited recovery. All event and identity data is synthetic. The recovery audit rows are intentionally retained with their dead-letter case and actor; use only a disposable database.
+To run the REN2-30/31 worker test locally, first build the app, then use that same isolated database URL and run `node --test tests/durable-worker.integration.cjs`. It checks process exits before and after commit, concurrent claims and duplicate processing, missed-poll discovery, receipt/effect atomicity, retry after rollback, lease takeover, poison-job quarantine, redacted structured logs/metrics and authorized/audited recovery followed by replay. All event and identity data is synthetic. The recovery audit rows are intentionally retained with their dead-letter case and actor; use only a disposable database.
+
+REN2-31 evidence crosswalk:
+
+| QA ID | Evidence and boundary |
+| --- | --- |
+| T-JOB-01 | Existing outbox/inbox PostgreSQL integration proves domain/outbox atomicity in `tests/outbox-inbox.integration.cjs`; worker suite confirms receipt/effect/job commit together. |
+| T-JOB-02 | Existing transaction rollback integration plus child-process exit inside the worker transaction proves receipt/effect rollback. |
+| T-JOB-03 | Child worker exits before commit; PostgreSQL rolls back its open transaction, then a fresh worker claims the expired lease and applies one effect. |
+| T-JOB-04 | Concurrent claimers and two concurrent `process()` calls prove one processing owner and one internal effect; post-commit replay is deduplicated by the inbox receipt. |
+| T-JOB-05 | Synthetic transient failure rolls back and retries with bounded backoff; succeeding retry applies the effect once. |
+| T-JOB-06 | Poison work exhausts attempts, becomes visible with safe state/attempt/error metadata, and excludes raw exception text. |
+| T-JOB-07 | A committed event missed by a wakeup is discovered by the next `runOnce()` poll. |
+| T-JOB-08 | External delivery remains at-least-once; exact-once external effects are not claimed and require provider idempotency/reconciliation. |
+| T-OPS-01 | CI step names, test IDs, TAP artifact, PR and Linear issue provide traceability. |
+| T-OPS-02 | Disposable PostgreSQL 16 suite runs before and after recovery; test failures fail CI and TAP is retained for seven days. |
+| T-OPS-03 | No production worker, scheduler, endpoint or database change is activated; release and operator access remain owner-controlled. |
+
+The recovery integration test exercises the runbook sequence only on synthetic disposable rows: inspect a dead-letter case, reject unauthorized recovery, record an authorized bounded reason, requeue atomically, process the corrected fixture, verify one effect and audit entry, then replay without a duplicate. The worker is not registered at application startup and no production operator UI/API exists. It does not prove provider delivery or external exactly-once behavior.
