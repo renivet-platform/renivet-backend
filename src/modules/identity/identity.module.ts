@@ -100,6 +100,6 @@ import { MfaService } from './mfa.service';
       inject: [Reflector, SessionService, MfaService],
     },
   ],
-  exports: [MfaGuard, MfaService],
+  exports: [MfaGuard, MfaService, SessionService, IdentityInfrastructure],
 })
 export class IdentityModule {}

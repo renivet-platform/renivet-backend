@@ -82,6 +82,12 @@ jobs:
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
         run: node --test tests/brand-access-schema.integration.cjs
+      - name: Verify REN2-27 session-derived authorization and live brand query scope
+        env:
+          RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
+        run: |
+          npm run build
+          node --test tests/brand-access.integration.test.cjs
       - name: Verify PostgreSQL transaction/unique-key/claim semantics
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
@@ -141,6 +147,12 @@ jobs:
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
         run: node --test tests/brand-access-schema.integration.cjs
+      - name: Re-verify REN2-27 live brand query scope after recovery
+        env:
+          RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
+        run: |
+          npm run build
+          node --test tests/brand-access.integration.test.cjs
       - name: Re-verify PostgreSQL transaction/unique-key/claim semantics after recovery
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci

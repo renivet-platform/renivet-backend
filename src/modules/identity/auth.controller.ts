@@ -26,7 +26,7 @@ import {
 } from '@nestjs/swagger';
 import { AuthHttpError, AuthService } from './auth.service';
 import { AuthExceptionFilter } from './auth-exception.filter';
-import { CsrfRejectedError, csrfMatches, SessionService } from './session.service';
+import { CsrfRejectedError, csrfMatches, readSessionToken, SessionService } from './session.service';
 import { ConfigService } from '@nestjs/config';
 import {
   AuthErrorDto,
@@ -107,7 +107,7 @@ export class AuthController {
     @Req() context: AuthenticatedRequestContext,
     @Res({ passthrough: true }) response: CookieResponse,
   ): Promise<PasswordSessionResponseDto> {
-    const result = await this.authentication.login(request, context.ip, this.readSessionCookie(context.headers.cookie));
+    const result = await this.authentication.login(request, context.ip, readSessionToken(context.headers.cookie));
     response.header('Cache-Control', 'no-store');
     response.header(
       'Set-Cookie',
@@ -127,9 +127,9 @@ export class AuthController {
   @ApiServiceUnavailableResponse({ description: 'AUTH_SERVICE_UNAVAILABLE. Session store or CSRF configuration is unavailable.', type: AuthErrorDto })
   @ApiInternalServerErrorResponse({ description: 'AUTH_INTERNAL_ERROR. Unexpected failure with a safe public message.', type: AuthErrorDto })
   async getSession(@Req() context: AuthenticatedRequestContext, @Res({ passthrough: true }) response: CookieResponse): Promise<{ authenticationState: 'authenticated'; user: { id: string }; csrfToken: string }> {
-    const session = await this.sessions.authenticate(this.readSessionCookie(context.headers.cookie));
+    const session = await this.sessions.authenticate(readSessionToken(context.headers.cookie));
     response.header('Cache-Control', 'no-store');
-    const token = this.readSessionCookie(context.headers.cookie)!;
+    const token = readSessionToken(context.headers.cookie)!;
     response.header(
       'Set-Cookie',
       `${sessionCookieName}=${token}; Path=/; Max-Age=${session.expiresInSeconds}; HttpOnly; Secure; SameSite=Lax`,
@@ -150,7 +150,7 @@ export class AuthController {
   @ApiServiceUnavailableResponse({ description: 'AUTH_SERVICE_UNAVAILABLE. Session store or CSRF configuration is unavailable.', type: AuthErrorDto })
   @ApiInternalServerErrorResponse({ description: 'AUTH_INTERNAL_ERROR. Unexpected failure with a safe public message.', type: AuthErrorDto })
   async logout(@Req() context: AuthenticatedRequestContext, @Res({ passthrough: true }) response: CookieResponse): Promise<{ status: 'logged_out' }> {
-    const token = this.readSessionCookie(context.headers.cookie);
+    const token = readSessionToken(context.headers.cookie);
     if (!token) await this.sessions.authenticate(token);
     const origins = this.configuration.get<string[]>('AUTH_ALLOWED_ORIGINS') ?? [];
     if (!csrfMatches(context.headers, origins, this.sessions.expectedCsrf(token!))) {
@@ -162,13 +162,4 @@ export class AuthController {
     return { status: 'logged_out' };
   }
 
-  private readSessionCookie(header: string | string[] | undefined): string | undefined {
-    if (Array.isArray(header) && header.length !== 1) return undefined;
-    const value = Array.isArray(header) ? header[0] : header;
-    const cookies = value?.split(';').map((part) => part.trim()).filter((part) => part.startsWith(`${sessionCookieName}=`)) ?? [];
-    if (cookies.length !== 1) return undefined;
-    const cookie = cookies[0];
-    const token = cookie?.slice(sessionCookieName.length + 1);
-    return token && /^[A-Za-z0-9_-]{43}$/.test(token) ? token : undefined;
-  }
 }

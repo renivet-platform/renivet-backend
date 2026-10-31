@@ -31,7 +31,7 @@ import { AuthExceptionFilter } from './auth-exception.filter';
 import { AuthErrorDto } from './auth.dto';
 import { MfaService } from './mfa.service';
 import { MfaEnabledResponseDto, MfaEnrollmentCodeRequestDto, MfaEnrollmentResponseDto, MfaRevocationResponseDto, MfaStatusResponseDto, MfaStepUpRequestDto, MfaStepUpResponseDto } from './mfa.dto';
-import { csrfMatches, CsrfRejectedError, SessionService } from './session.service';
+import { csrfMatches, CsrfRejectedError, readSessionToken, SessionService } from './session.service';
 
 interface MfaRequestContext {
   ip: string;
@@ -71,7 +71,7 @@ export class MfaController {
   @ApiServiceUnavailableResponse({ description: 'AUTH_SERVICE_UNAVAILABLE. The identity store is unavailable.', type: AuthErrorDto })
   @ApiInternalServerErrorResponse({ description: 'AUTH_INTERNAL_ERROR. Unexpected failure with a safe public message.', type: AuthErrorDto })
   async getStatus(@Req() context: MfaRequestContext, @Res({ passthrough: true }) response: CookieResponse): Promise<MfaStatusResponseDto> {
-    const session = await this.sessions.authenticate(this.readSessionCookie(context.headers.cookie));
+    const session = await this.sessions.authenticate(readSessionToken(context.headers.cookie));
     response.header('Cache-Control', 'no-store');
     return this.mfa.status(session.userId);
   }
@@ -206,20 +206,11 @@ export class MfaController {
     session: Awaited<ReturnType<SessionService['authenticate']>>;
     token: string;
   }> {
-    const token = this.readSessionCookie(context.headers.cookie);
+    const token = readSessionToken(context.headers.cookie);
     const session = await this.sessions.authenticate(token);
     const origins = this.configuration.get<string[]>('AUTH_ALLOWED_ORIGINS') ?? [];
     if (!csrfMatches(context.headers, origins, this.sessions.expectedCsrf(token!))) throw new CsrfRejectedError();
     return { session, token: token! };
-  }
-
-  private readSessionCookie(header: string | string[] | undefined): string | undefined {
-    if (Array.isArray(header) && header.length !== 1) return undefined;
-    const value = Array.isArray(header) ? header[0] : header;
-    const cookies = value?.split(';').map((part) => part.trim()).filter((part) => part.startsWith(`${sessionCookieName}=`)) ?? [];
-    if (cookies.length !== 1) return undefined;
-    const token = cookies[0]?.slice(sessionCookieName.length + 1);
-    return token && /^[A-Za-z0-9_-]{43}$/.test(token) ? token : undefined;
   }
 
   private sessionCookie(token: string, maxAge: number): string {
