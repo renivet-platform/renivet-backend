@@ -6,6 +6,23 @@ The same disposable PostgreSQL 16 job runs `node --test tests/brand-access-schem
 
 REN2-27 adds `tests/session-cookie.test.cjs` and `tests/brand-access-guard.test.cjs` to the local unit suite, plus `tests/brand-access.integration.test.cjs` to the PostgreSQL 16 disposable CI job. The integration test creates and removes synthetic users, memberships, role assignments and brands; its resource rows live only in a temporary table. It verifies session-derived identity, brand-specific and global permissions, multi-brand isolation, detail/list/search/count/nested/bulk-write/export scopes, and that committed grant expiry or membership suspension blocks the next SQL statement using an already issued context. It must only use the loopback `renivet_ci` disposable database.
 
+REN2-28 maps the W1 authorization-abuse matrix into executable checks:
+
+| Scenario | Executable evidence |
+| --- | --- |
+| T-AZ-01 | `brand-access.integration.test.cjs`: guessed foreign-brand detail IDs return no rows. |
+| T-AZ-02 | Same suite: list, filter, sort, page, search and count stay within the authorized brand. |
+| T-AZ-03 | Same suite: guessed cross-brand export and bulk update return no rows and change no fixture. |
+| T-AZ-04 | Same suite: a two-connection revocation/old-context request check, plus grant expiry and membership suspension/expiry, deny fresh SQL statements after the commit boundary. |
+| T-AZ-05 | `brand-access-schema.integration.cjs` and same suite: pending/suspended memberships and unapproved brands do not resolve effective permissions. |
+| T-AZ-06 | `brand-access-guard.test.cjs` and same suite: caller-supplied identity, role, brand and MFA claims do not establish access. |
+| T-AZ-07 | Same suite: both parent and child SQL aliases are scoped; guessed foreign nested IDs are invisible. |
+| T-AZ-08 | Same suite: a multi-brand principal can access each authorized brand independently, not an ungranted one. |
+| T-AZ-09 / T-ID-09 | `mfa-guard.test.cjs` plus `mfa-api.integration.test.cjs`: the actual MFA guard rejects forged/stale elevation and records persisted allow/deny audit decisions without factor/session secrets. |
+| Grant/removal audit | `brand-access-schema.integration.cjs`: synthetic grant/revocation actions use hashed safe metadata and append-only access audit rows inside a rolled-back transaction. |
+
+The protected brand, staff and finance operations do not yet have real domain HTTP handlers. These tests exercise the reusable authorization controls and synthetic resource fixtures; they do not claim real product routes or end-to-end seller/admin workflows exist. The database-backed CI gate runs the brand/access tests before recovery and reruns brand query and privileged-MFA evidence after rebuilding the disposable PostgreSQL 16 database. Every assertion is a normal `node --test` failure, with no allowed-failure or soft-fail setting.
+
 The recovery test is destructive by design and refuses to run without `RENIVET_ALLOW_DISPOSABLE_DATABASE_REBUILD=1`. It also requires loopback PostgreSQL, database `renivet_ci`, role `renivet_ci`, PostgreSQL 16, and a superuser role. Run it only against an isolated disposable database; never point it at a shared or deployed database.
 
 Do not point migration or integration commands at a shared, staging or production database. The integration fixtures use synthetic identifiers and cryptographic test digests only.

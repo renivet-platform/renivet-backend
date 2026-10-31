@@ -35,7 +35,7 @@ function requestContext(cookie, brandId, requestedPermission = permission) {
   };
 }
 
-test('REN2-27 derives identity from session and scopes repository query shapes to live effective permission', { timeout: 30000, skip: !process.env.RENIVET_TEST_DATABASE_URL }, async () => {
+test('REN2-27/28 derives identity from session and rejects cross-tenant and inactive access across query shapes', { timeout: 30000, skip: !process.env.RENIVET_TEST_DATABASE_URL }, async () => {
   const pool = new Pool({ connectionString: testDatabaseUrl(), max: 4, connectionTimeoutMillis: 5000, idleTimeoutMillis: 3000 });
   const client = await pool.connect();
   const suffix = randomUUID().replaceAll('-', '');
@@ -46,6 +46,7 @@ test('REN2-27 derives identity from session and scopes repository query shapes t
   let multiId;
   let globalId;
   let grantorId;
+  let unprivilegedId;
 
   try {
     const version = await client.query('SHOW server_version_num');
@@ -61,8 +62,9 @@ test('REN2-27 derives identity from session and scopes repository query shapes t
     multiId = await createUser('multi-brand');
     globalId = await createUser('global-admin');
     grantorId = await createUser('grantor');
+    unprivilegedId = await createUser('unprivileged');
 
-    for (const userId of [actorId, multiId, globalId]) {
+    for (const userId of [actorId, multiId, globalId, unprivilegedId]) {
       const token = randomBytes(32).toString('base64url');
       sessionTokens.set(userId, token);
       const stored = await client.query(
@@ -82,6 +84,13 @@ test('REN2-27 derives identity from session and scopes repository query shapes t
       brandIds[brand] = result.rows[0].id;
       created.brands.push(result.rows[0].id);
     }
+    const unapproved = await client.query(
+      `INSERT INTO brands.brands (slug, legal_name, display_name, onboarding_state)
+       VALUES ($1, $2, $3, 'pending') RETURNING id`,
+      [`ren2-28-${suffix}-unapproved`, 'REN2-28 Synthetic Pending Private Limited', 'Synthetic Pending'],
+    );
+    brandIds.unapproved = unapproved.rows[0].id;
+    created.brands.push(brandIds.unapproved);
 
     const ownerRole = await client.query(`SELECT id FROM access.roles WHERE role_code = 'brand_owner'`);
     assert.equal(ownerRole.rowCount, 1, 'REN2-26 role seed must exist');
@@ -107,6 +116,17 @@ test('REN2-27 derives identity from session and scopes repository query shapes t
       );
       created.assignments.push(grant.rows[0].id);
     }
+    await client.query(
+      `INSERT INTO brands.brand_memberships (brand_id, user_id, membership_state, invited_by_id, joined_at)
+       VALUES ($1, $2, 'active', $3, now())`,
+      [brandIds.unapproved, unprivilegedId, grantorId],
+    );
+    const unapprovedGrant = await client.query(
+      `INSERT INTO access.role_assignments (user_id, role_id, brand_id, scope_type, active_from, granted_by_id)
+       VALUES ($1, $2, $3, 'brand', now(), $4) RETURNING id`,
+      [unprivilegedId, roleId, brandIds.unapproved, grantorId],
+    );
+    created.assignments.push(unapprovedGrant.rows[0].id);
 
     await client.query(`CREATE TEMP TABLE ren2_27_resources (
       id uuid PRIMARY KEY, brand_id uuid NOT NULL, parent_id uuid NULL,
@@ -141,6 +161,14 @@ test('REN2-27 derives identity from session and scopes repository query shapes t
     assert.equal(result.rowCount, 0, 'Guessed cross-brand detail ID returns no row');
     result = await client.query(`SELECT resource.id FROM ren2_27_resources AS resource WHERE ${predicate.sql} ORDER BY resource.id` , predicate.parameters);
     assert.deepEqual(new Set(result.rows.map((row) => row.id)), new Set([ids.a, ids.nestedA]));
+    result = await client.query(
+      `SELECT resource.id FROM ren2_27_resources AS resource
+       WHERE ${predicate.sql} AND resource.resource_name ILIKE $4
+       ORDER BY resource.resource_name DESC LIMIT 1 OFFSET 0`,
+      [...predicate.parameters, '%item%'],
+    );
+    assert.equal(result.rows.length, 1, 'Filtered, sorted and paged results remain tenant-scoped');
+    assert.ok(result.rows[0].id === ids.a || result.rows[0].id === ids.nestedA);
     result = await client.query(`SELECT resource.id FROM ren2_27_resources AS resource WHERE ${predicate.sql} AND resource.resource_name ILIKE $4`, [...predicate.parameters, '%Bravo%']);
     assert.equal(result.rowCount, 0, 'Cross-brand search returns no rows');
     result = await client.query(`SELECT count(*)::integer AS count FROM ren2_27_resources AS resource WHERE ${predicate.sql}`, predicate.parameters);
@@ -184,16 +212,84 @@ test('REN2-27 derives identity from session and scopes repository query shapes t
     const multiB = requestContext(`__Host-renivet_session=${sessionTokens.get(multiId)}`, brandIds.b);
     await assert.rejects(guard.canActivate(multiB.context), (error) => error.getStatus() === 403, 'Multi-brand user cannot access an ungranted brand');
 
+    const unapprovedPermissions = await client.query(
+      `SELECT 1 FROM access.effective_permissions
+       WHERE user_id = $1 AND brand_id = $2 AND permission_code = $3`,
+      [unprivilegedId, brandIds.unapproved, permission],
+    );
+    assert.equal(unapprovedPermissions.rowCount, 0, 'A role assignment cannot make a pending brand effective');
+    const unapprovedRequest = requestContext(`__Host-renivet_session=${sessionTokens.get(unprivilegedId)}`, brandIds.unapproved);
+    await assert.rejects(guard.canActivate(unapprovedRequest.context), (error) => error.getStatus() === 403, 'Unapproved brand access is denied even with an active membership and role row');
+
+    const forgedAdmin = requestContext(
+      `__Host-renivet_session=${sessionTokens.get(unprivilegedId)}`,
+      brandIds.a,
+      'brand_membership.manage',
+    );
+    await assert.rejects(
+      new BrandAccessGuard({ get: (key) => key === REQUIRE_BRAND_PERMISSION ? 'brand_membership.manage' : undefined }, sessions, accessRepository)
+        .canActivate(forgedAdmin.context),
+      (error) => error.getStatus() === 403,
+      'T-ID-09: an unprivileged account cannot turn forged admin claims into a privileged operation',
+    );
+    assert.equal(forgedAdmin.request.brandAccess, undefined, 'Denied principals receive no authorized scope context');
+    const forgedGrant = await client.query(
+      `SELECT count(*)::integer AS count FROM access.role_assignments
+       WHERE user_id = $1 AND brand_id = $2`,
+      [unprivilegedId, brandIds.a],
+    );
+    assert.equal(forgedGrant.rows[0].count, 0, 'Denied privileged request leaves role assignments unchanged');
+
     const globalB = await authorize(globalId, brandIds.b, 'brand_membership.manage');
     const globalScope = scoped('resource', globalB);
     result = await client.query(`SELECT resource.id FROM ren2_27_resources AS resource WHERE ${globalScope.sql}`, globalScope.parameters);
     assert.deepEqual(new Set(result.rows.map((row) => row.id)), new Set([ids.b, ids.nestedB]), 'A global permission applies to requested brand scope');
 
+    // Exercise revocation on a separate connection while an old guard context
+    // remains in use. The follow-up request waits on the commit boundary and
+    // must re-evaluate permissions in its own fresh READ COMMITTED statement.
+    const revokeClient = await pool.connect();
+    const concurrentReadClient = await pool.connect();
+    try {
+      let signalRevocationCommitted;
+      const revocationCommitted = new Promise((resolve) => { signalRevocationCommitted = resolve; });
+      const revokeConcurrently = async () => {
+        try {
+          await revokeClient.query('BEGIN');
+          await revokeClient.query(
+            `UPDATE access.role_assignments
+             SET active_from = now() - interval '2 seconds', active_until = now() - interval '1 second',
+                 updated_at = now(), row_version = row_version + 1
+             WHERE user_id = $1 AND brand_id = $2`,
+            [actorId, brandIds.a],
+          );
+          await revokeClient.query('COMMIT');
+        } catch (error) {
+          await revokeClient.query('ROLLBACK').catch(() => {});
+          throw error;
+        } finally {
+          signalRevocationCommitted();
+        }
+      };
+      const staleContextReadAfterCommit = async () => {
+        await revocationCommitted;
+        return concurrentReadClient.query(
+          `SELECT count(*)::integer AS count FROM access.effective_permissions
+           WHERE user_id = $1 AND brand_id = $2 AND permission_code = $3`,
+          [actorA.userId, actorA.brandId, permission],
+        );
+      };
+      const [, concurrentResult] = await Promise.all([revokeConcurrently(), staleContextReadAfterCommit()]);
+      assert.equal(concurrentResult.rows[0].count, 0, 'A concurrent request using the old guard context sees the committed revocation in the live permission view');
+    } finally {
+      concurrentReadClient.release();
+      revokeClient.release();
+    }
+
     // A scope already issued by the guard is not a permission cache: every SQL statement rechecks the view.
-    await client.query(`UPDATE access.role_assignments SET active_from = now() - interval '2 seconds', active_until = now() - interval '1 second', updated_at = now(), row_version = row_version + 1 WHERE user_id = $1 AND brand_id = $2`, [actorId, brandIds.a]);
     predicate = scoped('resource', actorA);
     result = await client.query(`SELECT count(*)::integer AS count FROM ren2_27_resources AS resource WHERE ${predicate.sql}`, predicate.parameters);
-    assert.equal(result.rows[0].count, 0, 'Committed grant expiry denies the next statement using an old context');
+    assert.equal(result.rows[0].count, 0, 'Concurrent grant expiry denies the next statement using an old context');
     result = await client.query(`UPDATE ren2_27_resources AS resource SET marker = 'after-revoke' WHERE ${predicate.sql} RETURNING resource.id`, predicate.parameters);
     assert.equal(result.rowCount, 0, 'Committed revocation blocks writes through old contexts');
 
