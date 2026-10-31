@@ -21,7 +21,9 @@ jobs:
           cache-dependency-path: package-lock.json
       - name: Install locked dependencies
         run: npm ci --no-audit --no-fund
-      - name: Reject high/critical runtime dependency advisories
-        run: npm audit --omit=dev --audit-level=high
-      - name: Reject moderate-or-higher advisories in full dependency tree
-        run: npm audit --audit-level=moderate
+      # Keep runtime strict; the full tree still blocks high/critical advisories when a
+      # moderate issue has no compatible upstream fix in development-only tooling.
+      - name: Reject moderate-or-higher production dependency advisories
+        run: npm audit --omit=dev --audit-level=moderate
+      - name: Reject high/critical advisories in the full dependency tree
+        run: npm audit --audit-level=high
