@@ -194,13 +194,21 @@ test('REN2-22/23 OTP verification and account recovery HTTP/PostgreSQL/Postman a
         expiresAt: new Date(Date.now() + 300_000), destination: emails[1],
       }),
     ]);
-    assert.equal(raceReplacement, true, 'overlapping issue and verify transactions must not deadlock');
     assert.ok([200, 401].includes(raceVerification.status));
+    const raceUser = await pool.query('SELECT email_verified_at FROM identity.users WHERE id=$1', [userIds[1]]);
     const remainingActive = await pool.query(
       `SELECT id FROM identity.auth_challenges WHERE user_id=$1 AND kind='email:email_verification' AND consumed_at IS NULL AND expires_at > now()`,
       [userIds[1]],
     );
-    assert.equal(remainingActive.rowCount, 1, 'concurrent issue/verify leaves one coherent active state');
+    if (raceVerification.status === 200) {
+      assert.equal(raceReplacement, false, 'verification winning the race makes the contact ineligible for another challenge');
+      assert.ok(raceUser.rows[0].email_verified_at, 'successful verification must persist the verified state');
+      assert.equal(remainingActive.rowCount, 0, 'verified contact has no live verification challenge');
+    } else {
+      assert.equal(raceReplacement, true, 'replacement winning the race leaves verification pending');
+      assert.equal(raceUser.rows[0].email_verified_at, null, 'a superseded challenge must not verify the contact');
+      assert.equal(remainingActive.rowCount, 1, 'pending contact retains exactly one active replacement challenge');
+    }
 
     const unknownSentBefore = sent.length;
     const unknownResponse = await fetch(`${base}/auth/challenges`, {

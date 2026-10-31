@@ -22,6 +22,19 @@ export function deriveCsrfToken(sessionToken: string, key: string): string {
   return createHmac('sha256', key).update(`renivet-csrf-v1\0${sessionToken}`).digest('base64url');
 }
 
+const SESSION_COOKIE_NAME = '__Host-renivet_session';
+const SESSION_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+
+/** Read exactly one valid first-party session cookie; ambiguous headers fail closed. */
+export function readSessionToken(cookieHeader: string | string[] | undefined): string | undefined {
+  if (Array.isArray(cookieHeader) && cookieHeader.length !== 1) return undefined;
+  const header = Array.isArray(cookieHeader) ? cookieHeader[0] : cookieHeader;
+  const matches = header?.split(';').map((part) => part.trim()).filter((part) => part.startsWith(`${SESSION_COOKIE_NAME}=`)) ?? [];
+  if (matches.length !== 1) return undefined;
+  const token = matches[0]?.slice(SESSION_COOKIE_NAME.length + 1);
+  return token && SESSION_TOKEN_PATTERN.test(token) ? token : undefined;
+}
+
 function safeEqual(left: string, right: string): boolean {
   const a = Buffer.from(left);
   const b = Buffer.from(right);

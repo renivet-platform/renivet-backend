@@ -9,12 +9,11 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { MfaService } from '../../modules/identity/mfa.service';
-import { SessionService } from '../../modules/identity/session.service';
+import { readSessionToken, SessionService } from '../../modules/identity/session.service';
 
 export type PrivilegedAction = 'brand.manage' | 'staff.manage' | 'finance.evidence.manage';
 export const REQUIRE_MFA_ACTION = 'renivet:require-mfa-action';
 export const MFA_STEP_UP_MAX_AGE_SECONDS = 300;
-const sessionCookieName = '__Host-renivet_session';
 
 export function RequireMfa(action: PrivilegedAction): MethodDecorator & ClassDecorator {
   return SetMetadata(REQUIRE_MFA_ACTION, action);
@@ -24,15 +23,6 @@ export function hasRecentMfa(mfaVerifiedAt: Date | null | undefined, maxAgeSecon
   if (!(mfaVerifiedAt instanceof Date) || !Number.isFinite(mfaVerifiedAt.getTime())) return false;
   const ageMs = nowMs - mfaVerifiedAt.getTime();
   return ageMs >= 0 && ageMs <= maxAgeSeconds * 1_000;
-}
-
-function readSessionToken(cookieHeader: string | string[] | undefined): string | undefined {
-  if (Array.isArray(cookieHeader) && cookieHeader.length !== 1) return undefined;
-  const header = Array.isArray(cookieHeader) ? cookieHeader[0] : cookieHeader;
-  const cookies = header?.split(';').map((part) => part.trim()).filter((part) => part.startsWith(`${sessionCookieName}=`)) ?? [];
-  if (cookies.length !== 1) return undefined;
-  const token = cookies[0]?.slice(sessionCookieName.length + 1);
-  return token && /^[A-Za-z0-9_-]{43}$/.test(token) ? token : undefined;
 }
 
 interface GuardRequest {
