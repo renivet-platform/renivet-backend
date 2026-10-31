@@ -36,6 +36,13 @@
       "when": 1793354388989,
       "tag": "0004_ren2_30_safe_recovery_reason_codes",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793440461623,
+      "tag": "0005_ren2_26_brand_membership_permissions_audit",
+      "breakpoints": true
     }
   ]
 }

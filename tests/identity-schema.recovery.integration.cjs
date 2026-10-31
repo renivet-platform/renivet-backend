@@ -94,11 +94,20 @@ test('W1 disposable PostgreSQL snapshot recovery preserves the migrated schema a
         SELECT table_schema, table_name
         FROM information_schema.tables
         WHERE (table_schema = 'identity' AND table_type = 'BASE TABLE')
+           OR (table_schema = 'brands' AND table_type = 'BASE TABLE')
+           OR (table_schema = 'access' AND table_type = 'BASE TABLE')
            OR (table_schema = 'platform' AND table_type = 'BASE TABLE')
            OR (table_schema = 'public' AND table_name = 'system_events')
         ORDER BY table_schema, table_name
       `);
       assert.deepEqual(objects.rows, [
+        { table_schema: 'access', table_name: 'permissions' },
+        { table_schema: 'access', table_name: 'role_assignments' },
+        { table_schema: 'access', table_name: 'role_permissions' },
+        { table_schema: 'access', table_name: 'roles' },
+        { table_schema: 'access', table_name: 'security_audit_events' },
+        { table_schema: 'brands', table_name: 'brand_memberships' },
+        { table_schema: 'brands', table_name: 'brands' },
         { table_schema: 'identity', table_name: 'auth_challenges' },
         { table_schema: 'identity', table_name: 'mfa_factors' },
         { table_schema: 'identity', table_name: 'mfa_recovery_codes' },

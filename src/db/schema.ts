@@ -4,6 +4,7 @@ import {
   boolean,
   char,
   check,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -11,6 +12,7 @@ import {
   pgTable,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
@@ -24,6 +26,8 @@ export const systemEvents = pgTable('system_events', {
 
 export const identity = pgSchema('identity');
 export const platform = pgSchema('platform');
+export const brands = pgSchema('brands');
+export const access = pgSchema('access');
 
 export const identityUsers = identity.table(
   'users',
@@ -405,3 +409,208 @@ export const platformDeadLetterRecoveryAudit = platform.table(
     index('platform_dead_letter_recovery_audit_case_idx').on(table.caseId, table.createdAt),
   ],
 );
+
+const domainRow = () => ({
+  id: uuid('id').defaultRandom().primaryKey(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  rowVersion: bigint('row_version', { mode: 'number' }).default(1).notNull(),
+});
+
+// The canonical D02 brand root is included because it is the FK target for this first
+// brand-membership slice and does not yet exist in the backend migration chain.
+export const brandOrganizations = brands.table(
+  'brands',
+  {
+    ...domainRow(),
+    slug: text('slug').notNull(),
+    legalName: text('legal_name').notNull(),
+    displayName: text('display_name').notNull(),
+    onboardingState: text('onboarding_state').notNull(),
+    countryCode: char('country_code', { length: 2 }),
+    taxIdRef: text('tax_id_ref'),
+  },
+  (table) => [
+    uniqueIndex('ren2_26_brands_slug_uq').on(table.slug),
+    check('ren2_26_brands_slug_canonical', sql`${table.slug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$'`),
+    check('ren2_26_brands_legal_name_nonblank', sql`length(btrim(${table.legalName})) > 0`),
+    check('ren2_26_brands_display_name_nonblank', sql`length(btrim(${table.displayName})) > 0`),
+    check('ren2_26_brands_onboarding_state_nonblank', sql`length(btrim(${table.onboardingState})) > 0`),
+    check('ren2_26_brands_country_code_uppercase', sql`${table.countryCode} IS NULL OR ${table.countryCode} ~ '^[A-Z]{2}$'`),
+    check('ren2_26_brands_row_version_positive', sql`${table.rowVersion} > 0`),
+    check('ren2_26_brands_timestamps_ordered', sql`${table.updatedAt} >= ${table.createdAt}`),
+  ],
+);
+
+export const brandMemberships = brands.table(
+  'brand_memberships',
+  {
+    ...domainRow(),
+    brandId: uuid('brand_id').notNull().references(() => brandOrganizations.id),
+    userId: uuid('user_id').notNull().references(() => identityUsers.id),
+    membershipState: text('membership_state').notNull(),
+    invitedById: uuid('invited_by_id').references(() => identityUsers.id, { onDelete: 'set null' }),
+    joinedAt: timestamp('joined_at', { withTimezone: true }),
+    validFrom: timestamp('valid_from', { withTimezone: true }).defaultNow().notNull(),
+    validUntil: timestamp('valid_until', { withTimezone: true }),
+  },
+  (table) => [
+    unique('ren2_26_brand_memberships_user_brand_uq').on(table.userId, table.brandId),
+    index('ren2_26_brand_memberships_brand_state_idx').on(table.brandId, table.membershipState, table.userId),
+    index('ren2_26_brand_memberships_user_state_idx').on(table.userId, table.membershipState, table.brandId),
+    check(
+      'ren2_26_brand_memberships_state_valid',
+      sql`${table.membershipState} IN ('invited', 'pending', 'active', 'suspended', 'revoked')`,
+    ),
+    check(
+      'ren2_26_brand_memberships_active_joined',
+      sql`${table.membershipState} <> 'active' OR ${table.joinedAt} IS NOT NULL`,
+    ),
+    check(
+      'ren2_26_brand_memberships_validity_ordered',
+      sql`${table.validUntil} IS NULL OR ${table.validUntil} > ${table.validFrom}`,
+    ),
+    check('ren2_26_brand_memberships_row_version_positive', sql`${table.rowVersion} > 0`),
+    check('ren2_26_brand_memberships_timestamps_ordered', sql`${table.updatedAt} >= ${table.createdAt}`),
+  ],
+);
+
+export const accessRoles = access.table(
+  'roles',
+  {
+    ...domainRow(),
+    roleCode: text('role_code').notNull(),
+    scopeKind: text('scope_kind').notNull(),
+    description: text('description'),
+    isSystem: boolean('is_system').notNull().default(false),
+  },
+  (table) => [
+    uniqueIndex('ren2_26_roles_code_uq').on(table.roleCode),
+    unique('ren2_26_roles_id_scope_uq').on(table.id, table.scopeKind),
+    check('ren2_26_roles_code_canonical', sql`${table.roleCode} ~ '^[a-z][a-z0-9_]{0,63}$'`),
+    check('ren2_26_roles_scope_valid', sql`${table.scopeKind} IN ('global', 'brand')`),
+    check('ren2_26_roles_row_version_positive', sql`${table.rowVersion} > 0`),
+    check('ren2_26_roles_timestamps_ordered', sql`${table.updatedAt} >= ${table.createdAt}`),
+  ],
+);
+
+export const accessPermissions = access.table(
+  'permissions',
+  {
+    ...domainRow(),
+    permissionCode: text('permission_code').notNull(),
+    resource: text('resource').notNull(),
+    action: text('action').notNull(),
+    description: text('description'),
+  },
+  (table) => [
+    uniqueIndex('ren2_26_permissions_code_uq').on(table.permissionCode),
+    check('ren2_26_permissions_code_canonical', sql`${table.permissionCode} ~ '^[a-z][a-z0-9_.]{0,127}$'`),
+    check('ren2_26_permissions_resource_canonical', sql`${table.resource} ~ '^[a-z][a-z0-9_]{0,63}$'`),
+    check('ren2_26_permissions_action_canonical', sql`${table.action} ~ '^[a-z][a-z0-9_]{0,63}$'`),
+    check('ren2_26_permissions_row_version_positive', sql`${table.rowVersion} > 0`),
+    check('ren2_26_permissions_timestamps_ordered', sql`${table.updatedAt} >= ${table.createdAt}`),
+  ],
+);
+
+export const accessRolePermissions = access.table(
+  'role_permissions',
+  {
+    ...domainRow(),
+    roleId: uuid('role_id').notNull().references(() => accessRoles.id),
+    permissionId: uuid('permission_id').notNull().references(() => accessPermissions.id),
+  },
+  (table) => [
+    uniqueIndex('ren2_26_role_permissions_role_permission_uq').on(table.roleId, table.permissionId),
+    check('ren2_26_role_permissions_row_version_positive', sql`${table.rowVersion} > 0`),
+    check('ren2_26_role_permissions_timestamps_ordered', sql`${table.updatedAt} >= ${table.createdAt}`),
+  ],
+);
+
+export const accessRoleAssignments = access.table(
+  'role_assignments',
+  {
+    ...domainRow(),
+    userId: uuid('user_id').notNull().references(() => identityUsers.id),
+    roleId: uuid('role_id').notNull(),
+    brandId: uuid('brand_id').references(() => brandOrganizations.id),
+    scopeType: text('scope_type').notNull(),
+    activeFrom: timestamp('active_from', { withTimezone: true }).defaultNow().notNull(),
+    activeUntil: timestamp('active_until', { withTimezone: true }),
+    grantedById: uuid('granted_by_id').notNull().references(() => identityUsers.id),
+  },
+  (table) => [
+    foreignKey({
+      name: 'ren2_26_role_assignments_role_scope_fk',
+      columns: [table.roleId, table.scopeType],
+      foreignColumns: [accessRoles.id, accessRoles.scopeKind],
+    }),
+    foreignKey({
+      name: 'ren2_26_role_assignments_membership_fk',
+      columns: [table.userId, table.brandId],
+      foreignColumns: [brandMemberships.userId, brandMemberships.brandId],
+    }),
+    uniqueIndex('ren2_26_role_assignments_global_uq')
+      .on(table.userId, table.roleId)
+      .where(sql`${table.brandId} IS NULL`),
+    uniqueIndex('ren2_26_role_assignments_brand_uq')
+      .on(table.userId, table.roleId, table.brandId)
+      .where(sql`${table.brandId} IS NOT NULL`),
+    index('ren2_26_role_assignments_global_active_idx')
+      .on(table.userId, table.activeFrom, table.activeUntil)
+      .where(sql`${table.scopeType} = 'global'`),
+    index('ren2_26_role_assignments_brand_active_idx')
+      .on(table.brandId, table.userId, table.activeFrom, table.activeUntil)
+      .where(sql`${table.scopeType} = 'brand'`),
+    check(
+      'ren2_26_role_assignments_scope_consistent',
+      sql`(${table.scopeType} = 'global' AND ${table.brandId} IS NULL) OR (${table.scopeType} = 'brand' AND ${table.brandId} IS NOT NULL)`,
+    ),
+    check('ren2_26_role_assignments_scope_valid', sql`${table.scopeType} IN ('global', 'brand')`),
+    check(
+      'ren2_26_role_assignments_validity_ordered',
+      sql`${table.activeUntil} IS NULL OR ${table.activeUntil} > ${table.activeFrom}`,
+    ),
+    check('ren2_26_role_assignments_row_version_positive', sql`${table.rowVersion} > 0`),
+    check('ren2_26_role_assignments_timestamps_ordered', sql`${table.updatedAt} >= ${table.createdAt}`),
+  ],
+);
+
+export const accessSecurityAuditEvents = access.table(
+  'security_audit_events',
+  {
+    ...domainRow(),
+    actorUserId: uuid('actor_user_id').references(() => identityUsers.id),
+    action: text('action').notNull(),
+    subjectType: text('subject_type').notNull(),
+    subjectId: uuid('subject_id'),
+    requestId: text('request_id').notNull(),
+    ipHash: text('ip_hash'),
+    payloadHash: char('payload_hash', { length: 64 }).notNull(),
+    occurredAt: timestamp('occurred_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index('ren2_26_security_audit_actor_created_idx').on(table.actorUserId, table.occurredAt),
+    index('ren2_26_security_audit_subject_created_idx').on(table.subjectType, table.subjectId, table.occurredAt),
+    index('ren2_26_security_audit_action_created_idx').on(table.action, table.occurredAt),
+    check('ren2_26_security_audit_action_canonical', sql`${table.action} ~ '^[a-z][a-z0-9_.:-]{0,127}$'`),
+    check('ren2_26_security_audit_subject_type_canonical', sql`${table.subjectType} ~ '^[a-z][a-z0-9_.:-]{0,63}$'`),
+    check('ren2_26_security_audit_request_id_safe', sql`${table.requestId} ~ '^[A-Za-z0-9._:-]{1,128}$'`),
+    check('ren2_26_security_audit_ip_hash_sha256', sql`${table.ipHash} IS NULL OR ${table.ipHash} ~ '^[0-9a-f]{64}$'`),
+    check('ren2_26_security_audit_payload_hash_sha256', sql`${table.payloadHash} ~ '^[0-9a-f]{64}$'`),
+    check('ren2_26_security_audit_row_version_positive', sql`${table.rowVersion} > 0`),
+    check('ren2_26_security_audit_timestamps_ordered', sql`${table.updatedAt} >= ${table.createdAt}`),
+  ],
+);
+
+// This read-only resolver is a database-side deny-by-default boundary for authorization
+// checks: global grants remain global, while brand grants require a live membership and
+// an approved Brand. Business repositories still have to apply the authorized brand ID.
+export const effectivePermissions = access.view('effective_permissions', {
+  userId: uuid('user_id'),
+  roleId: uuid('role_id'),
+  roleCode: text('role_code'),
+  scopeType: text('scope_type'),
+  brandId: uuid('brand_id'),
+  permissionCode: text('permission_code'),
+}).existing();
