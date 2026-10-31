@@ -61,6 +61,7 @@ export type EventHandler = {
 };
 
 export type WorkerLog = (entry: Readonly<Record<string, string | number>>) => void;
+export type WorkerMetrics = (summary: Readonly<WorkerBatchSummary>) => void;
 
 export type RecoveryAuthorizer = (actorId: string, caseId: string) => Promise<boolean>;
 
@@ -86,6 +87,7 @@ export class DurableWorker {
       jitterMs?: number;
       random?: () => number;
       log?: WorkerLog;
+      metrics?: WorkerMetrics;
       authorizeRecovery?: RecoveryAuthorizer;
     } = {},
   ) {
@@ -226,7 +228,20 @@ export class DurableWorker {
       else if (result === 'dead_letter') summary.deadLetter += 1;
       else summary.leaseLost += 1;
     }
+    try {
+      this.options.metrics?.(Object.freeze({ ...summary }));
+    } catch {
+      // Telemetry is best-effort and must never change durable processing outcomes.
+    }
     return summary;
+  }
+
+  private safeLog(entry: Readonly<Record<string, string | number>>): void {
+    try {
+      this.options.log?.(Object.freeze({ ...entry }));
+    } catch {
+      // A logging sink cannot turn a committed job into a retry or hide its outcome.
+    }
   }
 
   async process(job: DurableJob): Promise<'processed' | 'duplicate' | 'lease_lost' | 'retry' | 'dead_letter'> {
@@ -234,14 +249,18 @@ export class DurableWorker {
     if (!handler) throw new TypeError('job kind is not registered');
     const client = await this.pool.connect();
     let outcome: 'processed' | 'duplicate' | 'lease_lost' = 'lease_lost';
+    let attemptCount = job.attemptCount;
+    let maxAttempts = job.maxAttempts;
     try {
       await client.query('BEGIN');
       const current = await client.query(
-        `SELECT id, business_key, attempt_count FROM platform.durable_jobs
+        `SELECT id, business_key, attempt_count AS "attemptCount", max_attempts AS "maxAttempts" FROM platform.durable_jobs
          WHERE id = $1 AND job_kind = $2 AND state = 'leased' AND lease_owner = $3 AND lease_until > now()
          FOR UPDATE`, [job.id, job.jobKind, job.leaseToken],
       );
       if (current.rowCount === 1) {
+        attemptCount = Number(current.rows[0].attemptCount);
+        maxAttempts = Number(current.rows[0].maxAttempts);
         const event = await client.query<DurableEvent>(
           `SELECT id, event_type AS "eventType", event_version AS "eventVersion",
                   aggregate_type AS "aggregateType", aggregate_id AS "aggregateId", event_payload AS "eventPayload"
@@ -262,12 +281,12 @@ export class DurableWorker {
         if (completed.rowCount === 1) outcome = receipt.rowCount === 1 ? 'processed' : 'duplicate';
       }
       await client.query('COMMIT');
-      if (outcome !== 'lease_lost') this.options.log?.({ event: 'worker.job.completed', jobId: job.id, jobKind: job.jobKind, outcome });
+      if (outcome !== 'lease_lost') this.safeLog({ event: 'worker.job.completed', traceId: job.id, jobId: job.id, jobKind: job.jobKind, outcome, attemptCount, maxAttempts, state: 'succeeded' });
       return outcome;
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
       const failure = await this.recordFailure(job, error);
-      this.options.log?.({ event: 'worker.job.failed', jobId: job.id, jobKind: job.jobKind, code: safeFailureCode(error), state: failure });
+      this.safeLog({ event: 'worker.job.failed', traceId: job.id, jobId: job.id, jobKind: job.jobKind, code: safeFailureCode(error), outcome: failure, attemptCount, maxAttempts, state: failure });
       return failure;
     } finally {
       client.release();
@@ -328,11 +347,15 @@ export class DurableWorker {
     }
   }
 
-  async listDeadLetters(limit = 100): Promise<Array<{ id: string; jobId: string | null; reasonCode: string; createdAt: Date }>> {
+  async listDeadLetters(limit = 100): Promise<Array<{ id: string; jobId: string | null; reasonCode: string; createdAt: Date; state: string | null; attemptCount: number | null; maxAttempts: number | null; lastErrorCode: string | null }>> {
     if (!Number.isInteger(limit) || limit < 1 || limit > 500) throw new RangeError('limit must be between 1 and 500');
     const result = await this.pool.query(
-      `SELECT id, job_id AS "jobId", reason_code AS "reasonCode", created_at AS "createdAt"
-       FROM platform.dead_letter_cases WHERE state = 'open' ORDER BY created_at, id LIMIT $1`, [limit],
+      `SELECT dead.id, dead.job_id AS "jobId", dead.reason_code AS "reasonCode", dead.created_at AS "createdAt",
+              job.state, job.attempt_count AS "attemptCount", job.max_attempts AS "maxAttempts",
+              job.last_error_code AS "lastErrorCode"
+       FROM platform.dead_letter_cases AS dead
+       LEFT JOIN platform.durable_jobs AS job ON job.id = dead.job_id
+       WHERE dead.state = 'open' ORDER BY dead.created_at, dead.id LIMIT $1`, [limit],
     );
     return result.rows;
   }
@@ -369,7 +392,7 @@ export class DurableWorker {
            updated_at = now(), row_version = row_version + 1 WHERE id = $1`, [caseId, actorId],
       );
       await client.query('COMMIT');
-      this.options.log?.({ event: 'worker.dead_letter.recovered', caseId, actorId, reasonCode });
+      this.safeLog({ event: 'worker.dead_letter.recovered', traceId: String(item.rows[0].job_id), jobId: String(item.rows[0].job_id), caseId, actorId, reasonCode, state: 'pending' });
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
       throw error;
