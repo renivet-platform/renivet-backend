@@ -2,7 +2,7 @@
 
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { randomUUID } = require('node:crypto');
+const { createHash, randomUUID } = require('node:crypto');
 const { Pool } = require('pg');
 
 function requireDisposablePostgresUrl() {
@@ -270,6 +270,23 @@ test('REN2-26 brand membership, role scopes and permanent audit enforce their da
     );
 
     const ownerGrantId = ownerAssignment.rows[0].id;
+    const roleAuditPayload = (action) => JSON.stringify({
+      action,
+      roleCode: 'brand_owner',
+      scopeType: 'brand',
+      brandId,
+      subjectUserId: ownerId,
+    });
+    const writeRoleAudit = async (action) => {
+      const payload = roleAuditPayload(action);
+      return client.query(
+        `INSERT INTO access.security_audit_events
+          (actor_user_id, action, subject_type, subject_id, request_id, ip_hash, payload_hash, occurred_at)
+         VALUES ($1, $2, 'role_assignment', $3, $4, $5, $6, now()) RETURNING id`,
+        [adminId, action, ownerGrantId, `ren2-28-${unique}-${action}`, 'c'.repeat(64), createHash('sha256').update(payload).digest('hex')],
+      );
+    };
+    const grantAudit = await writeRoleAudit('role_assignment.granted');
     const assertOwnerInvitePermission = async (expected, reason) => {
       const effective = await client.query(
         `SELECT permission_code FROM access.effective_permissions
@@ -280,6 +297,7 @@ test('REN2-26 brand membership, role scopes and permanent audit enforce their da
     };
     await assertOwnerInvitePermission(true, 'An active Brand Owner on an approved brand has assigned permissions');
     await client.query('UPDATE access.role_assignments SET active_from = now() - interval \'2 seconds\', active_until = now() - interval \'1 second\' WHERE id = $1', [ownerGrantId]);
+    const revokeAudit = await writeRoleAudit('role_assignment.revoked');
     await assertOwnerInvitePermission(false, 'Expired role assignments are not effective');
     await client.query('UPDATE access.role_assignments SET active_until = NULL, active_from = now() + interval \'1 day\' WHERE id = $1', [ownerGrantId]);
     await assertOwnerInvitePermission(false, 'Future role assignments are not effective');
@@ -397,6 +415,16 @@ test('REN2-26 brand membership, role scopes and permanent audit enforce their da
     );
     assert.equal(retained.rows[0].action, 'brand_membership.approved');
     assert.equal(retained.rows[0].subject_id, membershipId);
+
+    const roleAudit = await client.query(
+      `SELECT action, subject_type, subject_id, request_id, ip_hash, payload_hash
+       FROM access.security_audit_events WHERE id = ANY($1::uuid[]) ORDER BY action`,
+      [[grantAudit.rows[0].id, revokeAudit.rows[0].id]],
+    );
+    assert.deepEqual(roleAudit.rows.map((row) => row.action), ['role_assignment.granted', 'role_assignment.revoked']);
+    assert.ok(roleAudit.rows.every((row) => row.subject_type === 'role_assignment' && row.subject_id === ownerGrantId));
+    assert.ok(roleAudit.rows.every((row) => /^[0-9a-f]{64}$/.test(row.ip_hash) && /^[0-9a-f]{64}$/.test(row.payload_hash)));
+    assert.equal(JSON.stringify(roleAudit.rows).includes(`${unique}-owner@example.test`), false, 'Access audit contains no raw user email');
 
     await expectConstraintFailure(
       client,

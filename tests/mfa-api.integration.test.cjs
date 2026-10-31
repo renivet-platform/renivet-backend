@@ -5,6 +5,9 @@ const test = require('node:test');
 const { createHash, createHmac, randomBytes, randomUUID } = require('node:crypto');
 const { Pool } = require('pg');
 const { totpCode } = require('../dist/modules/identity/mfa-crypto');
+const { MfaGuard } = require('../dist/common/guards/require-mfa');
+const { SessionService } = require('../dist/modules/identity/session.service');
+const { MfaService } = require('../dist/modules/identity/mfa.service');
 
 function base32Decode(value) {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
@@ -171,6 +174,45 @@ test('REN2-24 MFA API enrolls, rejects invalid/replayed factors, rotates session
     assert.notEqual(stepUpToken, enrollmentToken);
     assert.equal(stepUpBody.authenticationState, 'elevated');
     assert.equal(stepUpBody.csrfToken, csrfFor(stepUpToken));
+
+    // There are no business/admin handlers in this foundation. Exercise the real
+    // reusable guard against a test-only action context and its real PostgreSQL audit sink.
+    const guard = new MfaGuard({ get: () => 'staff.manage' }, app.get(SessionService), app.get(MfaService));
+    const actionContext = (token) => {
+      const request = {
+        headers: { cookie: `__Host-renivet_session=${token}` },
+        body: { role: 'renivet_admin', mfaVerifiedAt: new Date().toISOString() },
+        ip: '127.0.0.1',
+      };
+      return {
+        request,
+        context: {
+          getHandler: () => ({}), getClass: () => ({}),
+          switchToHttp: () => ({ getRequest: () => request }),
+        },
+      };
+    };
+    // Step-up rotates and revokes its input session, so create a separate,
+    // active ordinary session with no persisted MFA timestamp for the denial case.
+    const unElevatedToken = randomBytes(32).toString('base64url');
+    await pool.query(
+      `INSERT INTO identity.user_sessions
+        (user_id, token_hash, expires_at, absolute_expires_at)
+       VALUES ($1, $2, clock_timestamp() + interval '30 minutes', clock_timestamp() + interval '7 days')`,
+      [userId, createHash('sha256').update(unElevatedToken).digest('hex')],
+    );
+    const unElevatedAction = actionContext(unElevatedToken);
+    await assert.rejects(
+      guard.canActivate(unElevatedAction.context),
+      (error) => error.getStatus() === 403,
+      'T-AZ-09/T-ID-09: client-supplied admin and MFA claims cannot bypass persisted step-up',
+    );
+    assert.equal(unElevatedAction.request.authSession, undefined, 'Denied privileged action receives no authenticated elevated context');
+    const elevatedAction = actionContext(stepUpToken);
+    assert.equal(await guard.canActivate(elevatedAction.context), true, 'A fresh server-side MFA step-up permits the guarded test action');
+    assert.equal(elevatedAction.request.authSession.userId, userId);
+    assert.match(elevatedAction.request.authSession.sessionId, /^[0-9a-f-]{36}$/i);
+
     const recoveryCode = activatedBody.recoveryCodes[0];
     const recoveryStepUp = await fetch(`${base}/api/v1/auth/mfa/step-up`, {
       method: 'POST', headers: mutationHeaders(stepUpToken), body: JSON.stringify({ code: recoveryCode }),
@@ -196,9 +238,14 @@ test('REN2-24 MFA API enrolls, rejects invalid/replayed factors, rotates session
     const audit = await pool.query('SELECT event_name, outcome, metadata::text AS metadata FROM identity.security_audit_events WHERE actor_user_id=$1 ORDER BY created_at, id', [userId]);
     assert.ok(audit.rows.some((row) => row.event_name === 'step_up_denied' && row.outcome === 'denied'));
     assert.ok(audit.rows.some((row) => row.event_name === 'factor_revoked' && row.outcome === 'allowed'));
+    assert.ok(audit.rows.some((row) => row.event_name === 'privileged_access_denied' && row.outcome === 'denied' && row.metadata.includes('staff.manage')));
+    assert.ok(audit.rows.some((row) => row.event_name === 'privileged_access_allowed' && row.outcome === 'allowed' && row.metadata.includes('staff.manage')));
     const factorMaterial = [setup.searchParams.get('secret'), validEnrollCode, nextStepCode, ...activatedBody.recoveryCodes];
     for (const material of factorMaterial) {
       assert.equal(audit.rows.some((row) => row.metadata.includes(material)), false);
+    }
+    for (const token of [initialToken, enrollmentToken, stepUpToken, recoveryStepUpToken, unElevatedToken]) {
+      assert.equal(audit.rows.some((row) => row.metadata.includes(token)), false, 'Privileged decision audit excludes raw session secrets');
     }
 
     revokedFixtureUserId = randomUUID();
