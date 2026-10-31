@@ -87,4 +87,4 @@
 - [x] Run `npm test`.
 - [x] Run the full PostgreSQL 16 disposable CI integration set, including the new REN2-26 test and recovery re-check.
 - [x] Review `git diff --check`, migration SQL/snapshot and full diff; list any unpassed criterion explicitly.
-- [ ] Prepare a PR description with issue/requirements/decision IDs, schema/compatibility, threat cases, test output, and remaining runtime/frontend work. Do not merge.
+- [x] Prepare a PR description with issue/requirements/decision IDs, schema/compatibility, threat cases, test output, and remaining runtime/frontend work. Do not merge.
