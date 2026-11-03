@@ -121,6 +121,8 @@ test('W1 disposable PostgreSQL snapshot recovery preserves the migrated schema a
         { table_schema: 'platform', table_name: 'inbox_receipts' },
         { table_schema: 'platform', table_name: 'outbox_events' },
         { table_schema: 'platform', table_name: 'webhook_inbox' },
+        { table_schema: 'platform', table_name: 'worker_authorization_audit' },
+        { table_schema: 'platform', table_name: 'worker_job_authorizations' },
         { table_schema: 'public', table_name: 'system_events' },
       ]);
     } finally {

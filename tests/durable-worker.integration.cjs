@@ -33,6 +33,7 @@ test('REN2-30/31 claims, crash recovery, observability and audited replay are sa
   const handler = {
     consumerId,
     eventTypes: ['test.worker.created'],
+    authorization: { scope: 'system' },
     async handle(event, transaction) {
       const effect = `${prefix}:${event.id}:effect`;
       effectNames.push(effect);

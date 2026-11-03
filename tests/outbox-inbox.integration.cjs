@@ -46,7 +46,7 @@ test('REN2-29 platform event schema enforces atomicity, inbox dedupe and bounded
     `);
     assert.deepEqual(
       tables.rows.map((row) => row.table_name),
-      ['dead_letter_cases', 'dead_letter_recovery_audit', 'durable_jobs', 'inbox_receipts', 'outbox_events', 'webhook_inbox'],
+      ['dead_letter_cases', 'dead_letter_recovery_audit', 'durable_jobs', 'inbox_receipts', 'outbox_events', 'webhook_inbox', 'worker_authorization_audit', 'worker_job_authorizations'],
       'platform must contain the reviewed event, webhook, receipt, job and recovery audit tables',
     );
 
@@ -63,6 +63,8 @@ test('REN2-29 platform event schema enforces atomicity, inbox dedupe and bounded
       inbox_receipts: ['id', 'created_at', 'consumer_id', 'message_id', 'event_version', 'processed_at'],
       outbox_events: ['id', 'created_at', 'updated_at', 'row_version', 'aggregate_type', 'aggregate_id', 'event_type', 'event_version', 'event_payload', 'event_key', 'occurred_at', 'delivered_at'],
       webhook_inbox: ['id', 'created_at', 'updated_at', 'row_version', 'provider', 'provider_event_id', 'signature_verified', 'payload_hash', 'payload_key', 'state', 'processed_at'],
+      worker_authorization_audit: ['id', 'actor_type', 'actor_id', 'job_id', 'source_event_id', 'brand_id', 'source_brand_id', 'target_brand_id', 'purpose', 'effect_key', 'decision', 'reason_code', 'authorization_provenance', 'created_at'],
+      worker_job_authorizations: ['job_id', 'actor_id', 'source_event_id', 'brand_id', 'purpose', 'permitted_effects', 'authorization_provenance', 'created_at'],
     };
     for (const [tableName, tableColumns] of Object.entries(expectedColumns)) {
       assert.deepEqual(
@@ -89,6 +91,9 @@ test('REN2-29 platform event schema enforces atomicity, inbox dedupe and bounded
       platform_outbox_events_scoped_key_uq: /CREATE UNIQUE INDEX .*USING btree \(aggregate_type, aggregate_id, event_key\)$/i,
       platform_webhook_inbox_provider_event_uq: /CREATE UNIQUE INDEX .*USING btree \(provider, provider_event_id\)$/i,
       platform_webhook_inbox_state_idx: /USING btree \(state, created_at\)$/i,
+      platform_worker_authorization_audit_job_idx: /USING btree \(job_id, created_at, id\)$/i,
+      platform_worker_authorization_audit_source_idx: /USING btree \(source_event_id, created_at, id\)$/i,
+      platform_worker_job_authorizations_source_idx: /USING btree \(source_event_id, brand_id, created_at\)$/i,
     };
     assert.deepEqual(
       indexRows.rows.map((row) => row.indexname).filter((name) => name.startsWith('platform_')),

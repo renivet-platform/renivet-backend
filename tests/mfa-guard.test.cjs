@@ -56,6 +56,28 @@ test('guard admits only the server-authenticated session with fresh persisted el
   assert.equal(audited[0].allowed, true);
 });
 
+for (const action of ['taxonomy.manage', 'taxonomy.approve']) {
+  test(`guard accepts a fresh persisted MFA step-up for ${action}`, async () => {
+    const audited = [];
+    const request = { headers: { cookie: '__Host-renivet_session=' + 'D'.repeat(43) }, ip: '127.0.0.1' };
+    const guard = new MfaGuard(
+      { get: () => action },
+      { authenticate: async () => ({ userId: 'platform-admin', sessionId: 'session-admin', mfaVerifiedAt: new Date(950_000) }) },
+      { auditPrivilegedDecision: async (input) => audited.push(input) },
+      () => 1_000_000,
+    );
+    assert.equal(await guard.canActivate(contextFor(request)), true);
+    assert.deepEqual(request.authSession, { userId: 'platform-admin', sessionId: 'session-admin' });
+    assert.deepEqual(audited, [{
+      action,
+      userId: 'platform-admin',
+      sessionId: 'session-admin',
+      allowed: true,
+      ipAddress: '127.0.0.1',
+    }]);
+  });
+}
+
 test('guard audits and rejects invalid session cookies without trusting request identity', async () => {
   const audited = [];
   const request = { headers: { cookie: '__Host-renivet_session=' + 'C'.repeat(43) }, ip: '127.0.0.1' };
