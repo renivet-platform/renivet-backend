@@ -1,0 +1,83 @@
+{
+  "info": {
+    "_postman_id": "39f4a38d-e11a-4daf-9e91-8e44d6617f77",
+    "name": "Renivet Backend - Global Taxonomy Administration (REN2-58)",
+    "description": "Runnable examples for proposing and publishing global category schema versions. Requires a local database seeded with the selected category and attribute, a distinct taxonomy.manage/taxonomy.approve session, recent MFA and session-bound CSRF values. Synthetic defaults only; no Postman Cloud sync. Linear: REN2-58.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "apiBaseUrl", "value": "http://127.0.0.1:4000/api/v1", "type": "string" },
+    { "key": "categoryId", "value": "00000000-0000-4000-8000-000000000001", "type": "string" },
+    { "key": "attributeId", "value": "00000000-0000-4000-8000-000000000002", "type": "string" },
+    { "key": "schemaVersion", "value": "1", "type": "string" },
+    { "key": "schemaValidatorVersion", "value": "w2-attribute-validator-v1", "type": "string" },
+    { "key": "adminSessionCookie", "value": "", "type": "string" },
+    { "key": "adminCsrfToken", "value": "", "type": "string" },
+    { "key": "adminAllowedOrigin", "value": "http://127.0.0.1:3000", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Propose category schema version",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Cookie", "value": "renivet_session={{adminSessionCookie}}" },
+          { "key": "Origin", "value": "{{adminAllowedOrigin}}" },
+          { "key": "Sec-Fetch-Site", "value": "same-origin" },
+          { "key": "X-CSRF-Token", "value": "{{adminCsrfToken}}" },
+          { "key": "Idempotency-Key", "value": "ren2-58-propose-{{categoryId}}-v{{schemaVersion}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"categoryId\": \"{{categoryId}}\",\n  \"version\": {{schemaVersion}},\n  \"validatorVersion\": \"{{schemaValidatorVersion}}\",\n  \"ruleset\": {\n    \"attributes\": [\n      {\n        \"attributeId\": \"{{attributeId}}\",\n        \"code\": \"example_attribute\",\n        \"scope\": \"product\",\n        \"valueType\": \"text\",\n        \"requiredByDefault\": false\n      }\n    ]\n  }\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": "{{apiBaseUrl}}/admin/catalog/categories/{{categoryId}}/schema-versions",
+        "description": "Purpose: create an immutable draft schema snapshot and inspect its rule preview diff. Linear: REN2-58. Parameters: categoryId is the path category UUID; schemaVersion is the next version. Body: validator version and typed rules for an existing taxonomy attribute. Authentication/permissions: first-party session, global taxonomy.manage, recent MFA step-up, allowed Origin, same-origin Sec-Fetch-Site and session-bound CSRF. Responses: 201 with receipt and previewDiff; 400 invalid proposal/CSRF; 401 missing session; 403 permission/MFA denied; 404 category missing; 409 conflict; 412 stale current version; 422 invalid/incomplete schema; 503 service unavailable. Defaults are synthetic; select category and attribute IDs that exist in your local database."
+      },
+      "protocolProfileBehavior": { "disableCookies": true },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('proposal is accepted or returns a documented authorization/setup denial', function () {",
+        "  pm.expect([201, 400, 401, 403, 404, 409, 412, 422, 503]).to.include(pm.response.code);",
+        "});",
+        "if (pm.response.code === 201) {",
+        "  const body = pm.response.json();",
+        "  pm.test('draft receipt and preview diff are returned', function () {",
+        "    pm.expect(body).to.have.property('id');",
+        "    pm.expect(body).to.have.property('previewDiff');",
+        "    pm.expect(body.previewDiff).to.have.all.keys('added', 'removed', 'changed');",
+        "  });",
+        "}"
+      ] } }]
+    },
+    {
+      "name": "Publish category schema version",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Cookie", "value": "renivet_session={{adminSessionCookie}}" },
+          { "key": "Origin", "value": "{{adminAllowedOrigin}}" },
+          { "key": "Sec-Fetch-Site", "value": "same-origin" },
+          { "key": "X-CSRF-Token", "value": "{{adminCsrfToken}}" },
+          { "key": "Idempotency-Key", "value": "ren2-58-publish-{{categoryId}}-v{{schemaVersion}}" }
+        ],
+        "url": "{{apiBaseUrl}}/admin/catalog/categories/{{categoryId}}/schema-versions/{{schemaVersion}}/publish",
+        "description": "Purpose: publish a complete draft schema version with a separate approver. Linear: REN2-58. Parameters: categoryId and schemaVersion identify the draft. Body: none. Authentication/permissions: first-party session distinct from the proposer, global taxonomy.approve, recent MFA step-up, allowed Origin, same-origin Sec-Fetch-Site and session-bound CSRF. Responses: 200 published receipt; 400 invalid path/CSRF; 401 missing session; 403 permission/MFA denied; 404 category missing; 409 conflict/incomplete/retired/already published; 412 stale current version; 422 invalid schema; 503 service unavailable. Run only after a successful proposal; authenticate as an independent approver."
+      },
+      "protocolProfileBehavior": { "disableCookies": true },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('publish succeeds or returns a documented authorization/state denial', function () {",
+        "  pm.expect([200, 400, 401, 403, 404, 409, 412, 422, 503]).to.include(pm.response.code);",
+        "});",
+        "if (pm.response.code === 200) {",
+        "  pm.test('published receipt is returned', function () {",
+        "    const body = pm.response.json();",
+        "    pm.expect(body).to.have.property('id');",
+        "    pm.expect(body.status).to.equal('published');",
+        "  });",
+        "}"
+      ] } }]
+    }
+  ]
+}

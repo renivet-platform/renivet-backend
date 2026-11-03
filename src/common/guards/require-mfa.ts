@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   HttpException,
   Injectable,
+  Optional,
   SetMetadata,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -37,6 +38,7 @@ export class MfaGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly sessions: SessionService,
     private readonly mfa: MfaService,
+    @Optional()
     private readonly now: () => number = Date.now,
   ) {}
 

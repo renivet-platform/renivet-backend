@@ -1138,6 +1138,315 @@
           "Mfa"
         ]
       }
+    },
+    "/api/v1/admin/catalog/categories/{categoryId}/schema-versions": {
+      "post": {
+        "description": "Requires the platform-global taxonomy.manage permission, fresh MFA and session-bound CSRF. Creates a draft snapshot and returns its rule diff against the current published version. Linear: REN2-58.",
+        "operationId": "proposeCategorySchemaVersion",
+        "parameters": [
+          {
+            "name": "categoryId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Stable request key, 1 to 120 safe characters.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "categoryId",
+                  "version",
+                  "ruleset",
+                  "validatorVersion"
+                ],
+                "properties": {
+                  "categoryId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "ruleset": {
+                    "type": "object"
+                  },
+                  "validatorVersion": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Draft schema submitted. Response includes previewDiff for added, removed, and changed rules.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxonomyActionReceiptDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid versioned schema, conditional AST, idempotency key, or CSRF proof.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxonomyErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid first-party session.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxonomyErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Global taxonomy permission, fresh MFA, or CSRF check denied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxonomyErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Category does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxonomyErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, retired category, or changed idempotent replay.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxonomyErrorDto"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "The category current-version pointer no longer matches the proposed version.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxonomyErrorDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The schema is incomplete or does not compile against the approved validator.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxonomyErrorDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authorization or taxonomy database is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxonomyErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "Submit a versioned category schema draft for approval",
+        "tags": [
+          "Catalog"
+        ],
+        "x-renivet-csrf-policy": "Require allowlisted Origin, Sec-Fetch-Site and X-CSRF-Token bound to W1 session; same-statement resource permission in W1.",
+        "x-renivet-guard": "platform-global-admin",
+        "x-renivet-implementation-wave": "W2",
+        "x-renivet-mfa-required": true,
+        "x-renivet-permission": "taxonomy.manage"
+      }
+    },
+    "/api/v1/admin/catalog/categories/{categoryId}/schema-versions/{version}/publish": {
+      "post": {
+        "description": "Requires a separate platform-global taxonomy.approve permission, fresh MFA and session-bound CSRF. Uses the category current-version pointer as a compare-and-swap and writes the audit receipt and publication outbox notice atomically. Linear: REN2-58.",
+        "operationId": "publishCategorySchemaVersion",
+        "parameters": [
+          {
+            "name": "categoryId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Stable request key, 1 to 120 safe characters.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Schema version published and category current pointer advanced.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxonomyActionReceiptDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid category or schema version, or invalid CSRF proof.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxonomyErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid first-party session.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxonomyErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Global approval permission, fresh MFA, or CSRF check denied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxonomyErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Category does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxonomyErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale, incomplete, retired, or previously published schema version.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxonomyErrorDto"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "The category current-version pointer no longer matches the requested version.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxonomyErrorDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The schema is incomplete or does not compile against the approved validator.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxonomyErrorDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authorization or taxonomy database is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxonomyErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "Approve and publish a category schema version",
+        "tags": [
+          "Catalog"
+        ],
+        "x-renivet-csrf-policy": "Require allowlisted Origin, Sec-Fetch-Site and X-CSRF-Token bound to W1 session; same-statement resource permission in W1.",
+        "x-renivet-guard": "platform-global-admin",
+        "x-renivet-implementation-wave": "W2",
+        "x-renivet-mfa-required": true,
+        "x-renivet-permission": "taxonomy.approve"
+      }
     }
   },
   "info": {
@@ -1525,6 +1834,53 @@
         },
         "required": [
           "status"
+        ]
+      },
+      "TaxonomyActionReceiptDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "rowVersion": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "requestId"
+        ]
+      },
+      "TaxonomyErrorDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "details": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "requestId"
         ]
       }
     }
