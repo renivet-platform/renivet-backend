@@ -149,7 +149,7 @@ test('REN2-52 permits a live slice only with a matching operation, verified test
   assert.ok(validate(candidate, manifest, active).some((error) => /createBrandProduct.*parameter contract differs/i.test(error)));
   active.components.parameters.idempotencyKey.required = true;
   entry.implementation.pullRequest = { status: 'pending', url: null };
-  assert.deepEqual(validate(candidate, manifest, active), []);
+  assert.deepEqual(validate(candidate, manifest, active, { requireLinkedPullRequest: false }), []);
   assert.ok(validate(candidate, manifest, active, { requireLinkedPullRequest: true }).some((error) => /CI requires an open or merged pull request URL/i.test(error)));
   entry.implementation.pullRequest = { status: 'open', url: 'https://github.com/renivet-platform/renivet-backend/pull/999' };
   entry.implementation.test.path = 'tests/missing-w2-test.test.cjs';
