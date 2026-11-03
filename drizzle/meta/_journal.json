@@ -57,6 +57,13 @@
       "when": 1793705000000,
       "tag": "0007_ren2_51_worker_authorization_audit",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793706000000,
+      "tag": "0008_ren2_56_canonical_taxonomy",
+      "breakpoints": true
     }
   ]
 }
