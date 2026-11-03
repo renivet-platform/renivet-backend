@@ -1,0 +1,3260 @@
+openapi: 3.1.0
+info:
+  title: Renivet 2.0 W2 Catalog Import and Inventory — PROPOSED
+  version: 1.5.0-LOCAL-DESIGN-CANDIDATE
+  description: W2 v1.5 contract closure. Brand-owned catalogue and inventory. Technical remediation approved for
+    local documentation; routes, Drizzle migrations, W1 permission seeds and PostgreSQL tests not yet executed.
+    W3 admission and COD are external dependencies.
+servers:
+- url: /api/v1
+security:
+- sessionCookie: []
+tags:
+- name: Catalog
+  description: PROPOSED RENIVET Catalog API; brand membership/access verified server-side.
+- name: Pricing
+  description: PROPOSED RENIVET Pricing API; brand membership/access verified server-side.
+- name: Review
+  description: PROPOSED RENIVET Review API; brand membership/access verified server-side.
+- name: Media
+  description: PROPOSED RENIVET Media API; brand membership/access verified server-side.
+- name: Imports
+  description: PROPOSED RENIVET Imports API; brand membership/access verified server-side.
+- name: Inventory
+  description: PROPOSED RENIVET Inventory API; brand membership/access verified server-side.
+paths:
+  /brands/{brandId}/categories:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    get:
+      tags:
+      - Catalog
+      operationId: listCategories
+      summary: PROPOSED — listCategories
+      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend.
+      x-renivet-permission: catalog.read
+      x-renivet-implementation-wave: W2
+      x-renivet-security-review:
+      - W1 effective permissions
+      - scoped resource SQL
+      - cookie CSRF policy
+      - immutable audit
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedCategories'
+        '401': &id001
+          $ref: '#/components/responses/ErrorResponse'
+        '403': *id001
+        '404': *id001
+        '409': *id001
+        '422': *id001
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+      parameters:
+      - $ref: '#/components/parameters/cursor'
+      - $ref: '#/components/parameters/limit'
+  /brands/{brandId}/categories/{categoryId}/attributes:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    - $ref: '#/components/parameters/categoryId'
+    get:
+      tags:
+      - Catalog
+      operationId: getCategoryAttributes
+      summary: PROPOSED — getCategoryAttributes
+      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend.
+      x-renivet-permission: catalog.read
+      x-renivet-implementation-wave: W2
+      x-renivet-security-review:
+      - W1 effective permissions
+      - scoped resource SQL
+      - cookie CSRF policy
+      - immutable audit
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedAttributeDefinitions'
+        '401': *id001
+        '403': *id001
+        '404': *id001
+        '409': *id001
+        '422': *id001
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+  /brands/{brandId}/products:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    post:
+      tags:
+      - Catalog
+      operationId: createBrandProduct
+      summary: PROPOSED — createBrandProduct
+      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend.
+      x-renivet-permission: catalog.write
+      x-renivet-implementation-wave: W2
+      x-renivet-security-review:
+      - W1 effective permissions
+      - scoped resource SQL
+      - cookie CSRF policy
+      - immutable audit
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductCreated'
+        '401': *id001
+        '403': *id001
+        '404': *id001
+        '409': *id001
+        '422': *id001
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProduct'
+      x-renivet-csrf-policy: 'W1 validateCsrfRequest: allowlisted Origin, sec-fetch-site same-origin, x-csrf-token
+        session-bound; permission and MFA still required'
+    get:
+      tags:
+      - Catalog
+      operationId: listBrandProducts
+      summary: PROPOSED — listBrandProducts
+      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend.
+      x-renivet-permission: catalog.read
+      x-renivet-implementation-wave: W2
+      x-renivet-security-review:
+      - W1 effective permissions
+      - scoped resource SQL
+      - cookie CSRF policy
+      - immutable audit
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedProducts'
+        '401': *id001
+        '403': *id001
+        '404': *id001
+        '409': *id001
+        '422': *id001
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+      parameters:
+      - $ref: '#/components/parameters/cursor'
+      - $ref: '#/components/parameters/limit'
+  /brands/{brandId}/products/{productId}:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    - $ref: '#/components/parameters/productId'
+    get:
+      tags:
+      - Catalog
+      operationId: getBrandProduct
+      summary: PROPOSED — getBrandProduct
+      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend.
+      x-renivet-permission: catalog.read
+      x-renivet-implementation-wave: W2
+      x-renivet-security-review:
+      - W1 effective permissions
+      - scoped resource SQL
+      - cookie CSRF policy
+      - immutable audit
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductDetail'
+        '401': *id001
+        '403': *id001
+        '404': *id001
+        '409': *id001
+        '422': *id001
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+    patch:
+      tags:
+      - Catalog
+      operationId: updateBrandProduct
+      summary: PROPOSED — updateBrandProduct
+      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend.
+      x-renivet-permission: catalog.write
+      x-renivet-implementation-wave: W2
+      x-renivet-security-review:
+      - W1 effective permissions
+      - scoped resource SQL
+      - cookie CSRF policy
+      - immutable audit
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductDetail'
+        '401': *id001
+        '403': *id001
+        '404': *id001
+        '409': *id001
+        '422': *id001
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      - $ref: '#/components/parameters/ifMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductPatch'
+      x-renivet-csrf-policy: 'W1 validateCsrfRequest: allowlisted Origin, sec-fetch-site same-origin, x-csrf-token
+        session-bound; permission and MFA still required'
+  /brands/{brandId}/products/{productId}/variants:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    - $ref: '#/components/parameters/productId'
+    post:
+      tags:
+      - Catalog
+      operationId: createProductVariant
+      summary: PROPOSED — createProductVariant
+      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend.
+      x-renivet-permission: catalog.write
+      x-renivet-implementation-wave: W2
+      x-renivet-security-review:
+      - W1 effective permissions
+      - scoped resource SQL
+      - cookie CSRF policy
+      - immutable audit
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionReceipt'
+        '401': *id001
+        '403': *id001
+        '404': *id001
+        '409': *id001
+        '422': *id001
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      - $ref: '#/components/parameters/ifMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVariant'
+      x-renivet-csrf-policy: 'W1 validateCsrfRequest: allowlisted Origin, sec-fetch-site same-origin, x-csrf-token
+        session-bound; permission and MFA still required'
+  /brands/{brandId}/variants/{variantId}/prices:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    - $ref: '#/components/parameters/variantId'
+    patch:
+      tags:
+      - Pricing
+      operationId: proposeVariantPrice
+      summary: PROPOSED — proposeVariantPrice
+      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend.
+      x-renivet-permission: pricing.write
+      x-renivet-implementation-wave: W2
+      x-renivet-security-review:
+      - W1 effective permissions
+      - scoped resource SQL
+      - cookie CSRF policy
+      - immutable audit
+      responses:
+        '202':
+          description: Versioned outcome / accepted command
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionReceipt'
+        '401': *id001
+        '403': *id001
+        '404': *id001
+        '409': *id001
+        '422': *id001
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      - $ref: '#/components/parameters/ifMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PriceProposal'
+      x-renivet-csrf-policy: 'W1 validateCsrfRequest: allowlisted Origin, sec-fetch-site same-origin, x-csrf-token
+        session-bound; permission and MFA still required'
+    get:
+      operationId: listVariantPrices
+      tags:
+      - Pricing
+      summary: PROPOSED v1.5 — listVariantPrices
+      description: 'Brand-scoped command: current effective permissions, parent/child row scope and resource version
+        verified.'
+      x-renivet-permission: pricing.read
+      x-renivet-guard: brand
+      x-renivet-implementation-wave: W2
+      responses:
+        '200':
+          description: Success / accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceHistory'
+        '400': &id002
+          $ref: '#/components/responses/ErrorResponse'
+        '401': *id002
+        '403': *id002
+        '404': *id002
+        '409': *id002
+        '412': *id002
+        '422': *id002
+        '503': *id002
+  /brands/{brandId}/products/{productId}/submit:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    - $ref: '#/components/parameters/productId'
+    post:
+      tags:
+      - Review
+      operationId: submitProductForReview
+      summary: PROPOSED — submitProductForReview
+      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend.
+      x-renivet-permission: catalog.submit
+      x-renivet-implementation-wave: W2
+      x-renivet-security-review:
+      - W1 effective permissions
+      - scoped resource SQL
+      - cookie CSRF policy
+      - immutable audit
+      responses:
+        '202':
+          description: Versioned outcome / accepted command
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionReceipt'
+        '401': *id001
+        '403': *id001
+        '404': *id001
+        '409': *id001
+        '422': *id001
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      - $ref: '#/components/parameters/ifMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitProductRevision'
+      x-renivet-csrf-policy: 'W1 validateCsrfRequest: allowlisted Origin, sec-fetch-site same-origin, x-csrf-token
+        session-bound; permission and MFA still required'
+  /brands/{brandId}/products/{productId}/publish:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    - $ref: '#/components/parameters/productId'
+    post:
+      tags:
+      - Review
+      operationId: publishApprovedProduct
+      summary: PROPOSED — publishApprovedProduct
+      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend.
+      x-renivet-permission: catalog.publish
+      x-renivet-implementation-wave: W2
+      x-renivet-security-review:
+      - W1 effective permissions
+      - scoped resource SQL
+      - cookie CSRF policy
+      - immutable audit
+      responses:
+        '202':
+          description: Versioned outcome / accepted command
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionReceipt'
+        '401': *id001
+        '403': *id001
+        '404': *id001
+        '409': *id001
+        '422': *id001
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+        '200':
+          description: Published exact approved revision; outbox committed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicationReceipt'
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      - $ref: '#/components/parameters/ifMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublishRevision'
+      x-renivet-csrf-policy: 'W1 validateCsrfRequest: allowlisted Origin, sec-fetch-site same-origin, x-csrf-token
+        session-bound; permission and MFA still required'
+  /brands/{brandId}/products/{productId}/restrict:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    - $ref: '#/components/parameters/productId'
+    post:
+      tags:
+      - Review
+      operationId: restrictPublishedProduct
+      summary: PROPOSED — restrictPublishedProduct
+      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend.
+      x-renivet-permission: catalog.restrict
+      x-renivet-implementation-wave: W2
+      x-renivet-security-review:
+      - W1 effective permissions
+      - scoped resource SQL
+      - cookie CSRF policy
+      - immutable audit
+      responses:
+        '202':
+          description: Versioned outcome / accepted command
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionReceipt'
+        '401': *id001
+        '403': *id001
+        '404': *id001
+        '409': *id001
+        '422': *id001
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      - $ref: '#/components/parameters/ifMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReasonedAction'
+      x-renivet-csrf-policy: 'W1 validateCsrfRequest: allowlisted Origin, sec-fetch-site same-origin, x-csrf-token
+        session-bound; permission and MFA still required'
+  /brands/{brandId}/media/uploads:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    post:
+      tags:
+      - Media
+      operationId: beginMediaUpload
+      summary: PROPOSED — beginMediaUpload
+      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend.
+      x-renivet-permission: media.write
+      x-renivet-implementation-wave: W2
+      x-renivet-security-review:
+      - W1 effective permissions
+      - scoped resource SQL
+      - cookie CSRF policy
+      - immutable audit
+      responses:
+        '401': *id001
+        '403': *id001
+        '404': *id001
+        '409': *id001
+        '422': *id001
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+        '201':
+          description: Presigned storage intent; server validates binding to brand
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaUploadIntent'
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadInit'
+      x-renivet-csrf-policy: 'W1 validateCsrfRequest: allowlisted Origin, sec-fetch-site same-origin, x-csrf-token
+        session-bound; permission and MFA still required'
+  /brands/{brandId}/media/zip-imports:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    post:
+      tags:
+      - Media
+      operationId: createMediaZipImport
+      summary: PROPOSED — createMediaZipImport
+      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend.
+      x-renivet-permission: media.write
+      x-renivet-implementation-wave: W2
+      x-renivet-security-review:
+      - W1 effective permissions
+      - scoped resource SQL
+      - cookie CSRF policy
+      - immutable audit
+      responses:
+        '202':
+          description: Versioned outcome / accepted command
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionReceipt'
+        '401': *id001
+        '403': *id001
+        '404': *id001
+        '409': *id001
+        '422': *id001
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ZipImport'
+      x-renivet-csrf-policy: 'W1 validateCsrfRequest: allowlisted Origin, sec-fetch-site same-origin, x-csrf-token
+        session-bound; permission and MFA still required'
+  /brands/{brandId}/product-imports:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    post:
+      tags:
+      - Imports
+      operationId: createCatalogImport
+      summary: PROPOSED — createCatalogImport
+      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend.
+      x-renivet-permission: imports.write
+      x-renivet-implementation-wave: W2
+      x-renivet-security-review:
+      - W1 effective permissions
+      - scoped resource SQL
+      - cookie CSRF policy
+      - immutable audit
+      responses:
+        '202':
+          description: Versioned outcome / accepted command
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportAccepted'
+        '401': *id001
+        '403': *id001
+        '404': *id001
+        '409': *id001
+        '422': *id001
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateImportBatch'
+      x-renivet-csrf-policy: 'W1 validateCsrfRequest: allowlisted Origin, sec-fetch-site same-origin, x-csrf-token
+        session-bound; permission and MFA still required'
+  /brands/{brandId}/product-imports/{batchId}/mapping:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    - $ref: '#/components/parameters/batchId'
+    post:
+      tags:
+      - Imports
+      operationId: saveImportMapping
+      summary: PROPOSED — saveImportMapping
+      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend.
+      x-renivet-permission: imports.write
+      x-renivet-implementation-wave: W2
+      x-renivet-security-review:
+      - W1 effective permissions
+      - scoped resource SQL
+      - cookie CSRF policy
+      - immutable audit
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionReceipt'
+        '401': *id001
+        '403': *id001
+        '404': *id001
+        '409': *id001
+        '422': *id001
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      - $ref: '#/components/parameters/ifMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImportMapping'
+      x-renivet-csrf-policy: 'W1 validateCsrfRequest: allowlisted Origin, sec-fetch-site same-origin, x-csrf-token
+        session-bound; permission and MFA still required'
+  /brands/{brandId}/product-imports/{batchId}/preview:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    - $ref: '#/components/parameters/batchId'
+    get:
+      tags:
+      - Imports
+      operationId: getCatalogImportPreview
+      summary: PROPOSED — getCatalogImportPreview
+      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend.
+      x-renivet-permission: imports.read
+      x-renivet-implementation-wave: W2
+      x-renivet-security-review:
+      - W1 effective permissions
+      - scoped resource SQL
+      - cookie CSRF policy
+      - immutable audit
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportPreviewSnapshot'
+        '401': *id001
+        '403': *id001
+        '404': *id001
+        '409': *id001
+        '422': *id001
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+  /brands/{brandId}/product-imports/{batchId}/confirm:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    - $ref: '#/components/parameters/batchId'
+    post:
+      tags:
+      - Imports
+      operationId: confirmCatalogImport
+      summary: PROPOSED — confirmCatalogImport
+      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend.
+      x-renivet-permission: imports.confirm
+      x-renivet-implementation-wave: W2
+      x-renivet-security-review:
+      - W1 effective permissions
+      - scoped resource SQL
+      - cookie CSRF policy
+      - immutable audit
+      responses:
+        '202':
+          description: Versioned outcome / accepted command
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionReceipt'
+        '401': *id001
+        '403': *id001
+        '404': *id001
+        '409': *id001
+        '422': *id001
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      - $ref: '#/components/parameters/ifMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImportConfirm'
+      x-renivet-csrf-policy: 'W1 validateCsrfRequest: allowlisted Origin, sec-fetch-site same-origin, x-csrf-token
+        session-bound; permission and MFA still required'
+  /brands/{brandId}/product-imports/{batchId}/results:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    - $ref: '#/components/parameters/batchId'
+    get:
+      tags:
+      - Imports
+      operationId: getImportResults
+      summary: PROPOSED — getImportResults
+      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend.
+      x-renivet-permission: imports.read
+      x-renivet-implementation-wave: W2
+      x-renivet-security-review:
+      - W1 effective permissions
+      - scoped resource SQL
+      - cookie CSRF policy
+      - immutable audit
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportResults'
+        '401': *id001
+        '403': *id001
+        '404': *id001
+        '409': *id001
+        '422': *id001
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+      parameters:
+      - $ref: '#/components/parameters/cursor'
+      - $ref: '#/components/parameters/limit'
+  /brands/{brandId}/product-imports/{batchId}/retry:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    - $ref: '#/components/parameters/batchId'
+    post:
+      tags:
+      - Imports
+      operationId: retryImportFailures
+      summary: PROPOSED — retryImportFailures
+      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend.
+      x-renivet-permission: imports.write
+      x-renivet-implementation-wave: W2
+      x-renivet-security-review:
+      - W1 effective permissions
+      - scoped resource SQL
+      - cookie CSRF policy
+      - immutable audit
+      responses:
+        '202':
+          description: Versioned outcome / accepted command
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionReceipt'
+        '401': *id001
+        '403': *id001
+        '404': *id001
+        '409': *id001
+        '422': *id001
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      - $ref: '#/components/parameters/ifMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RetryRequest'
+      x-renivet-csrf-policy: 'W1 validateCsrfRequest: allowlisted Origin, sec-fetch-site same-origin, x-csrf-token
+        session-bound; permission and MFA still required'
+  /brands/{brandId}/inventory/balances:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    get:
+      tags:
+      - Inventory
+      operationId: listAuthoritativeBalances
+      summary: PROPOSED — listAuthoritativeBalances
+      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend.
+      x-renivet-permission: inventory.read
+      x-renivet-implementation-wave: W2
+      x-renivet-security-review:
+      - W1 effective permissions
+      - scoped resource SQL
+      - cookie CSRF policy
+      - immutable audit
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedStockBalances'
+        '401': *id001
+        '403': *id001
+        '404': *id001
+        '409': *id001
+        '422': *id001
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+      parameters:
+      - $ref: '#/components/parameters/cursor'
+      - $ref: '#/components/parameters/limit'
+  /brands/{brandId}/inventory/locations:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    post:
+      tags:
+      - Inventory
+      operationId: createStockLocation
+      summary: PROPOSED — createStockLocation
+      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend.
+      x-renivet-permission: inventory.location.manage
+      x-renivet-implementation-wave: W2
+      x-renivet-security-review:
+      - W1 effective permissions
+      - scoped resource SQL
+      - cookie CSRF policy
+      - immutable audit
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionReceipt'
+        '401': *id001
+        '403': *id001
+        '404': *id001
+        '409': *id001
+        '422': *id001
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StockLocationCreate'
+      x-renivet-csrf-policy: 'W1 validateCsrfRequest: allowlisted Origin, sec-fetch-site same-origin, x-csrf-token
+        session-bound; permission and MFA still required'
+  /brands/{brandId}/inventory/observations:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    post:
+      tags:
+      - Inventory
+      operationId: submitStockObservation
+      summary: PROPOSED — submitStockObservation
+      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend.
+      x-renivet-permission: inventory.submit
+      x-renivet-implementation-wave: W2
+      x-renivet-security-review:
+      - W1 effective permissions
+      - scoped resource SQL
+      - cookie CSRF policy
+      - immutable audit
+      responses:
+        '202':
+          description: Versioned outcome / accepted command
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionReceipt'
+        '401': *id001
+        '403': *id001
+        '404': *id001
+        '409': *id001
+        '422': *id001
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StockObservation'
+      x-renivet-csrf-policy: 'W1 validateCsrfRequest: allowlisted Origin, sec-fetch-site same-origin, x-csrf-token
+        session-bound; permission and MFA still required'
+  /brands/{brandId}/inventory/adjustments:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    post:
+      tags:
+      - Inventory
+      operationId: proposeStockAdjustment
+      summary: PROPOSED — proposeStockAdjustment
+      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend.
+      x-renivet-permission: inventory.adjust.propose
+      x-renivet-implementation-wave: W2
+      x-renivet-security-review:
+      - W1 effective permissions
+      - scoped resource SQL
+      - cookie CSRF policy
+      - immutable audit
+      responses:
+        '202':
+          description: Versioned outcome / accepted command
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionReceipt'
+        '401': *id001
+        '403': *id001
+        '404': *id001
+        '409': *id001
+        '422': *id001
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      - $ref: '#/components/parameters/ifMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StockAdjustmentProposal'
+      x-renivet-csrf-policy: 'W1 validateCsrfRequest: allowlisted Origin, sec-fetch-site same-origin, x-csrf-token
+        session-bound; permission and MFA still required'
+  /brands/{brandId}/inventory/movements:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    get:
+      tags:
+      - Inventory
+      operationId: listStockMovements
+      summary: PROPOSED — listStockMovements
+      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend.
+      x-renivet-permission: inventory.read
+      x-renivet-implementation-wave: W2
+      x-renivet-security-review:
+      - W1 effective permissions
+      - scoped resource SQL
+      - cookie CSRF policy
+      - immutable audit
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedMovements'
+        '401': *id001
+        '403': *id001
+        '404': *id001
+        '409': *id001
+        '422': *id001
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+      parameters:
+      - $ref: '#/components/parameters/cursor'
+      - $ref: '#/components/parameters/limit'
+  /brands/{brandId}/inventory/cycle-counts:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    post:
+      tags:
+      - Inventory
+      operationId: createCycleCount
+      summary: PROPOSED — createCycleCount
+      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend.
+      x-renivet-permission: inventory.count
+      x-renivet-implementation-wave: W2
+      x-renivet-security-review:
+      - W1 effective permissions
+      - scoped resource SQL
+      - cookie CSRF policy
+      - immutable audit
+      responses:
+        '202':
+          description: Versioned outcome / accepted command
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionReceipt'
+        '401': *id001
+        '403': *id001
+        '404': *id001
+        '409': *id001
+        '422': *id001
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CycleCountCreate'
+      x-renivet-csrf-policy: 'W1 validateCsrfRequest: allowlisted Origin, sec-fetch-site same-origin, x-csrf-token
+        session-bound; permission and MFA still required'
+  /brands/{brandId}/inventory/reconciliations:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    get:
+      tags:
+      - Inventory
+      operationId: listInventoryReconciliations
+      summary: PROPOSED — listInventoryReconciliations
+      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend.
+      x-renivet-permission: inventory.read
+      x-renivet-implementation-wave: W2
+      x-renivet-security-review:
+      - W1 effective permissions
+      - scoped resource SQL
+      - cookie CSRF policy
+      - immutable audit
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedReconciliations'
+        '401': *id001
+        '403': *id001
+        '404': *id001
+        '409': *id001
+        '422': *id001
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+      parameters:
+      - $ref: '#/components/parameters/cursor'
+      - $ref: '#/components/parameters/limit'
+  /brands/{brandId}/inventory/reconciliations/{caseId}/resolve:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    - $ref: '#/components/parameters/caseId'
+    post:
+      tags:
+      - Inventory
+      operationId: resolveReconciliation
+      summary: PROPOSED — resolveReconciliation
+      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend.
+      x-renivet-permission: inventory.reconcile
+      x-renivet-implementation-wave: W2
+      x-renivet-security-review:
+      - W1 effective permissions
+      - scoped resource SQL
+      - cookie CSRF policy
+      - immutable audit
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionReceipt'
+        '401': *id001
+        '403': *id001
+        '404': *id001
+        '409': *id001
+        '422': *id001
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      - $ref: '#/components/parameters/ifMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconciliationResolution'
+      x-renivet-csrf-policy: 'W1 validateCsrfRequest: allowlisted Origin, sec-fetch-site same-origin, x-csrf-token
+        session-bound; permission and MFA still required'
+  /admin/brands/{brandId}/catalog-reviews/{reviewId}/decision:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    - $ref: '#/components/parameters/reviewId'
+    post:
+      tags:
+      - Review
+      operationId: decideCatalogReview
+      summary: PROPOSED — decideCatalogReview
+      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend. Admin
+        reviewer must resolve target brand from record, then apply global reviewer/MFA permissions. Server resolves
+        resource brand and must verify it matches the brandId URL scope; global administrative privilege, maker/checker
+        and MFA remain separate controls.
+      x-renivet-permission: catalog.approve
+      x-renivet-implementation-wave: W2
+      x-renivet-security-review:
+      - W1 effective permissions
+      - scoped resource SQL
+      - cookie CSRF policy
+      - immutable audit
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionReceipt'
+        '401': *id001
+        '403': *id001
+        '404': *id001
+        '409': *id001
+        '422': *id001
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      - $ref: '#/components/parameters/ifMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewDecision'
+      x-renivet-admin-target-brand-check: required
+      x-renivet-csrf-policy: 'W1 validateCsrfRequest: allowlisted Origin, sec-fetch-site same-origin, x-csrf-token
+        session-bound; permission and MFA still required'
+  /admin/brands/{brandId}/inventory/adjustments/{adjustmentId}/decision:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    - $ref: '#/components/parameters/adjustmentId'
+    post:
+      tags:
+      - Inventory
+      operationId: decideStockAdjustment
+      summary: PROPOSED — decideStockAdjustment
+      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend. Admin
+        reviewer must resolve target brand from record, then apply global reviewer/MFA permissions. Server resolves
+        resource brand and must verify it matches the brandId URL scope; global administrative privilege, maker/checker
+        and MFA remain separate controls.
+      x-renivet-permission: inventory.adjust.approve
+      x-renivet-implementation-wave: W2
+      x-renivet-security-review:
+      - W1 effective permissions
+      - scoped resource SQL
+      - cookie CSRF policy
+      - immutable audit
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionReceipt'
+        '401': *id001
+        '403': *id001
+        '404': *id001
+        '409': *id001
+        '422': *id001
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      - $ref: '#/components/parameters/ifMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StockAdjustmentDecision'
+      x-renivet-admin-target-brand-check: required
+      x-renivet-csrf-policy: 'W1 validateCsrfRequest: allowlisted Origin, sec-fetch-site same-origin, x-csrf-token
+        session-bound; permission and MFA still required'
+  /brands/{brandId}/categories/{categoryId}/schema-versions/{version}:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    - $ref: '#/components/parameters/categoryId'
+    - $ref: '#/components/parameters/version'
+    get:
+      operationId: getCategorySchemaVersion
+      tags:
+      - Catalog
+      summary: PROPOSED v1.5 — getCategorySchemaVersion
+      description: 'Brand-scoped command: current effective permissions, parent/child row scope and resource version
+        verified.'
+      x-renivet-permission: catalog.read
+      x-renivet-guard: brand
+      x-renivet-implementation-wave: W2
+      responses:
+        '200':
+          description: Success / accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategorySchemaVersion'
+        '400': *id002
+        '401': *id002
+        '403': *id002
+        '404': *id002
+        '409': *id002
+        '412': *id002
+        '422': *id002
+        '503': *id002
+  /brands/{brandId}/media/{mediaId}/complete:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    - $ref: '#/components/parameters/mediaId'
+    post:
+      operationId: completeMediaUpload
+      tags:
+      - Media
+      summary: PROPOSED v1.5 — completeMediaUpload
+      description: 'Brand-scoped command: current effective permissions, parent/child row scope and resource version
+        verified.'
+      x-renivet-permission: catalog.write
+      x-renivet-guard: brand
+      x-renivet-implementation-wave: W2
+      responses:
+        '202':
+          description: Success / accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionReceipt'
+        '400': *id002
+        '401': *id002
+        '403': *id002
+        '404': *id002
+        '409': *id002
+        '412': *id002
+        '422': *id002
+        '503': *id002
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      x-renivet-csrf-policy: Require allowlisted Origin, Sec-Fetch-Site and X-CSRF-Token bound to W1 session; same-statement
+        resource permission in W1.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MediaUploadComplete'
+  /brands/{brandId}/media/{mediaId}:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    - $ref: '#/components/parameters/mediaId'
+    get:
+      operationId: getMediaAssetStatus
+      tags:
+      - Media
+      summary: PROPOSED v1.5 — getMediaAssetStatus
+      description: 'Brand-scoped command: current effective permissions, parent/child row scope and resource version
+        verified.'
+      x-renivet-permission: catalog.read
+      x-renivet-guard: brand
+      x-renivet-implementation-wave: W2
+      responses:
+        '200':
+          description: Success / accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaAssetStatus'
+        '400': *id002
+        '401': *id002
+        '403': *id002
+        '404': *id002
+        '409': *id002
+        '412': *id002
+        '422': *id002
+        '503': *id002
+  /brands/{brandId}/products/{productId}/media:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    - $ref: '#/components/parameters/productId'
+    post:
+      operationId: attachProductMedia
+      tags:
+      - Media
+      summary: PROPOSED v1.5 — attachProductMedia
+      description: 'Brand-scoped command: current effective permissions, parent/child row scope and resource version
+        verified.'
+      x-renivet-permission: catalog.write
+      x-renivet-guard: brand
+      x-renivet-implementation-wave: W2
+      responses:
+        '201':
+          description: Success / accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaLink'
+        '400': *id002
+        '401': *id002
+        '403': *id002
+        '404': *id002
+        '409': *id002
+        '412': *id002
+        '422': *id002
+        '503': *id002
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      x-renivet-csrf-policy: Require allowlisted Origin, Sec-Fetch-Site and X-CSRF-Token bound to W1 session; same-statement
+        resource permission in W1.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttachMediaRequest'
+  /brands/{brandId}/products/{productId}/media/{linkId}:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    - $ref: '#/components/parameters/productId'
+    - $ref: '#/components/parameters/linkId'
+    patch:
+      operationId: updateProductMediaLink
+      tags:
+      - Media
+      summary: PROPOSED v1.5 — updateProductMediaLink
+      description: 'Brand-scoped command: current effective permissions, parent/child row scope and resource version
+        verified.'
+      x-renivet-permission: catalog.write
+      x-renivet-guard: brand
+      x-renivet-implementation-wave: W2
+      responses:
+        '200':
+          description: Success / accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaLink'
+        '400': *id002
+        '401': *id002
+        '403': *id002
+        '404': *id002
+        '409': *id002
+        '412': *id002
+        '422': *id002
+        '503': *id002
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      - $ref: '#/components/parameters/ifMatch'
+      x-renivet-csrf-policy: Require allowlisted Origin, Sec-Fetch-Site and X-CSRF-Token bound to W1 session; same-statement
+        resource permission in W1.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMediaLinkRequest'
+    delete:
+      operationId: detachProductMedia
+      tags:
+      - Media
+      summary: PROPOSED v1.5 — detachProductMedia
+      description: 'Brand-scoped command: current effective permissions, parent/child row scope and resource version
+        verified.'
+      x-renivet-permission: catalog.write
+      x-renivet-guard: brand
+      x-renivet-implementation-wave: W2
+      responses:
+        '200':
+          description: Success / accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionReceipt'
+        '400': *id002
+        '401': *id002
+        '403': *id002
+        '404': *id002
+        '409': *id002
+        '412': *id002
+        '422': *id002
+        '503': *id002
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      - $ref: '#/components/parameters/ifMatch'
+      x-renivet-csrf-policy: Require allowlisted Origin, Sec-Fetch-Site and X-CSRF-Token bound to W1 session; same-statement
+        resource permission in W1.
+  /admin/brands/{brandId}/variant-prices/{priceId}/decision:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    - $ref: '#/components/parameters/priceId'
+    post:
+      operationId: decideVariantPrice
+      tags:
+      - Pricing
+      summary: PROPOSED v1.5 — decideVariantPrice
+      description: 'Brand-scoped command: current effective permissions, parent/child row scope and resource version
+        verified.'
+      x-renivet-permission: pricing.approve
+      x-renivet-guard: brand
+      x-renivet-implementation-wave: W2
+      responses:
+        '200':
+          description: Success / accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionReceipt'
+        '400': *id002
+        '401': *id002
+        '403': *id002
+        '404': *id002
+        '409': *id002
+        '412': *id002
+        '422': *id002
+        '503': *id002
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      x-renivet-csrf-policy: Require allowlisted Origin, Sec-Fetch-Site and X-CSRF-Token bound to W1 session; same-statement
+        resource permission in W1.
+      x-renivet-mfa-required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PriceDecision'
+  /admin/catalog/categories/{categoryId}/schema-versions:
+    parameters:
+    - $ref: '#/components/parameters/categoryId'
+    post:
+      operationId: proposeCategorySchemaVersion
+      tags:
+      - Catalog
+      summary: PROPOSED v1.5 — proposeCategorySchemaVersion
+      description: Platform/global review route only; cannot use BrandAccessGuard as-is. Must implement dedicated
+        global-admin authorization.
+      x-renivet-permission: taxonomy.manage
+      x-renivet-guard: platform-global-admin
+      x-renivet-implementation-wave: W2
+      responses:
+        '201':
+          description: Success / accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionReceipt'
+        '400': *id002
+        '401': *id002
+        '403': *id002
+        '404': *id002
+        '409': *id002
+        '412': *id002
+        '422': *id002
+        '503': *id002
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      x-renivet-csrf-policy: Require allowlisted Origin, Sec-Fetch-Site and X-CSRF-Token bound to W1 session; same-statement
+        resource permission in W1.
+      x-renivet-mfa-required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategorySchemaProposal'
+  /admin/catalog/categories/{categoryId}/schema-versions/{version}/publish:
+    parameters:
+    - $ref: '#/components/parameters/categoryId'
+    - $ref: '#/components/parameters/version'
+    post:
+      operationId: publishCategorySchemaVersion
+      tags:
+      - Catalog
+      summary: PROPOSED v1.5 — publishCategorySchemaVersion
+      description: Publishes frozen taxonomy snapshot after schema governance review; global-admin guard required.
+      x-renivet-permission: taxonomy.approve
+      x-renivet-guard: platform-global-admin
+      x-renivet-implementation-wave: W2
+      responses:
+        '200':
+          description: Success / accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionReceipt'
+        '400': *id002
+        '401': *id002
+        '403': *id002
+        '404': *id002
+        '409': *id002
+        '412': *id002
+        '422': *id002
+        '503': *id002
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      x-renivet-csrf-policy: Require allowlisted Origin, Sec-Fetch-Site and X-CSRF-Token bound to W1 session; same-statement
+        resource permission in W1.
+      x-renivet-mfa-required: true
+  /brands/{brandId}/products/{productId}/variants/{variantId}:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    - $ref: '#/components/parameters/productId'
+    - $ref: '#/components/parameters/variantId'
+    patch:
+      operationId: updateProductVariant
+      summary: PROPOSED — updateProductVariant
+      tags:
+      - Catalog
+      x-renivet-permission: catalog.write
+      x-renivet-guard: brand
+      x-renivet-implementation-wave: W2
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionReceipt'
+        '401': &id003
+          $ref: '#/components/responses/ErrorResponse'
+        '403': *id003
+        '404': *id003
+        '409': *id003
+        '412': *id003
+        '422': *id003
+        '503': *id003
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      - $ref: '#/components/parameters/ifMatch'
+      x-renivet-csrf-policy: W1 session-bound X-CSRF-Token, Origin and Sec-Fetch-Site validation required
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateVariant'
+    delete:
+      operationId: deactivateProductVariant
+      summary: PROPOSED — deactivateProductVariant
+      tags:
+      - Catalog
+      x-renivet-permission: catalog.write
+      x-renivet-guard: brand
+      x-renivet-implementation-wave: W2
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionReceipt'
+        '401': *id003
+        '403': *id003
+        '404': *id003
+        '409': *id003
+        '412': *id003
+        '422': *id003
+        '503': *id003
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      - $ref: '#/components/parameters/ifMatch'
+      x-renivet-csrf-policy: W1 session-bound X-CSRF-Token, Origin and Sec-Fetch-Site validation required
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeactivateVariant'
+  /brands/{brandId}/products/{productId}/claims:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    - $ref: '#/components/parameters/productId'
+    post:
+      operationId: proposeProductClaim
+      summary: PROPOSED — proposeProductClaim
+      tags:
+      - Review
+      x-renivet-permission: catalog.write
+      x-renivet-guard: brand
+      x-renivet-implementation-wave: W2
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimDetail'
+        '401': *id003
+        '403': *id003
+        '404': *id003
+        '409': *id003
+        '412': *id003
+        '422': *id003
+        '503': *id003
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      - $ref: '#/components/parameters/ifMatch'
+      x-renivet-csrf-policy: W1 session-bound X-CSRF-Token, Origin and Sec-Fetch-Site validation required
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateClaim'
+    get:
+      operationId: listProductClaims
+      summary: PROPOSED — listProductClaims
+      tags:
+      - Review
+      x-renivet-permission: catalog.read
+      x-renivet-guard: brand
+      x-renivet-implementation-wave: W2
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimsList'
+        '401': *id003
+        '403': *id003
+        '404': *id003
+        '409': *id003
+        '412': *id003
+        '422': *id003
+        '503': *id003
+  /admin/brands/{brandId}/claims/{claimId}/decision:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    - $ref: '#/components/parameters/claimId'
+    post:
+      operationId: decideProductClaim
+      summary: PROPOSED — decideProductClaim
+      tags:
+      - Review
+      x-renivet-permission: catalog.review
+      x-renivet-guard: brand
+      x-renivet-implementation-wave: W2
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionReceipt'
+        '401': *id003
+        '403': *id003
+        '404': *id003
+        '409': *id003
+        '412': *id003
+        '422': *id003
+        '503': *id003
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      - $ref: '#/components/parameters/ifMatch'
+      x-renivet-csrf-policy: W1 session-bound X-CSRF-Token, Origin and Sec-Fetch-Site validation required
+      x-renivet-mfa-required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClaimDecision'
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-renivet_session
+      description: Exact cookie name read from W1 session.service.ts; Secure __Host- cookie. Session verification
+        and CSRF enforced server-side.
+  parameters:
+    brandId:
+      in: path
+      name: brandId
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Resolved and verified against session membership; never trust path alone
+    productId:
+      in: path
+      name: productId
+      required: true
+      schema:
+        type: string
+        format: uuid
+    idempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 120
+    categoryId:
+      in: path
+      name: categoryId
+      required: true
+      schema:
+        type: string
+        format: uuid
+    variantId:
+      in: path
+      name: variantId
+      required: true
+      schema:
+        type: string
+        format: uuid
+    reviewId:
+      in: path
+      name: reviewId
+      required: true
+      schema:
+        type: string
+        format: uuid
+    batchId:
+      in: path
+      name: batchId
+      required: true
+      schema:
+        type: string
+        format: uuid
+    locationId:
+      in: path
+      name: locationId
+      required: true
+      schema:
+        type: string
+        format: uuid
+    caseId:
+      in: path
+      name: caseId
+      required: true
+      schema:
+        type: string
+        format: uuid
+    adjustmentId:
+      in: path
+      name: adjustmentId
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ifMatch:
+      in: header
+      name: If-Match
+      required: true
+      schema:
+        type: string
+      description: Expected resource version or signed import preview hash
+    cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+    limit:
+      in: query
+      name: limit
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+    mediaId:
+      name: mediaId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    linkId:
+      name: linkId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    priceId:
+      name: priceId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    version:
+      name: version
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    claimId:
+      name: claimId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    ErrorResponse:
+      description: Auth-safe error with request trace
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Error:
+      type: object
+      required:
+      - code
+      - message
+      - requestId
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        requestId:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+    ProductSummary:
+      type: object
+      required:
+      - id
+      - brandId
+      - styleCode
+      - title
+      - publicationState
+      - contentVersion
+      properties:
+        id:
+          type: string
+          format: uuid
+        brandId:
+          type: string
+          format: uuid
+        styleCode:
+          type: string
+        title:
+          type: string
+        publicationState:
+          type: string
+          enum:
+          - DRAFT
+          - INCOMPLETE
+          - PENDING_REVIEW
+          - APPROVED
+          - PUBLISHED
+          - RE_REVIEW
+          - REJECTED
+          - RESTRICTED
+          - ARCHIVED
+        contentVersion:
+          type: integer
+          minimum: 1
+    CreateProduct:
+      type: object
+      required:
+      - styleCode
+      - categoryCode
+      - categorySchemaVersion
+      - title
+      additionalProperties: false
+      properties:
+        styleCode:
+          type: string
+          minLength: 1
+        categoryCode:
+          type: string
+        categorySchemaVersion:
+          type: integer
+          minimum: 1
+        title:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        attributes:
+          type: object
+          additionalProperties: true
+        variants:
+          type: array
+          minItems: 0
+          items:
+            $ref: '#/components/schemas/CreateVariant'
+      description: Creates INCOMPLETE/DRAFT parent; variants, price and images are optional until submit.
+    CreateVariant:
+      type: object
+      required:
+      - sku
+      - options
+      properties:
+        sku:
+          type: string
+          minLength: 1
+          maxLength: 40
+          pattern: ^[A-Za-z0-9_.-]+$
+        options:
+          type: object
+          additionalProperties:
+            type: string
+        weightG:
+          type: integer
+          minimum: 0
+      additionalProperties: false
+    Price:
+      type: object
+      required:
+      - currency
+      - sellingPriceMinor
+      - mrpMinor
+      properties:
+        currency:
+          type: string
+          const: INR
+        sellingPriceMinor:
+          type: integer
+          minimum: 0
+        mrpMinor:
+          type: integer
+          minimum: 1
+    ProductCreated:
+      type: object
+      required:
+      - productId
+      - publicationState
+      - contentVersion
+      - qcState
+      - categorySchemaVersion
+      properties:
+        productId:
+          type: string
+          format: uuid
+        publicationState:
+          type: string
+          const: DRAFT
+        contentVersion:
+          type: integer
+          const: 1
+        rowVersion:
+          type: integer
+          const: 1
+        variantIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        qcState:
+          type: string
+          const: NOT_SUBMITTED
+        categorySchemaVersion:
+          type: integer
+          minimum: 1
+    CreateImportBatch:
+      type: object
+      required:
+      - sourceKind
+      - sourceAsOf
+      - fileUploadId
+      - mode
+      properties:
+        sourceKind:
+          type: string
+          enum:
+          - RENIVET_CSV
+          - RENIVET_XLSX
+          - SHOPIFY_CSV
+          - UNIWARE_CSV
+          - GENERIC_CSV
+        sourceAsOf:
+          type: string
+          format: date-time
+        fileUploadId:
+          type: string
+          format: uuid
+        mode:
+          type: string
+          enum:
+          - CREATE_ONLY
+          - UPDATE_MATCHED
+          - SKIP_EXISTING
+          - REVIEW_CONFLICT
+    ImportAccepted:
+      type: object
+      required:
+      - batchId
+      - status
+      properties:
+        batchId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          const: RECEIVED
+    ImportPreview:
+      type: object
+      required:
+      - batchId
+      - previewHash
+      - rows
+      - counts
+      properties:
+        batchId:
+          type: string
+          format: uuid
+        previewHash:
+          type: string
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        counts:
+          type: object
+          additionalProperties:
+            type: integer
+            minimum: 0
+    StockBalance:
+      type: object
+      required:
+      - brandId
+      - variantId
+      - locationId
+      - physicalOnHand
+      - quarantined
+      - otherNonSellable
+      - allocatedNotDispatched
+      - safetyBuffer
+      - availableToPromise
+      - balanceVersion
+      properties:
+        brandId:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        physicalOnHand:
+          type: integer
+          minimum: 0
+        quarantined:
+          type: integer
+          minimum: 0
+        otherNonSellable:
+          type: integer
+          minimum: 0
+        allocatedNotDispatched:
+          type: integer
+          minimum: 0
+        safetyBuffer:
+          type: integer
+          minimum: 0
+        availableToPromise:
+          type: integer
+          minimum: 0
+        balanceVersion:
+          type: integer
+          minimum: 1
+        suspended:
+          type: boolean
+        unit:
+          type: string
+          const: each
+        prePaymentHeld:
+          type: integer
+          const: 0
+        stockFreshnessState:
+          type: string
+          enum:
+          - FRESH
+          - STALE
+          - SUSPENDED
+          - UNKNOWN
+    StockObservation:
+      type: object
+      required:
+      - source
+      - sourceReference
+      - asOf
+      - lines
+      properties:
+        source:
+          type: string
+          enum:
+          - BRAND_PORTAL_COUNT
+          - RENIVET_CSV
+          - UNIWARE_EXPORT
+          - AUTHORIZED_API
+          - OPERATIONS_CORRECTION
+        sourceReference:
+          type: string
+        asOf:
+          type: string
+          format: date-time
+        lines:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required:
+            - variantId
+            - locationId
+            - reportedPhysicalOnHand
+            - expectedBalanceVersion
+            properties:
+              variantId:
+                type: string
+                format: uuid
+              locationId:
+                type: string
+                format: uuid
+              reportedPhysicalOnHand:
+                type: integer
+                minimum: 0
+              expectedBalanceVersion:
+                type: integer
+                minimum: 1
+    ActionReceipt:
+      type: object
+      required:
+      - id
+      - status
+      - requestId
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        requestId:
+          type: string
+        rowVersion:
+          type: integer
+          minimum: 1
+    CategorySummary:
+      type: object
+      required:
+      - isLeaf
+      - parentId
+      - schemaVersion
+      - id
+      - isActive
+      - name
+      - currentSchemaVersion
+      - code
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        schemaVersion:
+          type: integer
+          minimum: 1
+        parentId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        isLeaf:
+          type: boolean
+        isActive:
+          type: boolean
+        currentSchemaVersion:
+          type: integer
+          minimum: 1
+        pathCodes:
+          type: array
+          items:
+            type: string
+    AttributeDefinition:
+      type: object
+      required:
+      - code
+      - scope
+      - type
+      - required
+      properties:
+        code:
+          type: string
+        scope:
+          type: string
+          enum:
+          - PRODUCT
+          - VARIANT
+        type:
+          type: string
+          enum:
+          - text
+          - integer
+          - decimal
+          - boolean
+          - enum
+          - multi_enum
+          - date
+          - measurement
+        required:
+          type: boolean
+        condition:
+          type:
+          - object
+          - 'null'
+        allowedValues:
+          type: array
+          items:
+            type: string
+        schemaVersionId:
+          type: string
+          format: uuid
+        validatorVersion:
+          type: string
+        conditionalAst:
+          type:
+          - object
+          - 'null'
+        scopeType:
+          type: string
+          enum:
+          - product
+          - variant
+    VariantCreate:
+      $ref: '#/components/schemas/CreateVariant'
+    PriceProposal:
+      type: object
+      additionalProperties: false
+      required:
+      - currency
+      - sellingPriceMinor
+      - mrpMinor
+      - validFrom
+      - ruleVersion
+      properties:
+        currency:
+          type: string
+          const: INR
+        sellingPriceMinor:
+          type: integer
+          minimum: 0
+        mrpMinor:
+          type: integer
+          minimum: 1
+        validFrom:
+          type: string
+          format: date-time
+        validTo:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        ruleVersion:
+          type: integer
+          minimum: 1
+        reasonCode:
+          type: string
+    ReviewDecision:
+      type: object
+      additionalProperties: false
+      required:
+      - decision
+      - reasonCode
+      - expectedRevisionId
+      properties:
+        decision:
+          type: string
+          enum:
+          - APPROVED
+          - REJECTED
+          - CORRECTION_REQUIRED
+          - RESTRICTED
+        reasonCode:
+          type: string
+        expectedRevisionId:
+          type: string
+          format: uuid
+        comment:
+          type: string
+    ReasonedAction:
+      type: object
+      additionalProperties: false
+      required:
+      - reasonCode
+      properties:
+        reasonCode:
+          type: string
+        comment:
+          type: string
+    UploadInit:
+      type: object
+      additionalProperties: false
+      required:
+      - fileName
+      - mimeType
+      - byteLength
+      - rightsAttested
+      properties:
+        fileName:
+          type: string
+        mimeType:
+          type: string
+        byteLength:
+          type: integer
+          minimum: 1
+        rightsAttested:
+          type: boolean
+        sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+    ZipImport:
+      type: object
+      additionalProperties: false
+      required:
+      - fileUploadId
+      - mappingManifestId
+      properties:
+        fileUploadId:
+          type: string
+          format: uuid
+        mappingManifestId:
+          type: string
+          format: uuid
+        retryMode:
+          type: string
+          enum:
+          - ALL
+          - FAILED_ONLY
+    ImportMapping:
+      type: object
+      additionalProperties: false
+      required:
+      - sourceSchemaVersion
+      - mappings
+      - expectedBatchVersion
+      properties:
+        sourceSchemaVersion:
+          type: string
+        mappings:
+          type: object
+          additionalProperties:
+            type: string
+        expectedBatchVersion:
+          type: integer
+          minimum: 1
+    ImportConfirm:
+      type: object
+      additionalProperties: false
+      required:
+      - previewHash
+      - previewRevision
+      - allowPartial
+      properties:
+        previewHash:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+        previewRevision:
+          type: integer
+          minimum: 1
+        allowPartial:
+          type: boolean
+    RetryRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - mode
+      properties:
+        mode:
+          type: string
+          const: FAILED_ONLY
+        errorCodes:
+          type: array
+          items:
+            type: string
+    StockLocationCreate:
+      type: object
+      additionalProperties: false
+      required:
+      - locationCode
+      - name
+      properties:
+        locationCode:
+          type: string
+        name:
+          type: string
+    StockAdjustmentProposal:
+      type: object
+      additionalProperties: false
+      required:
+      - variantId
+      - locationId
+      - deltaPhysical
+      - expectedBalanceVersion
+      - reasonCode
+      properties:
+        variantId:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        deltaPhysical:
+          type: integer
+        expectedBalanceVersion:
+          type: integer
+          minimum: 1
+        reasonCode:
+          type: string
+        evidenceRef:
+          type: string
+    StockAdjustmentDecision:
+      type: object
+      additionalProperties: false
+      required:
+      - decision
+      - reasonCode
+      properties:
+        decision:
+          type: string
+          enum:
+          - APPROVED
+          - REJECTED
+        reasonCode:
+          type: string
+    CycleCountCreate:
+      type: object
+      additionalProperties: false
+      required:
+      - variantId
+      - locationId
+      - reportedPhysical
+      - expectedBalanceVersion
+      properties:
+        variantId:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        reportedPhysical:
+          type: integer
+          minimum: 0
+        expectedBalanceVersion:
+          type: integer
+          minimum: 1
+    ReconciliationResolution:
+      type: object
+      additionalProperties: false
+      required:
+      - decision
+      - reasonCode
+      - expectedCaseVersion
+      properties:
+        decision:
+          type: string
+          enum:
+          - DISMISS
+          - COMPENSATE
+        reasonCode:
+          type: string
+        expectedCaseVersion:
+          type: integer
+          minimum: 1
+        approvedAdjustmentId:
+          type: string
+          format: uuid
+    ProductPatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        categorySchemaVersion:
+          type: integer
+          minimum: 1
+        attributes:
+          type: object
+          additionalProperties: true
+    ImportResults:
+      type: object
+      required:
+      - batchId
+      - items
+      properties:
+        batchId:
+          type: string
+          format: uuid
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              rowNumber:
+                type: integer
+              status:
+                type: string
+              errorCodes:
+                type: array
+                items:
+                  type: string
+              effectReceiptId:
+                type: string
+                format: uuid
+        nextCursor:
+          type:
+          - string
+          - 'null'
+    MovementSummary:
+      type: object
+      required:
+      - id
+      - reason
+      - deltaPhysical
+      - recordedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        reason:
+          type: string
+        deltaPhysical:
+          type: integer
+        recordedAt:
+          type: string
+          format: date-time
+    ReconciliationCase:
+      type: object
+      required:
+      - id
+      - state
+      - reasonCode
+      properties:
+        id:
+          type: string
+          format: uuid
+        state:
+          type: string
+        reasonCode:
+          type: string
+    PagedCategories:
+      type: object
+      required:
+      - items
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategorySummary'
+        nextCursor:
+          type:
+          - string
+          - 'null'
+    PagedProducts:
+      type: object
+      required:
+      - items
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductSummary'
+        nextCursor:
+          type:
+          - string
+          - 'null'
+    PagedMovements:
+      type: object
+      required:
+      - items
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MovementSummary'
+        nextCursor:
+          type:
+          - string
+          - 'null'
+    PagedStockBalances:
+      type: object
+      required:
+      - items
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockBalance'
+        nextCursor:
+          type:
+          - string
+          - 'null'
+    PagedReconciliations:
+      type: object
+      required:
+      - items
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconciliationCase'
+        nextCursor:
+          type:
+          - string
+          - 'null'
+    PagedAttributeDefinitions:
+      type: object
+      required:
+      - items
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttributeDefinition'
+        nextCursor:
+          type:
+          - string
+          - 'null'
+    CategorySchemaVersion:
+      type: object
+      additionalProperties: false
+      required:
+      - categoryId
+      - version
+      - state
+      - validatorVersion
+      - rulesetSha256
+      - attributes
+      properties:
+        categoryId:
+          type: string
+          format: uuid
+        version:
+          type: integer
+          minimum: 1
+        state:
+          type: string
+          enum:
+          - DRAFT
+          - PUBLISHED
+        validatorVersion:
+          type: string
+        rulesetSha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+        attributes:
+          type: array
+          items:
+            $ref: '#/components/schemas/AttributeDefinition'
+    VariantDetail:
+      type: object
+      required:
+      - id
+      - productId
+      - brandId
+      - sku
+      - options
+      - variantState
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        brandId:
+          type: string
+          format: uuid
+        sku:
+          type: string
+        options:
+          type: object
+          additionalProperties:
+            type: string
+        variantState:
+          type: string
+        priceVersions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PriceVersion'
+        mediaLinks:
+          type: array
+          items:
+            $ref: '#/components/schemas/MediaLink'
+    PriceVersion:
+      type: object
+      required:
+      - id
+      - variantId
+      - currency
+      - amountMinor
+      - mrpMinor
+      - priceState
+      - validFrom
+      properties:
+        id:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+        currency:
+          type: string
+          const: INR
+        amountMinor:
+          type: integer
+          minimum: 0
+        mrpMinor:
+          type: integer
+          minimum: 1
+        priceState:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING
+          - APPROVED
+          - REJECTED
+          - EXPIRED
+        validFrom:
+          type: string
+          format: date-time
+        validTo:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        rowVersion:
+          type: integer
+          minimum: 1
+    MediaLink:
+      type: object
+      required:
+      - id
+      - mediaAssetId
+      - productId
+      - displayRole
+      - displayOrder
+      - scanState
+      - rightsState
+      properties:
+        id:
+          type: string
+          format: uuid
+        mediaAssetId:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        variantId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        displayRole:
+          type: string
+        displayOrder:
+          type: integer
+          minimum: 0
+        scanState:
+          type: string
+          enum:
+          - PENDING
+          - CLEAN
+          - REJECTED
+        rightsState:
+          type: string
+          enum:
+          - UNVERIFIED
+          - ATTESTED
+          - REVIEWED
+          - REVOKED
+    ProductDetail:
+      allOf:
+      - $ref: '#/components/schemas/ProductSummary'
+      - type: object
+        required:
+        - categoryId
+        - categorySchemaVersion
+        - rowVersion
+        - variants
+        - mediaLinks
+        - attributes
+        - qcState
+        properties:
+          categoryId:
+            type: string
+            format: uuid
+          categorySchemaVersion:
+            type: integer
+            minimum: 1
+          rowVersion:
+            type: integer
+            minimum: 1
+          qcState:
+            type: string
+          draftRevisionId:
+            type:
+            - string
+            - 'null'
+            format: uuid
+          publishedRevisionId:
+            type:
+            - string
+            - 'null'
+            format: uuid
+          approvedReviewId:
+            type:
+            - string
+            - 'null'
+            format: uuid
+          variants:
+            type: array
+            items:
+              $ref: '#/components/schemas/VariantDetail'
+          mediaLinks:
+            type: array
+            items:
+              $ref: '#/components/schemas/MediaLink'
+          attributes:
+            type: object
+            additionalProperties: true
+    MediaUploadIntent:
+      type: object
+      required:
+      - mediaAssetId
+      - uploadMethod
+      - uploadUrl
+      - expiresAt
+      - headers
+      properties:
+        mediaAssetId:
+          type: string
+          format: uuid
+        uploadMethod:
+          type: string
+          const: PUT
+        uploadUrl:
+          type: string
+          format: uri
+        expiresAt:
+          type: string
+          format: date-time
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+    MediaUploadComplete:
+      type: object
+      required:
+      - sha256
+      - sizeBytes
+      properties:
+        sha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+        sizeBytes:
+          type: integer
+          minimum: 1
+    MediaAssetStatus:
+      type: object
+      required:
+      - id
+      - scanState
+      - rightsState
+      properties:
+        id:
+          type: string
+          format: uuid
+        scanState:
+          type: string
+        rightsState:
+          type: string
+        derivativeState:
+          type: string
+        safePreviewUrl:
+          type:
+          - string
+          - 'null'
+          format: uri
+    AttachMediaRequest:
+      type: object
+      required:
+      - mediaAssetId
+      - displayRole
+      - displayOrder
+      properties:
+        mediaAssetId:
+          type: string
+          format: uuid
+        variantId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        displayRole:
+          type: string
+        displayOrder:
+          type: integer
+          minimum: 0
+        altText:
+          type: string
+          maxLength: 500
+    UpdateMediaLinkRequest:
+      type: object
+      minProperties: 1
+      properties:
+        displayOrder:
+          type: integer
+          minimum: 0
+        displayRole:
+          type: string
+        altText:
+          type: string
+    PriceDecision:
+      type: object
+      additionalProperties: false
+      required:
+      - decision
+      - reasonCode
+      properties:
+        decision:
+          type: string
+          enum:
+          - APPROVE
+          - REJECT
+        reasonCode:
+          type: string
+        comment:
+          type: string
+        expectedState:
+          type: string
+          const: PENDING
+    PriceHistory:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PriceVersion'
+        nextCursor:
+          type:
+          - string
+          - 'null'
+    PublicationReceipt:
+      type: object
+      required:
+      - productId
+      - revisionId
+      - reviewId
+      - publicationVersion
+      - status
+      properties:
+        productId:
+          type: string
+          format: uuid
+        revisionId:
+          type: string
+          format: uuid
+        reviewId:
+          type: string
+          format: uuid
+        publicationVersion:
+          type: integer
+          minimum: 1
+        status:
+          type: string
+          enum:
+          - PUBLISHED
+          - RESTRICTED
+          - ARCHIVED
+        outboxEventId:
+          type: string
+          format: uuid
+    ImportPreviewSnapshot:
+      type: object
+      required:
+      - batchId
+      - previewRevision
+      - previewHash
+      - mappingVersion
+      - sourceSha256
+      - taxonomySnapshotSha256
+      - conflicts
+      properties:
+        batchId:
+          type: string
+          format: uuid
+        previewRevision:
+          type: integer
+          minimum: 1
+        previewHash:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+        mappingVersion:
+          type: integer
+          minimum: 1
+        sourceSha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+        taxonomySnapshotSha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+        conflicts:
+          type: array
+          items:
+            type: object
+    ImportEffectReceipt:
+      type: object
+      required:
+      - rowId
+      - effectKind
+      - logicalTargetKey
+      - effectKey
+      - payloadHash
+      - outcome
+      properties:
+        rowId:
+          type: string
+          format: uuid
+        effectKind:
+          type: string
+        logicalTargetKey:
+          type: string
+        effectKey:
+          type: string
+        payloadHash:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+        targetMediaAssetId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        outcome:
+          type: string
+    StockEventReceipt:
+      type: object
+      required:
+      - brandId
+      - variantId
+      - locationId
+      - poolSequence
+      - eventId
+      - payloadSha256
+      - balanceVersion
+      properties:
+        brandId:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        poolSequence:
+          type: integer
+          minimum: 2
+        eventId:
+          type: string
+          format: uuid
+        payloadSha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+        balanceVersion:
+          type: integer
+          minimum: 2
+    CategorySchemaProposal:
+      type: object
+      required:
+      - categoryId
+      - version
+      - ruleset
+      - validatorVersion
+      properties:
+        categoryId:
+          type: string
+          format: uuid
+        version:
+          type: integer
+          minimum: 1
+        ruleset:
+          type: object
+        validatorVersion:
+          type: string
+    SubmitProductRevision:
+      type: object
+      required:
+      - draftContentVersion
+      - categorySchemaVersion
+      - contentSha256
+      properties:
+        draftContentVersion:
+          type: integer
+          minimum: 1
+        categorySchemaVersion:
+          type: integer
+          minimum: 1
+        contentSha256:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+    PublishRevision:
+      type: object
+      required:
+      - approvedRevisionId
+      - approvedReviewId
+      - expectedProductVersion
+      properties:
+        approvedRevisionId:
+          type: string
+          format: uuid
+        approvedReviewId:
+          type: string
+          format: uuid
+        expectedProductVersion:
+          type: integer
+          minimum: 1
+    UpdateVariant:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        options:
+          type: object
+          additionalProperties:
+            type: string
+        weightG:
+          type: integer
+          minimum: 0
+        gtin:
+          type:
+          - string
+          - 'null'
+        reasonCode:
+          type: string
+    DeactivateVariant:
+      type: object
+      required:
+      - reasonCode
+      properties:
+        reasonCode:
+          type: string
+        expectedVariantVersion:
+          type: integer
+          minimum: 1
+    CreateClaim:
+      type: object
+      required:
+      - claimCode
+      - claimText
+      - evidenceAssetIds
+      properties:
+        claimCode:
+          type: string
+        claimText:
+          type: string
+        evidenceAssetIds:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            format: uuid
+        expiresAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+    ClaimDetail:
+      type: object
+      required:
+      - id
+      - productId
+      - brandId
+      - claimCode
+      - claimText
+      - claimState
+      - evidenceAssetIds
+      properties:
+        id:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        brandId:
+          type: string
+          format: uuid
+        claimCode:
+          type: string
+        claimText:
+          type: string
+        claimState:
+          type: string
+          enum:
+          - PENDING
+          - VERIFIED
+          - REJECTED
+          - EXPIRED
+          - REVOKED
+        expiresAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        evidenceAssetIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+    ClaimsList:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClaimDetail'
+    ClaimDecision:
+      type: object
+      required:
+      - decision
+      - reasonCode
+      properties:
+        decision:
+          type: string
+          enum:
+          - VERIFY
+          - REJECT
+          - REVOKE
+        reasonCode:
+          type: string
+        comment:
+          type: string
+x-renivet-known-gaps:
+- Returned list item schemas are semantic candidates and may need paginated response wrappers before SDK generation.
+- Actual W1 CSRF cookie/header and permission roles must be mapped, not invented.
+- Category conditional validation and media upload ticket protocol need implemented/contract-tested.
+- No public W3 allocation endpoint; COD priority still requires an explicit W3 decision.
+x-renivet-contract-boundaries:
+  W2: Catalog/media/import/stock-ops technical contracts, no verified handlers yet
+  W3: Payment verification, COD admission, allocation command queue and refunds are outside this OpenAPI, not deployed
+  security: Brand routes require W1 BrandAccessGuard and same-statement scoped predicate; platform taxonomy requires
+    reviewed separate global guard
+  sessions: __Host-renivet_session; CSRF and MFA conditions follow W1

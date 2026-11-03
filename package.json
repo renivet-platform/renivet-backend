@@ -9,7 +9,7 @@
     "dev": "nest start --watch",
     "build": "nest build",
     "api:generate": "npm run build && node scripts/export-openapi.cjs && node node_modules/openapi-typescript/bin/cli.js openapi/renivet.openapi.json -o src/generated/api-schema.d.ts",
-    "api:check": "npm run build && node scripts/check-generated-api.cjs && node scripts/check-postman-contract.cjs",
+    "api:check": "npm run build && node scripts/check-generated-api.cjs && node scripts/check-postman-contract.cjs && node scripts/w2-contract-traceability.cjs",
     "start": "node dist/main.js",
     "lint": "eslint \"src/**/*.ts\" drizzle.config.ts",
     "test": "node --test tests/*.test.cjs",
@@ -42,6 +42,7 @@
     "@types/pg": "^8.11.0",
     "drizzle-kit": "^0.31.11",
     "eslint": "^10.13.0",
+    "js-yaml": "^5.5.0",
     "openapi-typescript": "^7.13.0",
     "typescript": "^5.6.0",
     "typescript-eslint": "^8.72.0"
