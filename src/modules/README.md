@@ -10,6 +10,8 @@ Future brand-owned handlers must use `@UseGuards(BrandAccessGuard)` and `@Requir
 
 The predicate checks `access.effective_permissions` in the same SQL statement. Keep permission resolution uncached and run protected operations as short autocommit/READ COMMITTED units. A committed revocation is visible to the next statement using a fresh READ COMMITTED snapshot; an already-running statement or older transaction snapshot cannot be cancelled retroactively. The existing permission view evaluates time windows with PostgreSQL `CURRENT_TIMESTAMP`, so expiry is relative to transaction start. A detail query with no scoped row should use the endpoint's reviewed non-disclosing not-found policy. Cookie-authenticated mutations still require their separately reviewed CSRF and, where applicable, MFA guards.
 
+Global taxonomy administration uses `@RequireGlobalTaxonomyPermission('taxonomy.manage' | 'taxonomy.approve')`. It composes `PlatformPermissionGuard` with `MfaGuard`: the permission must be globally effective from the W1 session, and persisted MFA freshness must be within five minutes. The permission codes are not granted or seeded by this decorator; approved global grants remain an owner-controlled prerequisite. Cookie-authenticated mutations also require the existing CSRF policy.
+
 REN2-27 tests these rules against temporary synthetic tables in the disposable PostgreSQL 16 CI database; no permanent business resource table or endpoint is introduced.
 
 ## Existing business boundaries

@@ -11,7 +11,7 @@ import { Reflector } from '@nestjs/core';
 import { MfaService } from '../../modules/identity/mfa.service';
 import { readSessionToken, SessionService } from '../../modules/identity/session.service';
 
-export type PrivilegedAction = 'brand.manage' | 'staff.manage' | 'finance.evidence.manage';
+export type PrivilegedAction = 'brand.manage' | 'staff.manage' | 'finance.evidence.manage' | 'taxonomy.manage' | 'taxonomy.approve';
 export const REQUIRE_MFA_ACTION = 'renivet:require-mfa-action';
 export const MFA_STEP_UP_MAX_AGE_SECONDS = 300;
 
@@ -43,7 +43,7 @@ export class MfaGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const action = this.reflector.get<PrivilegedAction>(REQUIRE_MFA_ACTION, context.getHandler())
       ?? this.reflector.get<PrivilegedAction>(REQUIRE_MFA_ACTION, context.getClass());
-    if (!action || !['brand.manage', 'staff.manage', 'finance.evidence.manage'].includes(action)) {
+    if (!action || !['brand.manage', 'staff.manage', 'finance.evidence.manage', 'taxonomy.manage', 'taxonomy.approve'].includes(action)) {
       throw new HttpException({ code: 'AUTH_POLICY_CONFIGURATION_ERROR', message: 'The operation could not be authorized.' }, 500);
     }
 

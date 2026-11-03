@@ -29,7 +29,24 @@ test('failure details normalize to a safe code without preserving raw exception 
 });
 
 test('operator recovery fails closed when no authorization policy is configured', async () => {
-  const worker = new DurableWorker({}, [{ consumerId: 'test-consumer', eventTypes: ['test.event'], async handle() {} }]);
+  const worker = new DurableWorker({}, [{ consumerId: 'test-consumer', eventTypes: ['test.event'], authorization: { scope: 'system' }, async handle() {} }]);
   await assert.rejects(worker.recoverDeadLetter('case-id', 'actor-id', 'OPERATOR_RETRY'), /not authorized/);
   await assert.rejects(worker.runOnce('unregistered-consumer'), /not registered/);
+});
+
+test('brand-scoped consumers require an authorization port and declare purpose plus effects', () => {
+  const handler = {
+    consumerId: 'brand-media-worker',
+    eventTypes: ['media.asset.ready'],
+    authorization: { scope: 'brand', purpose: 'media.derivative', effects: ['media.derivative.create'] },
+    async handle() {},
+  };
+  assert.throws(() => new DurableWorker({}, [handler]), /authorization provider/);
+  assert.throws(() => new DurableWorker({}, [{ consumerId: 'implicit-scope', eventTypes: ['test.event'], async handle() {} }]), /declare an authorization scope/);
+  assert.throws(() => new DurableWorker({}, [{ ...handler, authorization: { scope: 'brand', purpose: '', effects: [] } }], {
+    workerAuthorization: { bindJob: async () => {}, authorize: async () => ({}) },
+  }), /purpose and permitted effects/);
+  assert.doesNotThrow(() => new DurableWorker({}, [handler], {
+    workerAuthorization: { bindJob: async () => {}, authorize: async () => ({}) },
+  }));
 });

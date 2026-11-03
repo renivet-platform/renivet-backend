@@ -1,6 +1,8 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { PlatformPermissionGuard, REQUIRE_PLATFORM_PERMISSION, RequirePlatformPermission } = require('../dist/modules/access/platform-permission.guard.js');
+const { REQUIRE_MFA_ACTION } = require('../dist/common/guards/require-mfa.js');
+const { RequireGlobalTaxonomyPermission } = require('../dist/modules/access/taxonomy-admin.decorator.js');
 
 const token = 'T'.repeat(43);
 const userId = '11111111-1111-4111-8111-111111111111';
@@ -25,8 +27,22 @@ test('platform permission decorator declares global permission metadata', () => 
   assert.equal(typeof RequirePlatformPermission('taxonomy.manage'), 'function');
 });
 
+test('global taxonomy decorator composes global permission and MFA metadata', () => {
+  class TaxonomyController {}
+  RequireGlobalTaxonomyPermission('taxonomy.approve')(TaxonomyController);
+  assert.equal(Reflect.getMetadata(REQUIRE_PLATFORM_PERMISSION, TaxonomyController), 'taxonomy.approve');
+  assert.equal(Reflect.getMetadata(REQUIRE_MFA_ACTION, TaxonomyController), 'taxonomy.approve');
+  assert.ok(Reflect.getMetadata('__guards__', TaxonomyController).length >= 2);
+});
+
 test('brand role without a global taxonomy grant is denied and client claims cannot elevate it', async () => {
   const h = harness({ granted: false });
+  await assert.rejects(h.guard.canActivate(h.context), (error) => error.getStatus() === 403);
+  assert.equal(h.request.platformPermission, undefined);
+});
+
+test('brand role without global taxonomy.approve cannot call platform taxonomy admin', async () => {
+  const h = harness({ permission: 'taxonomy.approve', granted: false });
   await assert.rejects(h.guard.canActivate(h.context), (error) => error.getStatus() === 403);
   assert.equal(h.request.platformPermission, undefined);
 });

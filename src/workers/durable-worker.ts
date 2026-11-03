@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
+import type { BrandWorkerPolicy, WorkerAuthorizationContext, WorkerAuthorizationPort } from './worker-authorization';
 
 const MAX_LEASE_SECONDS = 300;
 const DEFAULT_MAX_ATTEMPTS = 5;
@@ -57,7 +58,8 @@ export type DurableJob = {
 export type EventHandler = {
   consumerId: string;
   eventTypes: readonly string[];
-  handle(event: DurableEvent, transaction: PoolClient): Promise<void>;
+  authorization: Readonly<{ scope: 'system' }> | Readonly<{ scope: 'brand'; purpose: string; effects: readonly string[] }>;
+  handle(event: DurableEvent, transaction: PoolClient, authorization?: WorkerAuthorizationContext): Promise<void>;
 };
 
 export type WorkerLog = (entry: Readonly<Record<string, string | number>>) => void;
@@ -89,6 +91,7 @@ export class DurableWorker {
       log?: WorkerLog;
       metrics?: WorkerMetrics;
       authorizeRecovery?: RecoveryAuthorizer;
+      workerAuthorization?: WorkerAuthorizationPort;
     } = {},
   ) {
     const leaseSeconds = options.leaseSeconds ?? 60;
@@ -103,6 +106,21 @@ export class DurableWorker {
         handlers.some((handler) => !/^[a-z][a-z0-9._-]{0,63}$/.test(handler.consumerId) ||
           handler.eventTypes.length === 0 || handler.eventTypes.some((type) => !/^[a-z][a-z0-9._-]{0,127}$/.test(type)))) {
       throw new TypeError('consumerId values must be unique safe identifiers');
+    }
+    if (handlers.some((handler) => !handler.authorization || !['system', 'brand'].includes(handler.authorization.scope))) {
+      throw new TypeError('every consumer must declare an authorization scope');
+    }
+    if (handlers.some((handler) => handler.authorization?.scope === 'brand' &&
+      (!options.workerAuthorization || typeof options.workerAuthorization.bindJob !== 'function' ||
+        typeof options.workerAuthorization.authorize !== 'function'))) {
+      throw new TypeError('brand-scoped consumers require a worker authorization provider');
+    }
+    if (handlers.some((handler) => handler.authorization?.scope === 'brand' &&
+      (typeof handler.authorization.purpose !== 'string' || !/^[a-z][a-z0-9._-]{0,127}$/.test(handler.authorization.purpose) ||
+        !Array.isArray(handler.authorization.effects) || handler.authorization.effects.length === 0 || handler.authorization.effects.length > 32 ||
+        handler.authorization.effects.some((effect) => typeof effect !== 'string' || !/^[a-z][a-z0-9._-]{0,127}$/.test(effect)) ||
+        new Set(handler.authorization.effects).size !== handler.authorization.effects.length))) {
+      throw new TypeError('brand-scoped consumers must declare a purpose and permitted effects');
     }
   }
 
@@ -128,11 +146,21 @@ export class DurableWorker {
         const matchingHandlers = this.handlers.filter((handler) => handler.eventTypes.includes(event.eventType));
         if (matchingHandlers.length === 0) continue;
         for (const handler of matchingHandlers) {
-          await client.query(
+          const inserted = await client.query<{ id: string }>(
             `INSERT INTO platform.durable_jobs (job_kind, business_key, max_attempts)
-             VALUES ($1, $2, $3) ON CONFLICT (job_kind, business_key) DO NOTHING`,
+             VALUES ($1, $2, $3) ON CONFLICT (job_kind, business_key) DO NOTHING RETURNING id`,
             [handler.consumerId, event.id, this.options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS],
           );
+          const jobId = inserted.rows[0]?.id ?? (await client.query<{ id: string }>(
+            'SELECT id FROM platform.durable_jobs WHERE job_kind = $1 AND business_key = $2', [handler.consumerId, event.id],
+          )).rows[0]?.id;
+          if (!jobId) throw new Error('durable job could not be resolved');
+          if (handler.authorization.scope === 'brand') {
+            const policy: BrandWorkerPolicy = { purpose: handler.authorization.purpose, effects: handler.authorization.effects };
+            await this.options.workerAuthorization!.bindJob(
+              { jobId, consumerId: handler.consumerId, event, policy }, client,
+            );
+          }
         }
         await client.query(
           'UPDATE platform.outbox_events SET delivered_at = now(), updated_at = now() WHERE id = $1',
@@ -272,7 +300,16 @@ export class DurableWorker {
            VALUES ($1, $2, $3) ON CONFLICT (consumer_id, message_id) DO NOTHING RETURNING id`,
           [job.jobKind, event.rows[0].id, event.rows[0].eventVersion],
         );
-        if (receipt.rowCount === 1) await handler.handle(event.rows[0], client);
+        if (receipt.rowCount === 1) {
+          let authorization: WorkerAuthorizationContext | undefined;
+          if (handler.authorization.scope === 'brand') {
+            const policy: BrandWorkerPolicy = { purpose: handler.authorization.purpose, effects: handler.authorization.effects };
+            authorization = await this.options.workerAuthorization!.authorize(
+              { job, event: event.rows[0], policy }, client,
+            );
+          }
+          await handler.handle(event.rows[0], client, authorization);
+        }
         const completed = await client.query(
           `UPDATE platform.durable_jobs SET state = 'succeeded', lease_until = NULL,
              lease_owner = NULL, lease_started_at = NULL, updated_at = now(), row_version = row_version + 1

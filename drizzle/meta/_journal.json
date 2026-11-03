@@ -50,6 +50,13 @@
       "when": 1793703283726,
       "tag": "0006_ren2_50_w2_catalog_inventory",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793705000000,
+      "tag": "0007_ren2_51_worker_authorization_audit",
+      "breakpoints": true
     }
   ]
 }

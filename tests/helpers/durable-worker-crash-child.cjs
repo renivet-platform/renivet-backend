@@ -11,6 +11,7 @@ async function main() {
   const worker = new DurableWorker(pool, [{
     consumerId: job.jobKind,
     eventTypes: ['test.worker.created'],
+    authorization: { scope: 'system' },
     async handle(_event, transaction) {
       await transaction.query('INSERT INTO system_events (event_name) VALUES ($1)', [effectName]);
       if (mode === 'before_commit') process.exit(71);
