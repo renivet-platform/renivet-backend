@@ -124,6 +124,43 @@ test('REN2-52 detects success-status, error-schema, header and DTO drift', () =>
   assert.ok(compareOperationContracts(expected, wrongStatus).some((error) => /response status codes differ/i.test(error)));
 });
 
+test('REN2-59 permits documented read revalidation extensions while preserving response schema checks', () => {
+  const candidate = structuredClone(candidateSpec);
+  const active = structuredClone(activeSpec);
+  const id = 'listCategories';
+  const candidateOperation = candidate.paths['/brands/{brandId}/categories'].get;
+  const activeOperation = active.paths['/api/v1/brands/{brandId}/categories'].get;
+  activeOperation.responses['304'] = { description: 'Not modified' };
+  activeOperation.responses['400'] = { description: 'Invalid cursor' };
+  activeOperation.responses['200'].headers = {
+    ETag: { schema: { type: 'string' } },
+    'Cache-Control': { schema: { type: 'string' } },
+  };
+  activeOperation.parameters = [
+    ...(activeOperation.parameters ?? []),
+    { name: 'If-None-Match', in: 'header', required: false, schema: { type: 'string' } },
+  ];
+  activeOperation.operationId = id;
+  assert.deepEqual(compareOperationContracts(
+    candidateOperation,
+    activeOperation,
+    candidate,
+    active,
+    candidate.paths['/brands/{brandId}/categories'],
+    active.paths['/api/v1/brands/{brandId}/categories'],
+  ), []);
+
+  activeOperation.responses['200'].headers.ETag.schema.type = 'integer';
+  assert.ok(compareOperationContracts(
+    candidateOperation,
+    activeOperation,
+    candidate,
+    active,
+    candidate.paths['/brands/{brandId}/categories'],
+    active.paths['/api/v1/brands/{brandId}/categories'],
+  ).some((error) => /200.*cache header/i.test(error)));
+});
+
 test('REN2-52 rejects mutations without the W1 session cookie CSRF and idempotency policy', () => {
   const candidate = structuredClone(candidateSpec);
   const productCreate = candidate.paths['/brands/{brandId}/products'].post;
@@ -140,7 +177,7 @@ test('REN2-52 permits a live slice only with a matching operation, verified test
   const candidate = structuredClone(candidateSpec);
   const manifest = structuredClone(traceability);
   const active = structuredClone(activeSpec);
-  for (const entry of manifest.operations.filter(({ ownerIssue }) => ownerIssue === 'REN2-58')) {
+  for (const entry of manifest.operations.filter(({ ownerIssue }) => ['REN2-58', 'REN2-59'].includes(ownerIssue))) {
     entry.implementation = {
       status: 'design_only',
       test: { status: 'pending', path: `tests/w2/${entry.operationId}.test.cjs` },

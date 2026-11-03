@@ -7,18 +7,24 @@ import { BrandAccessRepository } from '../access/brand-access.repository';
 import { PlatformPermissionGuard } from '../access/platform-permission.guard';
 import { IdentityModule } from '../identity/identity.module';
 import { SessionService } from '../identity/session.service';
+import { CatalogReadController } from './catalog-read.controller';
+import { CatalogReadPostgresRepository } from './catalog-read.repository';
+import { CATALOG_READ_REPOSITORY, CatalogReadService } from './catalog-read.service';
 import { TaxonomyAdminController } from './taxonomy-admin.controller';
 import { TaxonomyAdminPostgresRepository } from './taxonomy-admin.repository';
 import { TAXONOMY_ADMIN_REPOSITORY, TaxonomyAdminService } from './taxonomy-admin.service';
 
-// REN2-58 registers only the two reviewed global taxonomy schema operations.
+// REN2-59 adds only the approved brand-scoped taxonomy read operations.
 @Module({
   imports: [ConfigModule, IdentityModule, AccessModule],
-  controllers: [TaxonomyAdminController],
+  controllers: [TaxonomyAdminController, CatalogReadController],
   providers: [
     TaxonomyAdminPostgresRepository,
     { provide: TAXONOMY_ADMIN_REPOSITORY, useExisting: TaxonomyAdminPostgresRepository },
     TaxonomyAdminService,
+    CatalogReadPostgresRepository,
+    { provide: CATALOG_READ_REPOSITORY, useExisting: CatalogReadPostgresRepository },
+    CatalogReadService,
     {
       provide: PlatformPermissionGuard,
       useFactory: (reflector: Reflector, sessions: SessionService, access: BrandAccessRepository) =>

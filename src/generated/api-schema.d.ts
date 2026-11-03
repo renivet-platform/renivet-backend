@@ -264,6 +264,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/brands/{brandId}/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the shared category tree for a brand catalog form
+         * @description Returns parent and leaf nodes with path, active state and current schema version. Non-leaf or inactive nodes are informational and must not be selected for product submission. Revalidates the private representation on every request; a schema or category change produces a new ETag. Linear: REN2-59.
+         */
+        get: operations["listCategories"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/brands/{brandId}/categories/{categoryId}/attributes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the current published typed category attributes
+         * @description Returns the immutable rules in the category current published schema snapshot. Pagination cursors are bound to that version and fail closed after a publish; use getCategorySchemaVersion for a specific historical version. Linear: REN2-59.
+         */
+        get: operations["getCategoryAttributes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/brands/{brandId}/categories/{categoryId}/schema-versions/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read an exact published category schema version
+         * @description Returns a historical published schema and its immutable typed rules without substituting the latest version. The ETag remains stable for this frozen snapshot. Linear: REN2-59.
+         */
+        get: operations["getCategorySchemaVersion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -459,6 +519,61 @@ export interface components {
             details?: {
                 [key: string]: unknown;
             };
+        };
+        CategorySummaryDto: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            name: string;
+            schemaVersion: number;
+            /** Format: uuid */
+            parentId: string | null;
+            isLeaf: boolean;
+            isActive: boolean;
+            currentSchemaVersion: number;
+            pathCodes?: string[];
+        };
+        PagedCategoriesDto: {
+            items: components["schemas"]["CategorySummaryDto"][];
+            nextCursor?: string | null;
+        };
+        CategoryReadErrorDto: {
+            code: string;
+            message: string;
+            requestId: string;
+            details?: {
+                [key: string]: unknown;
+            };
+        };
+        AttributeDefinitionDto: {
+            code: string;
+            /** @enum {string} */
+            scope: "PRODUCT" | "VARIANT";
+            /** @enum {string} */
+            type: "text" | "integer" | "decimal" | "boolean" | "enum" | "multi_enum" | "date" | "measurement";
+            required: boolean;
+            condition?: Record<string, never> | null;
+            allowedValues?: string[];
+            /** Format: uuid */
+            schemaVersionId?: string;
+            validatorVersion?: string;
+            conditionalAst?: Record<string, never> | null;
+            /** @enum {string} */
+            scopeType?: "product" | "variant";
+        };
+        PagedAttributeDefinitionsDto: {
+            items: components["schemas"]["AttributeDefinitionDto"][];
+            nextCursor?: string | null;
+        };
+        CategorySchemaVersionReadDto: {
+            /** Format: uuid */
+            categoryId: string;
+            version: number;
+            /** @enum {string} */
+            state: "DRAFT" | "PUBLISHED";
+            validatorVersion: string;
+            rulesetSha256: string;
+            attributes: components["schemas"]["AttributeDefinitionDto"][];
         };
     };
     responses: never;
@@ -1445,6 +1560,313 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TaxonomyErrorDto"];
+                };
+            };
+        };
+    };
+    listCategories: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+            };
+            header?: {
+                /** @description Revalidate a previously returned page ETag. */
+                "If-None-Match"?: string;
+            };
+            path: {
+                brandId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated category tree. Cache-Control is private, no-cache; ETag covers this page and its cursor. */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PagedCategoriesDto"];
+                };
+            };
+            /** @description The page representation is unchanged for the supplied If-None-Match. */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid category cursor or page size. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+            /** @description Brand permission denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+            /** @description Brand or category resource was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+            /** @description Category state prevents the requested read. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+            /** @description The supplied category query is invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+            /** @description Taxonomy read storage is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+        };
+    };
+    getCategoryAttributes: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+            };
+            header?: {
+                "If-None-Match"?: string;
+            };
+            path: {
+                brandId: string;
+                categoryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paged typed attributes. Cache-Control is private, no-cache; ETag is version and page specific. */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PagedAttributeDefinitionsDto"];
+                };
+            };
+            /** @description The page representation is unchanged for the supplied If-None-Match. */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid category identifier, cursor or page size. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+            /** @description Brand permission denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+            /** @description Category does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+            /** @description Category state prevents the requested read. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+            /** @description The supplied category query is invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+            /** @description Taxonomy read storage is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+        };
+    };
+    getCategorySchemaVersion: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-None-Match"?: string;
+            };
+            path: {
+                brandId: string;
+                categoryId: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Exact published category schema version. */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategorySchemaVersionReadDto"];
+                };
+            };
+            /** @description The exact version representation is unchanged for the supplied If-None-Match. */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid category identifier or version. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+            /** @description Brand permission denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+            /** @description Category or published schema version does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+            /** @description Category state prevents the requested read. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+            /** @description The selected schema version is stale. */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+            /** @description The supplied category or version is invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+            /** @description Taxonomy read storage is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
                 };
             };
         };

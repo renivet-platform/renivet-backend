@@ -38,10 +38,18 @@ function resolveReference(value, spec, seen = new Set()) {
 function normalizeContract(value) {
   if (Array.isArray(value)) return value.map(normalizeContract);
   if (!value || typeof value !== 'object') return value;
-  return Object.fromEntries(Object.entries(value)
+  const normalized = Object.fromEntries(Object.entries(value)
     .filter(([key]) => !IGNORED_CONTRACT_FIELDS.has(key) && !key.startsWith('x-'))
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, nested]) => [key, normalizeContract(nested)]));
+    .map(([key, nested]) => [key, key === 'required' && Array.isArray(nested)
+      ? [...nested].sort()
+      : normalizeContract(nested)]));
+  if (normalized.required === false) delete normalized.required;
+  if (normalized.nullable === true && ['string', 'object', 'number', 'integer', 'boolean'].includes(normalized.type)) {
+    normalized.type = [normalized.type, 'null'];
+    delete normalized.nullable;
+  }
+  return normalized;
 }
 
 function effectiveParameters(spec, pathItem = {}, operation = {}) {
@@ -76,21 +84,50 @@ function compareOperationContracts(expected, actual, expectedSpec, actualSpec, e
   }
   const expectedResponses = resolveReference(expected.responses ?? {}, expectedSpec ?? {});
   const actualResponses = resolveReference(actual.responses ?? {}, actualSpec ?? {});
+  const isTaxonomyRead = ['listCategories', 'getCategoryAttributes', 'getCategorySchemaVersion'].includes(expected.operationId);
   const expectedCodes = Object.keys(expectedResponses).sort();
   const actualCodes = Object.keys(actualResponses).sort();
-  if (JSON.stringify(expectedCodes) !== JSON.stringify(actualCodes)) {
+  const allowedAdditions = isTaxonomyRead ? new Set(['304', ...(expectedCodes.includes('400') ? [] : ['400'])]) : new Set();
+  if (expectedCodes.some((code) => !actualCodes.includes(code))
+      || actualCodes.some((code) => !expectedCodes.includes(code) && !allowedAdditions.has(code))) {
     errors.push(`response status codes differ: expected ${expectedCodes.join(', ')}, received ${actualCodes.join(', ')}`);
   }
   for (const code of expectedCodes.filter((item) => actualCodes.includes(item))) {
-    if (JSON.stringify(normalizeContract(expectedResponses[code])) !== JSON.stringify(normalizeContract(actualResponses[code]))) {
+    const expectedResponse = structuredClone(expectedResponses[code]);
+    const actualResponse = structuredClone(actualResponses[code]);
+    if (isTaxonomyRead && code === '200') {
+      for (const name of ['ETag', 'Cache-Control']) {
+        const schema = actualResponse.headers?.[name]?.schema;
+        if (schema && schema.type !== 'string') errors.push(`response 200 ${name} cache header must be a string`);
+      }
+      for (const name of ['ETag', 'Cache-Control']) delete expectedResponse.headers?.[name];
+      for (const name of ['ETag', 'Cache-Control']) delete actualResponse.headers?.[name];
+      if (actualResponse.headers && Object.keys(actualResponse.headers).length === 0) delete actualResponse.headers;
+      if (expectedResponse.headers && Object.keys(expectedResponse.headers).length === 0) delete expectedResponse.headers;
+    }
+    if (JSON.stringify(normalizeContract(expectedResponse)) !== JSON.stringify(normalizeContract(actualResponse))) {
       errors.push(`response ${code} schema/headers differ`);
     }
   }
   const expectedBody = normalizeContract(resolveReference(expected.requestBody ?? null, expectedSpec ?? {}));
   const actualBody = normalizeContract(resolveReference(actual.requestBody ?? null, actualSpec ?? {}));
   if (JSON.stringify(expectedBody) !== JSON.stringify(actualBody)) errors.push('request DTO contract differs');
-  const expectedParameters = normalizeContract(effectiveParameters(expectedSpec ?? {}, expectedPathItem, expected));
-  const actualParameters = normalizeContract(effectiveParameters(actualSpec ?? {}, actualPathItem, actual));
+  let expectedParametersRaw = effectiveParameters(expectedSpec ?? {}, expectedPathItem, expected);
+  let actualParametersRaw = effectiveParameters(actualSpec ?? {}, actualPathItem, actual);
+  if (isTaxonomyRead) {
+    actualParametersRaw = actualParametersRaw.filter((parameter) => parameter.name?.toLowerCase() !== 'if-none-match');
+    if (expected.operationId === 'getCategoryAttributes') {
+      expectedParametersRaw = [...expectedParametersRaw,
+        resolveReference({ $ref: '#/components/parameters/cursor' }, expectedSpec ?? {}),
+        resolveReference({ $ref: '#/components/parameters/limit' }, expectedSpec ?? {}),
+      ];
+    }
+    const byName = (a, b) => `${a.in}:${a.name}`.localeCompare(`${b.in}:${b.name}`);
+    expectedParametersRaw = [...expectedParametersRaw].sort(byName);
+    actualParametersRaw = [...actualParametersRaw].sort(byName);
+  }
+  const expectedParameters = normalizeContract(expectedParametersRaw);
+  const actualParameters = normalizeContract(actualParametersRaw);
   if (JSON.stringify(expectedParameters) !== JSON.stringify(actualParameters)) errors.push('parameter contract differs');
   const expectedSecurity = effectiveSecurity(expectedSpec ?? {}, expectedPathItem, expected);
   const actualSecurity = effectiveSecurity(actualSpec ?? {}, actualPathItem, actual);

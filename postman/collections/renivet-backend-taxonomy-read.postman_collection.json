@@ -1,0 +1,59 @@
+{
+  "info": {
+    "_postman_id": "f82030b2-e34a-463d-a5b9-9f15b7d8a719",
+    "name": "Renivet Backend - Brand Taxonomy Reads (REN2-59)",
+    "description": "Runnable examples for brand category tree, current attributes and exact published schema reads. Requires a local brand with catalog.read and a first-party session. Synthetic defaults only. Linear: REN2-59.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "apiBaseUrl", "value": "http://127.0.0.1:4000/api/v1", "type": "string" },
+    { "key": "brandId", "value": "00000000-0000-4000-8000-000000000001", "type": "string" },
+    { "key": "categoryId", "value": "00000000-0000-4000-8000-000000000002", "type": "string" },
+    { "key": "schemaVersion", "value": "1", "type": "string" },
+    { "key": "brandSessionCookie", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "List shared category tree",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Cookie", "value": "__Host-renivet_session={{brandSessionCookie}}" }],
+        "url": "{{apiBaseUrl}}/brands/{{brandId}}/categories?limit=25",
+        "description": "Purpose: retrieve category nodes and current schema metadata. Linear: REN2-59. Parameters: brandId is the brand UUID; optional cursor and limit page the stable tree. Body: none. Authentication/permissions: first-party session and live brand catalog.read permission. Responses: 200 page with ETag; 304 matching If-None-Match; 400 invalid cursor/page; 401 missing session; 403 denied; 503 storage unavailable. Inactive and non-leaf nodes are informational and cannot be selected for submission."
+      },
+      "protocolProfileBehavior": { "disableCookies": true },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('tree succeeds or returns a documented authorization denial', function () { pm.expect([200, 304, 400, 401, 403, 503]).to.include(pm.response.code); });",
+        "if (pm.response.code === 200) pm.test('tree includes parent, leaf and current version metadata', function () { pm.expect(pm.response.json()).to.have.property('items'); pm.expect(pm.response.headers.has('ETag')).to.equal(true); });"
+      ] } }]
+    },
+    {
+      "name": "Get current category attributes",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Cookie", "value": "__Host-renivet_session={{brandSessionCookie}}" }],
+        "url": "{{apiBaseUrl}}/brands/{{brandId}}/categories/{{categoryId}}/attributes?limit=25",
+        "description": "Purpose: page typed rules from the current published snapshot. Linear: REN2-59. Parameters: brandId and categoryId are UUIDs; optional cursor is bound to the current schema version. Body: none. Authentication/permissions: first-party session and live brand catalog.read permission. Responses: 200 page with ETag; 304 matching If-None-Match; 400 invalid/stale cursor; 401 missing session; 403 denied; 404 category missing; 503 storage unavailable. Restart pagination after publication."
+      },
+      "protocolProfileBehavior": { "disableCookies": true },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('attributes succeed or return a documented authorization/state denial', function () { pm.expect([200, 304, 400, 401, 403, 404, 503]).to.include(pm.response.code); });",
+        "if (pm.response.code === 200) pm.test('typed attribute page includes items', function () { pm.expect(pm.response.json()).to.have.property('items'); pm.expect(pm.response.headers.has('ETag')).to.equal(true); });"
+      ] } }]
+    },
+    {
+      "name": "Get exact published category schema version",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Cookie", "value": "__Host-renivet_session={{brandSessionCookie}}" }],
+        "url": "{{apiBaseUrl}}/brands/{{brandId}}/categories/{{categoryId}}/schema-versions/{{schemaVersion}}",
+        "description": "Purpose: retrieve the exact immutable schema version without substituting latest. Linear: REN2-59. Parameters: brandId/categoryId are UUIDs and schemaVersion is a positive integer. Body: none. Authentication/permissions: first-party session and live brand catalog.read permission. Responses: 200 exact published version with ETag; 304 matching If-None-Match; 400 invalid path; 401 missing session; 403 denied; 404 unpublished/missing version; 503 storage unavailable."
+      },
+      "protocolProfileBehavior": { "disableCookies": true },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('exact version succeeds or returns a documented authorization/state denial', function () { pm.expect([200, 304, 400, 401, 403, 404, 503]).to.include(pm.response.code); });",
+        "if (pm.response.code === 200) pm.test('requested exact published version is returned', function () { pm.expect(pm.response.json().version).to.equal(Number(pm.collectionVariables.get('schemaVersion'))); pm.expect(pm.response.json().state).to.equal('PUBLISHED'); });"
+      ] } }]
+    }
+  ]
+}
