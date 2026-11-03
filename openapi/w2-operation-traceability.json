@@ -1130,8 +1130,8 @@
           "path": "tests/w2/proposeCategorySchemaVersion.test.cjs"
         },
         "pullRequest": {
-          "status": "pending",
-          "url": null
+          "status": "open",
+          "url": "https://github.com/renivet-platform/renivet-backend/pull/44"
         }
       },
       "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-58"
@@ -1155,8 +1155,8 @@
           "path": "tests/w2/publishCategorySchemaVersion.test.cjs"
         },
         "pullRequest": {
-          "status": "pending",
-          "url": null
+          "status": "open",
+          "url": "https://github.com/renivet-platform/renivet-backend/pull/44"
         }
       },
       "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-58"
