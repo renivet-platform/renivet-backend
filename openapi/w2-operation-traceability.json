@@ -181,14 +181,14 @@
       ],
       "ownerIssue": "REN2-59",
       "implementation": {
-        "status": "design_only",
+        "status": "implemented",
         "test": {
-          "status": "pending",
-          "path": "tests/w2/listCategories.test.cjs"
+          "status": "verified",
+          "path": "tests/w2/taxonomy-read.integration.test.cjs"
         },
         "pullRequest": {
-          "status": "pending",
-          "url": null
+          "status": "open",
+          "url": "https://github.com/renivet-platform/renivet-backend/pull/45"
         }
       },
       "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-59"
@@ -203,19 +203,19 @@
         "A5",
         "QA-14"
       ],
-      "ownerIssue": "REN2-57",
+      "ownerIssue": "REN2-59",
       "implementation": {
-        "status": "design_only",
+        "status": "implemented",
         "test": {
-          "status": "pending",
-          "path": "tests/w2/getCategoryAttributes.test.cjs"
+          "status": "verified",
+          "path": "tests/w2/taxonomy-read.integration.test.cjs"
         },
         "pullRequest": {
-          "status": "pending",
-          "url": null
+          "status": "open",
+          "url": "https://github.com/renivet-platform/renivet-backend/pull/45"
         }
       },
-      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-57"
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-59"
     },
     {
       "operationId": "createBrandProduct",
@@ -950,14 +950,14 @@
       ],
       "ownerIssue": "REN2-59",
       "implementation": {
-        "status": "design_only",
+        "status": "implemented",
         "test": {
-          "status": "pending",
-          "path": "tests/w2/getCategorySchemaVersion.test.cjs"
+          "status": "verified",
+          "path": "tests/w2/taxonomy-read.integration.test.cjs"
         },
         "pullRequest": {
-          "status": "pending",
-          "url": null
+          "status": "open",
+          "url": "https://github.com/renivet-platform/renivet-backend/pull/45"
         }
       },
       "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-59"

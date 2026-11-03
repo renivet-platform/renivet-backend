@@ -1447,6 +1447,488 @@
         "x-renivet-mfa-required": true,
         "x-renivet-permission": "taxonomy.approve"
       }
+    },
+    "/api/v1/brands/{brandId}/categories": {
+      "get": {
+        "description": "Returns parent and leaf nodes with path, active state and current schema version. Non-leaf or inactive nodes are informational and must not be selected for product submission. Revalidates the private representation on every request; a schema or category change produces a new ETag. Linear: REN2-59.",
+        "operationId": "listCategories",
+        "parameters": [
+          {
+            "name": "brandId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "description": "Revalidate a previously returned page ETag.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated category tree. Cache-Control is private, no-cache; ETag covers this page and its cursor.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "example": "private, no-cache"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string",
+                  "example": "\"sha256-hex\""
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagedCategoriesDto"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "The page representation is unchanged for the supplied If-None-Match."
+          },
+          "400": {
+            "description": "Invalid category cursor or page size.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Brand permission denied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Brand or category resource was not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Category state prevents the requested read.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The supplied category query is invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Taxonomy read storage is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "List the shared category tree for a brand catalog form",
+        "tags": [
+          "Catalog"
+        ],
+        "x-renivet-implementation-wave": "W2",
+        "x-renivet-permission": "catalog.read"
+      }
+    },
+    "/api/v1/brands/{brandId}/categories/{categoryId}/attributes": {
+      "get": {
+        "description": "Returns the immutable rules in the category current published schema snapshot. Pagination cursors are bound to that version and fail closed after a publish; use getCategorySchemaVersion for a specific historical version. Linear: REN2-59.",
+        "operationId": "getCategoryAttributes",
+        "parameters": [
+          {
+            "name": "brandId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "categoryId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paged typed attributes. Cache-Control is private, no-cache; ETag is version and page specific.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "example": "private, no-cache"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string",
+                  "example": "\"sha256-hex\""
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagedAttributeDefinitionsDto"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "The page representation is unchanged for the supplied If-None-Match."
+          },
+          "400": {
+            "description": "Invalid category identifier, cursor or page size.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Brand permission denied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Category does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Category state prevents the requested read.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The supplied category query is invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Taxonomy read storage is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "Read the current published typed category attributes",
+        "tags": [
+          "Catalog"
+        ],
+        "x-renivet-implementation-wave": "W2",
+        "x-renivet-permission": "catalog.read"
+      }
+    },
+    "/api/v1/brands/{brandId}/categories/{categoryId}/schema-versions/{version}": {
+      "get": {
+        "description": "Returns a historical published schema and its immutable typed rules without substituting the latest version. The ETag remains stable for this frozen snapshot. Linear: REN2-59.",
+        "operationId": "getCategorySchemaVersion",
+        "parameters": [
+          {
+            "name": "brandId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "categoryId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Exact published category schema version.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "example": "private, no-cache"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string",
+                  "example": "\"sha256-hex\""
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategorySchemaVersionReadDto"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "The exact version representation is unchanged for the supplied If-None-Match."
+          },
+          "400": {
+            "description": "Invalid category identifier or version.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Brand permission denied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Category or published schema version does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Category state prevents the requested read.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "The selected schema version is stale.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The supplied category or version is invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Taxonomy read storage is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "Read an exact published category schema version",
+        "tags": [
+          "Catalog"
+        ],
+        "x-renivet-guard": "brand",
+        "x-renivet-implementation-wave": "W2",
+        "x-renivet-permission": "catalog.read"
+      }
     }
   },
   "info": {
@@ -1881,6 +2363,224 @@
           "code",
           "message",
           "requestId"
+        ]
+      },
+      "CategorySummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "schemaVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "parentId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "isLeaf": {
+            "type": "boolean"
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "currentSchemaVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "pathCodes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "name",
+          "schemaVersion",
+          "parentId",
+          "isLeaf",
+          "isActive",
+          "currentSchemaVersion"
+        ]
+      },
+      "PagedCategoriesDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CategorySummaryDto"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ]
+      },
+      "CategoryReadErrorDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "details": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "requestId"
+        ]
+      },
+      "AttributeDefinitionDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "PRODUCT",
+              "VARIANT"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "text",
+              "integer",
+              "decimal",
+              "boolean",
+              "enum",
+              "multi_enum",
+              "date",
+              "measurement"
+            ]
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "condition": {
+            "type": "object",
+            "nullable": true
+          },
+          "allowedValues": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "schemaVersionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "validatorVersion": {
+            "type": "string"
+          },
+          "conditionalAst": {
+            "type": "object",
+            "nullable": true
+          },
+          "scopeType": {
+            "type": "string",
+            "enum": [
+              "product",
+              "variant"
+            ]
+          }
+        },
+        "required": [
+          "code",
+          "scope",
+          "type",
+          "required"
+        ]
+      },
+      "PagedAttributeDefinitionsDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AttributeDefinitionDto"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "items"
+        ]
+      },
+      "CategorySchemaVersionReadDto": {
+        "type": "object",
+        "properties": {
+          "categoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "PUBLISHED"
+            ]
+          },
+          "validatorVersion": {
+            "type": "string"
+          },
+          "rulesetSha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "attributes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AttributeDefinitionDto"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "categoryId",
+          "version",
+          "state",
+          "validatorVersion",
+          "rulesetSha256",
+          "attributes"
         ]
       }
     }

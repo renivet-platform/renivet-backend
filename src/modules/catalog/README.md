@@ -1,8 +1,8 @@
-# Catalog module — taxonomy administration routes only
+# Catalog module — taxonomy routes
 
 Brand-owned products only; no universal SKU or brand catalog mutation route is implemented.
 
-The NestJS module is registered in `AppModule` for the two REN2-58 global taxonomy schema operations. Other catalog and product APIs remain inactive.
+The NestJS module is registered in `AppModule` for REN2-58 global taxonomy schema operations and REN2-59 brand-scoped category reads. Other catalog and product APIs remain inactive.
 
 ## REN2-56 taxonomy persistence
 
@@ -27,3 +27,9 @@ Variant option signatures are deterministic canonical JSON with sorted object ke
 The proposal and publication use the taxonomy advisory lock and category-version pointer as a compare-and-swap. Publishing requires the next version, a live leaf category, a valid immutable ruleset, and a different approver. An inactive category with no retirement event can receive its first published schema; a retired category cannot receive a new publication. The transaction advances the pointer, records an append-only `catalogue.taxonomy_admin_events` audit event, and writes a `category_schema.published` outbox notice atomically. Idempotent retries return the saved receipt; reuse with a changed payload conflicts.
 
 No categories, attributes or pilot seed data are inserted by this slice. Production taxonomy seed approval remains a separate gate. The route output's `previewDiff` is a response extension on the proposed `ActionReceipt`; the v1.5 candidate operation remains the source contract for the operation and required receipt fields.
+
+## REN2-59 brand category reads
+
+`GET /api/v1/brands/{brandId}/categories` returns the shared tree in stable UUID keyset pages. Each item includes its parent, leaf and active flags, path codes, the current schema pointer, and the schema version (version 1 is the initial schema generation when a category has no publication yet). Inactive and non-leaf entries are informational and cannot be selected for product submission. Every request requires a live W1 `catalog.read` grant for the brand; the SQL read also checks the effective permission in the same statement.
+
+`GET /api/v1/brands/{brandId}/categories/{categoryId}/attributes` pages only the current published version's frozen typed rules. Its opaque cursor is bound to that schema snapshot and becomes stale after publication. `GET /api/v1/brands/{brandId}/categories/{categoryId}/schema-versions/{version}` returns only the exact requested published snapshot, including its immutable ruleset hash and validator version; it never substitutes the latest version. These GET routes use private revalidation (`Cache-Control: private, no-cache`, `ETag`); requests re-read storage before returning 304, so category or schema changes are immediately visible.

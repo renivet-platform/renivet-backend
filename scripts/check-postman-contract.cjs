@@ -9,6 +9,7 @@ const collections = [
   'renivet-backend-auth.postman_collection.json',
   'renivet-backend-otp.postman_collection.json',
   'renivet-backend-taxonomy-admin.postman_collection.json',
+  'renivet-backend-taxonomy-read.postman_collection.json',
 ].map((name) => JSON.parse(readFileSync(resolve(root, 'postman/collections', name), 'utf8')));
 
 function visit(items) {
@@ -29,9 +30,10 @@ for (const { collection, apiBasePath, item } of requests) {
   if (/https?:\/\/(?!\{\{apiBaseUrl\}\})/i.test(url)) throw new Error(`${item.name}: hardcoded URL is not permitted`);
   const path = `${apiBasePath}${url.slice('{{apiBaseUrl}}'.length)}`
     .replace(/\{\{(?:otpChallengeId|unknownChallengeId|recoveryChallengeId)\}\}/g, '{challengeId}')
+    .replace(/\{\{brandId\}\}/g, '{brandId}')
     .replace(/\{\{categoryId\}\}/g, '{categoryId}')
     .replace(/\{\{schemaVersion\}\}/g, '{version}')
-    .replace(/\{\{[^}]+\}\}/g, 'synthetic');
+    .replace(/\{\{[^}]+\}\}/g, 'synthetic').split('?')[0];
   const key = `${request.method.toLowerCase()} ${path}`;
   operations.add(key);
   if (!/REN2-\d+/.test(item.request.description ?? '')) throw new Error(`${item.name}: description must reference a Linear issue`);
@@ -66,6 +68,14 @@ for (const [method, path] of [
 ]) {
   if (!openapi.paths[path]?.[method]) throw new Error(`Expected implemented taxonomy route ${method.toUpperCase()} ${path} is absent from OpenAPI`);
   if (!operations.has(`${method} ${path}`)) throw new Error(`Implemented taxonomy operation ${method.toUpperCase()} ${path} is missing from the handwritten Postman collection`);
+}
+for (const [method, path] of [
+  ['get', '/api/v1/brands/{brandId}/categories'],
+  ['get', '/api/v1/brands/{brandId}/categories/{categoryId}/attributes'],
+  ['get', '/api/v1/brands/{brandId}/categories/{categoryId}/schema-versions/{version}'],
+]) {
+  if (!openapi.paths[path]?.[method]) throw new Error(`Expected implemented taxonomy read route ${method.toUpperCase()} ${path} is absent from OpenAPI`);
+  if (!operations.has(`${method} ${path}`)) throw new Error(`Implemented taxonomy read operation ${method.toUpperCase()} ${path} is missing from the handwritten Postman collection`);
 }
 const mfaRequests = requests.filter(({ item }) => item.name.includes('MFA') || item.name.includes('factor') || item.name.includes('authenticator'));
 for (const { item } of mfaRequests) {
