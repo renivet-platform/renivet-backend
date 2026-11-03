@@ -2,7 +2,7 @@
 
 `HealthModule`, `IdentityModule` and the infrastructure-only `AccessModule` are registered in `AppModule`. Identity currently implements first-party email/password registration and sessions, OTP challenge APIs and MFA APIs. Access reuses the session service and REN2-26 `access.effective_permissions` view, but registers no controller and exposes no brand business endpoint.
 
-Catalog, cart, checkout, orders, payments, fulfillment, settlements and integrations are still scaffolding modules. Do not treat their placeholders or proposed database models as implemented capabilities. Add a real module's handlers, application services, domain entities, repository interfaces, tests, API contract and Postman examples before registering its routes.
+Catalog, cart, checkout, orders, payments, fulfillment, settlements and integrations are still scaffolding modules apart from the two REN2-58 global taxonomy schema operations. Do not treat placeholders or proposed database models as implemented capabilities. Add a real module's handlers, application services, domain entities, repository interfaces, tests, API contract and Postman examples before registering additional routes.
 
 ## Brand-owned repository access
 

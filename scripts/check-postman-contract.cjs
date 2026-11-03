@@ -8,6 +8,7 @@ const openapi = JSON.parse(readFileSync(resolve(root, 'openapi/renivet.openapi.j
 const collections = [
   'renivet-backend-auth.postman_collection.json',
   'renivet-backend-otp.postman_collection.json',
+  'renivet-backend-taxonomy-admin.postman_collection.json',
 ].map((name) => JSON.parse(readFileSync(resolve(root, 'postman/collections', name), 'utf8')));
 
 function visit(items) {
@@ -28,6 +29,8 @@ for (const { collection, apiBasePath, item } of requests) {
   if (/https?:\/\/(?!\{\{apiBaseUrl\}\})/i.test(url)) throw new Error(`${item.name}: hardcoded URL is not permitted`);
   const path = `${apiBasePath}${url.slice('{{apiBaseUrl}}'.length)}`
     .replace(/\{\{(?:otpChallengeId|unknownChallengeId|recoveryChallengeId)\}\}/g, '{challengeId}')
+    .replace(/\{\{categoryId\}\}/g, '{categoryId}')
+    .replace(/\{\{schemaVersion\}\}/g, '{version}')
     .replace(/\{\{[^}]+\}\}/g, 'synthetic');
   const key = `${request.method.toLowerCase()} ${path}`;
   operations.add(key);
@@ -57,6 +60,13 @@ for (const path of ['/api/v1/auth/mfa', '/api/v1/auth/mfa/enrollments', '/api/v1
     throw new Error(`Implemented MFA operation ${path} is missing from the handwritten Postman collection`);
   }
 }
+for (const [method, path] of [
+  ['post', '/api/v1/admin/catalog/categories/{categoryId}/schema-versions'],
+  ['post', '/api/v1/admin/catalog/categories/{categoryId}/schema-versions/{version}/publish'],
+]) {
+  if (!openapi.paths[path]?.[method]) throw new Error(`Expected implemented taxonomy route ${method.toUpperCase()} ${path} is absent from OpenAPI`);
+  if (!operations.has(`${method} ${path}`)) throw new Error(`Implemented taxonomy operation ${method.toUpperCase()} ${path} is missing from the handwritten Postman collection`);
+}
 const mfaRequests = requests.filter(({ item }) => item.name.includes('MFA') || item.name.includes('factor') || item.name.includes('authenticator'));
 for (const { item } of mfaRequests) {
   const description = item.request.description ?? '';
@@ -65,5 +75,5 @@ for (const { item } of mfaRequests) {
   }
 }
 
-const implementedRoutes = Object.keys(openapi.paths).filter((path) => path.startsWith('/api/v1/auth/') || path === '/api/v1/health').length;
+const implementedRoutes = Object.keys(openapi.paths).filter((path) => path.startsWith('/api/v1/auth/') || path.startsWith('/api/v1/admin/') || path === '/api/v1/health').length;
 process.stdout.write(`Postman/OpenAPI drift check passed (${requests.length} requests, ${operations.size} unique operations, ${implementedRoutes} implemented routes).\n`);

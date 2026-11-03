@@ -15,16 +15,23 @@ function validate(candidate = candidateSpec, manifest = traceability, active = a
   return checkTraceability({ ...options, candidateSpec: candidate, traceability: manifest, activeSpec: active });
 }
 
-test('REN2-52 loads exactly 44 unique v1.5 operations as design-only contracts', () => {
+test('REN2-52 loads exactly 44 unique v1.5 candidate operations and verifies the implemented subset', () => {
   const operations = extractOperations(candidateSpec);
   assert.equal(operations.length, 44);
   assert.equal(new Set(operations.map(({ operation }) => operation.operationId)).size, 44);
   assert.ok(operations.every(({ operation }) => operation['x-renivet-implementation-wave'] === 'W2'));
   assert.deepEqual(validate(), []);
-  assert.ok(operations.every(({ operation }) => !Object.values(activeSpec.paths).some((path) =>
-    Object.values(path).some((active) => active.operationId === operation.operationId))));
-  assert.ok(operations.every(({ path }) => !generatedSdk.includes(`"/api/v1${path}"`)));
-  assert.ok(operations.every(({ operation }) => !generatedSdk.includes(operation.operationId)));
+  for (const { path, method, operation } of operations) {
+    const manifestEntry = traceability.operations.find(({ operationId }) => operationId === operation.operationId);
+    const live = activeSpec.paths[`/api/v1${path}`]?.[method];
+    if (manifestEntry.implementation.status === 'design_only') {
+      assert.equal(live, undefined, `${operation.operationId} remains design-only`);
+      assert.equal(generatedSdk.includes(operation.operationId), false, `${operation.operationId} is absent from the SDK`);
+    } else {
+      assert.equal(live?.operationId, operation.operationId, `${operation.operationId} is live`);
+      assert.equal(generatedSdk.includes(operation.operationId), true, `${operation.operationId} is included in the SDK`);
+    }
+  }
 });
 
 test('REN2-52 requires owner, source, test and PR traceability for every operation', () => {
@@ -133,6 +140,20 @@ test('REN2-52 permits a live slice only with a matching operation, verified test
   const candidate = structuredClone(candidateSpec);
   const manifest = structuredClone(traceability);
   const active = structuredClone(activeSpec);
+  for (const entry of manifest.operations.filter(({ ownerIssue }) => ownerIssue === 'REN2-58')) {
+    entry.implementation = {
+      status: 'design_only',
+      test: { status: 'pending', path: `tests/w2/${entry.operationId}.test.cjs` },
+      pullRequest: { status: 'pending', url: null },
+    };
+    const path = `/api/v1${entry.path}`;
+    if (active.paths[path]) {
+      for (const [method, operation] of Object.entries(active.paths[path])) {
+        if (operation.operationId === entry.operationId) delete active.paths[path][method];
+      }
+      if (Object.keys(active.paths[path]).length === 0) delete active.paths[path];
+    }
+  }
   const entry = manifest.operations.find(({ operationId }) => operationId === 'createBrandProduct');
   entry.implementation = {
     status: 'implemented',

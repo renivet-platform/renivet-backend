@@ -224,6 +224,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/catalog/categories/{categoryId}/schema-versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit a versioned category schema draft for approval
+         * @description Requires the platform-global taxonomy.manage permission, fresh MFA and session-bound CSRF. Creates a draft snapshot and returns its rule diff against the current published version. Linear: REN2-58.
+         */
+        post: operations["proposeCategorySchemaVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/catalog/categories/{categoryId}/schema-versions/{version}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve and publish a category schema version
+         * @description Requires a separate platform-global taxonomy.approve permission, fresh MFA and session-bound CSRF. Uses the category current-version pointer as a compare-and-swap and writes the audit receipt and publication outbox notice atomically. Linear: REN2-58.
+         */
+        post: operations["publishCategorySchemaVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -404,6 +444,21 @@ export interface components {
              * @enum {string}
              */
             status: "revoked";
+        };
+        TaxonomyActionReceiptDto: {
+            /** Format: uuid */
+            id: string;
+            status: string;
+            requestId: string;
+            rowVersion?: number;
+        };
+        TaxonomyErrorDto: {
+            code: string;
+            message: string;
+            requestId: string;
+            details?: {
+                [key: string]: unknown;
+            };
         };
     };
     responses: never;
@@ -1185,6 +1240,211 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+        };
+    };
+    proposeCategorySchemaVersion: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable request key, 1 to 120 safe characters. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                categoryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    categoryId: string;
+                    version: number;
+                    ruleset: Record<string, never>;
+                    validatorVersion: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Draft schema submitted. Response includes previewDiff for added, removed, and changed rules. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxonomyActionReceiptDto"];
+                };
+            };
+            /** @description Invalid versioned schema, conditional AST, idempotency key, or CSRF proof. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxonomyErrorDto"];
+                };
+            };
+            /** @description Missing or invalid first-party session. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxonomyErrorDto"];
+                };
+            };
+            /** @description Global taxonomy permission, fresh MFA, or CSRF check denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxonomyErrorDto"];
+                };
+            };
+            /** @description Category does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxonomyErrorDto"];
+                };
+            };
+            /** @description Stale version, retired category, or changed idempotent replay. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxonomyErrorDto"];
+                };
+            };
+            /** @description The category current-version pointer no longer matches the proposed version. */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxonomyErrorDto"];
+                };
+            };
+            /** @description The schema is incomplete or does not compile against the approved validator. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxonomyErrorDto"];
+                };
+            };
+            /** @description Authorization or taxonomy database is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxonomyErrorDto"];
+                };
+            };
+        };
+    };
+    publishCategorySchemaVersion: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Stable request key, 1 to 120 safe characters. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                categoryId: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Schema version published and category current pointer advanced. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxonomyActionReceiptDto"];
+                };
+            };
+            /** @description Invalid category or schema version, or invalid CSRF proof. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxonomyErrorDto"];
+                };
+            };
+            /** @description Missing or invalid first-party session. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxonomyErrorDto"];
+                };
+            };
+            /** @description Global approval permission, fresh MFA, or CSRF check denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxonomyErrorDto"];
+                };
+            };
+            /** @description Category does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxonomyErrorDto"];
+                };
+            };
+            /** @description Stale, incomplete, retired, or previously published schema version. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxonomyErrorDto"];
+                };
+            };
+            /** @description The category current-version pointer no longer matches the requested version. */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxonomyErrorDto"];
+                };
+            };
+            /** @description The schema is incomplete or does not compile against the approved validator. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxonomyErrorDto"];
+                };
+            };
+            /** @description Authorization or taxonomy database is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxonomyErrorDto"];
                 };
             };
         };

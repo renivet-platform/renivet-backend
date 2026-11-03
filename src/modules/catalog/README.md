@@ -1,8 +1,8 @@
-# Catalog module — no routes registered
+# Catalog module — taxonomy administration routes only
 
-Brand-owned products only; no universal SKU or catalog route is implemented.
+Brand-owned products only; no universal SKU or brand catalog mutation route is implemented.
 
-The NestJS module is **not** imported into AppModule. Internal persistence and pure domain helpers can be used by later task slices without activating API routes.
+The NestJS module is registered in `AppModule` for the two REN2-58 global taxonomy schema operations. Other catalog and product APIs remain inactive.
 
 ## REN2-56 taxonomy persistence
 
@@ -17,3 +17,13 @@ Activation and retirement require transaction-local actor, request, and reason c
 Conditional rules use a strict version 1 AST object shaped as `{ "version": 1, "root": <expression> }`. Expressions use only `all`, `any`, `not`, `eq`, `in`, `exists`, `gte`, and `lte`; field references are attribute codes in the compiled category snapshot. Unknown fields/operators, type mismatches, extra keys, and over-complex trees fail closed. No JavaScript, SQL, or dynamic expression evaluation is performed. The compiler accepts only `w2-attribute-validator-v1`; its result carries the category ID, immutable schema row ID/version, and validator version so callers can bind validation to the exact product or revision pin.
 
 Variant option signatures are deterministic canonical JSON with sorted object keys. Attribute codes are unique within the snapshot so conditional field references cannot be ambiguous.
+
+## REN2-58 taxonomy administration
+
+`POST /api/v1/admin/catalog/categories/{categoryId}/schema-versions` accepts a schema proposal whose `ruleset` is exactly `{ "attributes": [...] }`. Each entry identifies a pre-approved global attribute by `attributeId` and supplies its category code, product/variant scope, value type, allowed values, unit, requiredness, conditional AST and cardinality. The API checks that the persisted global attribute's ID, code, scope and type match, then compiles the complete snapshot with the pinned `w2-attribute-validator-v1` compiler. A successful response returns `previewDiff` with added, removed and changed attribute rules against the currently published version.
+
+`POST /api/v1/admin/catalog/categories/{categoryId}/schema-versions/{version}/publish` requires a different authenticated global approver than the draft submitter. `taxonomy.manage` and `taxonomy.approve` are separate global W1 permissions; both routes require a persisted MFA step-up no older than five minutes and session-bound CSRF. Brand-scoped permissions and client-supplied roles never authorize these routes.
+
+The proposal and publication use the taxonomy advisory lock and category-version pointer as a compare-and-swap. Publishing requires the next version, a live leaf category, a valid immutable ruleset, and a different approver. An inactive category with no retirement event can receive its first published schema; a retired category cannot receive a new publication. The transaction advances the pointer, records an append-only `catalogue.taxonomy_admin_events` audit event, and writes a `category_schema.published` outbox notice atomically. Idempotent retries return the saved receipt; reuse with a changed payload conflicts.
+
+No categories, attributes or pilot seed data are inserted by this slice. Production taxonomy seed approval remains a separate gate. The route output's `previewDiff` is a response extension on the proposed `ActionReceipt`; the v1.5 candidate operation remains the source contract for the operation and required receipt fields.

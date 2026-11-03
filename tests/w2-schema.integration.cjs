@@ -14,6 +14,7 @@ const W2_TABLES = [
   'catalogue.products', 'catalogue.product_variants', 'catalogue.variant_prices',
   'catalogue.product_revisions', 'catalogue.product_qc_reviews',
   'catalogue.price_audit_events', 'catalogue.product_attribute_values',
+  'catalogue.taxonomy_admin_events',
   'catalogue.variant_attribute_values', 'catalogue.sustainability_claims',
   'catalogue.claim_evidence', 'catalogue.claim_review_events', 'catalogue.publication_events',
   'media.media_assets', 'media.product_media', 'imports.import_batches', 'imports.import_rows',

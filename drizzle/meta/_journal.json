@@ -64,6 +64,13 @@
       "when": 1793706000000,
       "tag": "0008_ren2_56_canonical_taxonomy",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793725140000,
+      "tag": "0009_ren2_58_taxonomy_admin_events",
+      "breakpoints": true
     }
   ]
 }
