@@ -9,6 +9,7 @@ const { Pool } = require('pg');
 
 const W2_TABLES = [
   'catalogue.categories', 'catalogue.attributes', 'catalogue.category_attributes',
+  'catalogue.category_availability_events',
   'catalogue.category_schema_versions', 'catalogue.category_schema_attribute_rules',
   'catalogue.products', 'catalogue.product_variants', 'catalogue.variant_prices',
   'catalogue.product_revisions', 'catalogue.product_qc_reviews',
