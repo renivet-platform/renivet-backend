@@ -1,0 +1,1289 @@
+{
+  "contract": "W2 v1.5 local design candidate",
+  "candidateFile": "openapi/W2_v1_5_CANDIDATE.yaml",
+  "sourceUrl": "https://github.com/renivet-platform/renivet-engineering-os/blob/main/docs/02-system-design/w2-catalog-inventory/v1.5/W2_OpenAPI_v1_5_CANDIDATE.yaml",
+  "candidateBlob": "b3b5ddd1a77d570c604692cb543215d9e2a30234",
+  "expectedOperationCount": 44,
+  "qualityGates": [
+    "G08",
+    "G17"
+  ],
+  "backlogIssues": [
+    {
+      "id": "REN2-56",
+      "title": "[W2-C1.01] Implement canonical category hierarchy and immutable schema-version persistence",
+      "url": "https://linear.app/renivet/issue/REN2-56",
+      "verifiedAt": "2026-11-03"
+    },
+    {
+      "id": "REN2-57",
+      "title": "[W2-C1.02] Implement typed category attribute validation and safe conditional-rule grammar",
+      "url": "https://linear.app/renivet/issue/REN2-57",
+      "verifiedAt": "2026-11-03"
+    },
+    {
+      "id": "REN2-58",
+      "title": "[W2-C1.03] Build global taxonomy publishing and category administration APIs",
+      "url": "https://linear.app/renivet/issue/REN2-58",
+      "verifiedAt": "2026-11-03"
+    },
+    {
+      "id": "REN2-59",
+      "title": "[W2-C1.04] Expose category tree and pinned version metadata for brand product forms",
+      "url": "https://linear.app/renivet/issue/REN2-59",
+      "verifiedAt": "2026-11-03"
+    },
+    {
+      "id": "REN2-61",
+      "title": "[W2-C1.06] Create progressive parent-product draft lifecycle API",
+      "url": "https://linear.app/renivet/issue/REN2-61",
+      "verifiedAt": "2026-11-03"
+    },
+    {
+      "id": "REN2-62",
+      "title": "[W2-C1.07] Create, update and deactivate SKU variants with canonical option signatures",
+      "url": "https://linear.app/renivet/issue/REN2-62",
+      "verifiedAt": "2026-11-03"
+    },
+    {
+      "id": "REN2-64",
+      "title": "[W2-C2.01] Implement INR paise price versions, MRP and approved-window exclusion",
+      "url": "https://linear.app/renivet/issue/REN2-64",
+      "verifiedAt": "2026-11-03"
+    },
+    {
+      "id": "REN2-65",
+      "title": "[W2-C2.02] Implement independent price-review decision and audit workflow",
+      "url": "https://linear.app/renivet/issue/REN2-65",
+      "verifiedAt": "2026-11-03"
+    },
+    {
+      "id": "REN2-66",
+      "title": "[W2-C2.03] Implement secure media upload, validation, derivatives and rights metadata",
+      "url": "https://linear.app/renivet/issue/REN2-66",
+      "verifiedAt": "2026-11-03"
+    },
+    {
+      "id": "REN2-67",
+      "title": "[W2-C2.04] Implement parent/variant image association and ordering APIs",
+      "url": "https://linear.app/renivet/issue/REN2-67",
+      "verifiedAt": "2026-11-03"
+    },
+    {
+      "id": "REN2-68",
+      "title": "[W2-C2.05] Implement sustainability claims, evidence lifecycle and expiry logic",
+      "url": "https://linear.app/renivet/issue/REN2-68",
+      "verifiedAt": "2026-11-03"
+    },
+    {
+      "id": "REN2-69",
+      "title": "[W2-C2.06] Implement independent sustainability claim moderation and evidence review",
+      "url": "https://linear.app/renivet/issue/REN2-69",
+      "verifiedAt": "2026-11-03"
+    },
+    {
+      "id": "REN2-70",
+      "title": "[W2-C2.07] Provide complete brand product list, detail and draft status contract",
+      "url": "https://linear.app/renivet/issue/REN2-70",
+      "verifiedAt": "2026-11-03"
+    },
+    {
+      "id": "REN2-71",
+      "title": "[W2-C3.01] Freeze immutable submitted product revisions and enforce completeness",
+      "url": "https://linear.app/renivet/issue/REN2-71",
+      "verifiedAt": "2026-11-03"
+    },
+    {
+      "id": "REN2-72",
+      "title": "[W2-C3.02] Implement QC review, maker-checker and decision history",
+      "url": "https://linear.app/renivet/issue/REN2-72",
+      "verifiedAt": "2026-11-03"
+    },
+    {
+      "id": "REN2-73",
+      "title": "[W2-C3.03] Implement atomic publication, restriction and audit/outbox transition",
+      "url": "https://linear.app/renivet/issue/REN2-73",
+      "verifiedAt": "2026-11-03"
+    },
+    {
+      "id": "REN2-76",
+      "title": "[W2-C4.01] Implement generic staged upload parser and canonical import-batch persistence",
+      "url": "https://linear.app/renivet/issue/REN2-76",
+      "verifiedAt": "2026-11-03"
+    },
+    {
+      "id": "REN2-77",
+      "title": "[W2-C4.02] Implement mapping profiles and immutable dry-run preview",
+      "url": "https://linear.app/renivet/issue/REN2-77",
+      "verifiedAt": "2026-11-03"
+    },
+    {
+      "id": "REN2-78",
+      "title": "[W2-C4.03] Implement atomic preview confirmation and per-target effect receipts",
+      "url": "https://linear.app/renivet/issue/REN2-78",
+      "verifiedAt": "2026-11-03"
+    },
+    {
+      "id": "REN2-79",
+      "title": "[W2-C4.04] Implement import worker recovery, retry, conflict report and DLQ workflow",
+      "url": "https://linear.app/renivet/issue/REN2-79",
+      "verifiedAt": "2026-11-03"
+    },
+    {
+      "id": "REN2-82",
+      "title": "[W2-C4.07] Implement secure image ZIP and optional remote media ingestion workers",
+      "url": "https://linear.app/renivet/issue/REN2-82",
+      "verifiedAt": "2026-11-03"
+    },
+    {
+      "id": "REN2-83",
+      "title": "[W2-I1.01] Implement brand-owned stock locations, stock pools and physical accounting invariant",
+      "url": "https://linear.app/renivet/issue/REN2-83",
+      "verifiedAt": "2026-11-03"
+    },
+    {
+      "id": "REN2-84",
+      "title": "[W2-I1.02] Implement pool-wide append-only stock event envelope and journal details",
+      "url": "https://linear.app/renivet/issue/REN2-84",
+      "verifiedAt": "2026-11-03"
+    },
+    {
+      "id": "REN2-86",
+      "title": "[W2-I1.04] Implement timestamped brand stock observations, freshness and conflicts",
+      "url": "https://linear.app/renivet/issue/REN2-86",
+      "verifiedAt": "2026-11-03"
+    },
+    {
+      "id": "REN2-87",
+      "title": "[W2-I1.05] Implement stock adjustment requests and maker-checker approval",
+      "url": "https://linear.app/renivet/issue/REN2-87",
+      "verifiedAt": "2026-11-03"
+    },
+    {
+      "id": "REN2-88",
+      "title": "[W2-I1.06] Implement cycle counts, reconciliation cases and authoritative balance API",
+      "url": "https://linear.app/renivet/issue/REN2-88",
+      "verifiedAt": "2026-11-03"
+    }
+  ],
+  "operations": [
+    {
+      "operationId": "listCategories",
+      "method": "GET",
+      "path": "/brands/{brandId}/categories",
+      "sourceIds": [
+        "A1",
+        "QA-01",
+        "QA-03",
+        "QA-10",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-59",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/listCategories.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-59"
+    },
+    {
+      "operationId": "getCategoryAttributes",
+      "method": "GET",
+      "path": "/brands/{brandId}/categories/{categoryId}/attributes",
+      "sourceIds": [
+        "A1",
+        "QA-10",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-57",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/getCategoryAttributes.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-57"
+    },
+    {
+      "operationId": "createBrandProduct",
+      "method": "POST",
+      "path": "/brands/{brandId}/products",
+      "sourceIds": [
+        "A2",
+        "QA-02",
+        "QA-07",
+        "QA-13",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-61",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/createBrandProduct.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-61"
+    },
+    {
+      "operationId": "listBrandProducts",
+      "method": "GET",
+      "path": "/brands/{brandId}/products",
+      "sourceIds": [
+        "A2",
+        "QA-02",
+        "QA-03",
+        "QA-13",
+        "QA-14",
+        "A5"
+      ],
+      "ownerIssue": "REN2-70",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/listBrandProducts.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-70"
+    },
+    {
+      "operationId": "getBrandProduct",
+      "method": "GET",
+      "path": "/brands/{brandId}/products/{productId}",
+      "sourceIds": [
+        "A2",
+        "QA-02",
+        "QA-03",
+        "QA-13",
+        "QA-14",
+        "A5"
+      ],
+      "ownerIssue": "REN2-70",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/getBrandProduct.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-70"
+    },
+    {
+      "operationId": "updateBrandProduct",
+      "method": "PATCH",
+      "path": "/brands/{brandId}/products/{productId}",
+      "sourceIds": [
+        "A2",
+        "QA-02",
+        "QA-07",
+        "QA-13",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-61",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/updateBrandProduct.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-61"
+    },
+    {
+      "operationId": "createProductVariant",
+      "method": "POST",
+      "path": "/brands/{brandId}/products/{productId}/variants",
+      "sourceIds": [
+        "A2",
+        "QA-02",
+        "QA-07",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-62",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/createProductVariant.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-62"
+    },
+    {
+      "operationId": "proposeVariantPrice",
+      "method": "PATCH",
+      "path": "/brands/{brandId}/variants/{variantId}/prices",
+      "sourceIds": [
+        "A2",
+        "QA-08",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-64",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/proposeVariantPrice.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-64"
+    },
+    {
+      "operationId": "listVariantPrices",
+      "method": "GET",
+      "path": "/brands/{brandId}/variants/{variantId}/prices",
+      "sourceIds": [
+        "A2",
+        "QA-08",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-64",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/listVariantPrices.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-64"
+    },
+    {
+      "operationId": "submitProductForReview",
+      "method": "POST",
+      "path": "/brands/{brandId}/products/{productId}/submit",
+      "sourceIds": [
+        "A2",
+        "QA-03",
+        "QA-13",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-71",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/submitProductForReview.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-71"
+    },
+    {
+      "operationId": "publishApprovedProduct",
+      "method": "POST",
+      "path": "/brands/{brandId}/products/{productId}/publish",
+      "sourceIds": [
+        "A2",
+        "QA-03",
+        "QA-13",
+        "QA-14",
+        "A5"
+      ],
+      "ownerIssue": "REN2-73",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/publishApprovedProduct.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-73"
+    },
+    {
+      "operationId": "restrictPublishedProduct",
+      "method": "POST",
+      "path": "/brands/{brandId}/products/{productId}/restrict",
+      "sourceIds": [
+        "A2",
+        "QA-03",
+        "QA-13",
+        "QA-14",
+        "A5"
+      ],
+      "ownerIssue": "REN2-73",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/restrictPublishedProduct.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-73"
+    },
+    {
+      "operationId": "beginMediaUpload",
+      "method": "POST",
+      "path": "/brands/{brandId}/media/uploads",
+      "sourceIds": [
+        "A2",
+        "QA-09",
+        "QA-15",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-66",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/beginMediaUpload.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-66"
+    },
+    {
+      "operationId": "createMediaZipImport",
+      "method": "POST",
+      "path": "/brands/{brandId}/media/zip-imports",
+      "sourceIds": [
+        "A2",
+        "A3",
+        "QA-09",
+        "QA-15",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-82",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/createMediaZipImport.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-82"
+    },
+    {
+      "operationId": "createCatalogImport",
+      "method": "POST",
+      "path": "/brands/{brandId}/product-imports",
+      "sourceIds": [
+        "A3",
+        "QA-04",
+        "QA-11",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-76",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/createCatalogImport.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-76"
+    },
+    {
+      "operationId": "saveImportMapping",
+      "method": "POST",
+      "path": "/brands/{brandId}/product-imports/{batchId}/mapping",
+      "sourceIds": [
+        "A3",
+        "QA-04",
+        "QA-11",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-77",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/saveImportMapping.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-77"
+    },
+    {
+      "operationId": "getCatalogImportPreview",
+      "method": "GET",
+      "path": "/brands/{brandId}/product-imports/{batchId}/preview",
+      "sourceIds": [
+        "A3",
+        "QA-04",
+        "QA-11",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-77",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/getCatalogImportPreview.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-77"
+    },
+    {
+      "operationId": "confirmCatalogImport",
+      "method": "POST",
+      "path": "/brands/{brandId}/product-imports/{batchId}/confirm",
+      "sourceIds": [
+        "A3",
+        "QA-04",
+        "QA-11",
+        "QA-15",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-78",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/confirmCatalogImport.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-78"
+    },
+    {
+      "operationId": "getImportResults",
+      "method": "GET",
+      "path": "/brands/{brandId}/product-imports/{batchId}/results",
+      "sourceIds": [
+        "A3",
+        "QA-04",
+        "QA-11",
+        "QA-15",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-79",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/getImportResults.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-79"
+    },
+    {
+      "operationId": "retryImportFailures",
+      "method": "POST",
+      "path": "/brands/{brandId}/product-imports/{batchId}/retry",
+      "sourceIds": [
+        "A3",
+        "QA-04",
+        "QA-11",
+        "QA-15",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-79",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/retryImportFailures.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-79"
+    },
+    {
+      "operationId": "listAuthoritativeBalances",
+      "method": "GET",
+      "path": "/brands/{brandId}/inventory/balances",
+      "sourceIds": [
+        "A4",
+        "QA-05",
+        "QA-12",
+        "QA-16",
+        "QA-19",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-88",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/listAuthoritativeBalances.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-88"
+    },
+    {
+      "operationId": "createStockLocation",
+      "method": "POST",
+      "path": "/brands/{brandId}/inventory/locations",
+      "sourceIds": [
+        "A4",
+        "QA-05",
+        "QA-12",
+        "QA-16",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-83",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/createStockLocation.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-83"
+    },
+    {
+      "operationId": "submitStockObservation",
+      "method": "POST",
+      "path": "/brands/{brandId}/inventory/observations",
+      "sourceIds": [
+        "A4",
+        "QA-05",
+        "QA-12",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-86",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/submitStockObservation.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-86"
+    },
+    {
+      "operationId": "proposeStockAdjustment",
+      "method": "POST",
+      "path": "/brands/{brandId}/inventory/adjustments",
+      "sourceIds": [
+        "A4",
+        "QA-05",
+        "QA-12",
+        "QA-16",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-87",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/proposeStockAdjustment.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-87"
+    },
+    {
+      "operationId": "listStockMovements",
+      "method": "GET",
+      "path": "/brands/{brandId}/inventory/movements",
+      "sourceIds": [
+        "A4",
+        "QA-05",
+        "QA-12",
+        "QA-16",
+        "QA-19",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-84",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/listStockMovements.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-84"
+    },
+    {
+      "operationId": "createCycleCount",
+      "method": "POST",
+      "path": "/brands/{brandId}/inventory/cycle-counts",
+      "sourceIds": [
+        "A4",
+        "QA-05",
+        "QA-12",
+        "QA-16",
+        "QA-19",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-88",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/createCycleCount.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-88"
+    },
+    {
+      "operationId": "listInventoryReconciliations",
+      "method": "GET",
+      "path": "/brands/{brandId}/inventory/reconciliations",
+      "sourceIds": [
+        "A4",
+        "QA-05",
+        "QA-12",
+        "QA-16",
+        "QA-19",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-88",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/listInventoryReconciliations.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-88"
+    },
+    {
+      "operationId": "resolveReconciliation",
+      "method": "POST",
+      "path": "/brands/{brandId}/inventory/reconciliations/{caseId}/resolve",
+      "sourceIds": [
+        "A4",
+        "QA-05",
+        "QA-12",
+        "QA-16",
+        "QA-19",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-88",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/resolveReconciliation.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-88"
+    },
+    {
+      "operationId": "decideCatalogReview",
+      "method": "POST",
+      "path": "/admin/brands/{brandId}/catalog-reviews/{reviewId}/decision",
+      "sourceIds": [
+        "A2",
+        "QA-03",
+        "QA-13",
+        "QA-14",
+        "A5"
+      ],
+      "ownerIssue": "REN2-72",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/decideCatalogReview.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-72"
+    },
+    {
+      "operationId": "decideStockAdjustment",
+      "method": "POST",
+      "path": "/admin/brands/{brandId}/inventory/adjustments/{adjustmentId}/decision",
+      "sourceIds": [
+        "A4",
+        "QA-05",
+        "QA-12",
+        "QA-16",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-87",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/decideStockAdjustment.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-87"
+    },
+    {
+      "operationId": "getCategorySchemaVersion",
+      "method": "GET",
+      "path": "/brands/{brandId}/categories/{categoryId}/schema-versions/{version}",
+      "sourceIds": [
+        "A1",
+        "QA-01",
+        "QA-03",
+        "QA-10",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-59",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/getCategorySchemaVersion.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-59"
+    },
+    {
+      "operationId": "completeMediaUpload",
+      "method": "POST",
+      "path": "/brands/{brandId}/media/{mediaId}/complete",
+      "sourceIds": [
+        "A2",
+        "QA-09",
+        "QA-15",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-66",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/completeMediaUpload.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-66"
+    },
+    {
+      "operationId": "getMediaAssetStatus",
+      "method": "GET",
+      "path": "/brands/{brandId}/media/{mediaId}",
+      "sourceIds": [
+        "A2",
+        "QA-09",
+        "QA-15",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-66",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/getMediaAssetStatus.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-66"
+    },
+    {
+      "operationId": "attachProductMedia",
+      "method": "POST",
+      "path": "/brands/{brandId}/products/{productId}/media",
+      "sourceIds": [
+        "A2",
+        "QA-09",
+        "QA-15",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-67",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/attachProductMedia.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-67"
+    },
+    {
+      "operationId": "updateProductMediaLink",
+      "method": "PATCH",
+      "path": "/brands/{brandId}/products/{productId}/media/{linkId}",
+      "sourceIds": [
+        "A2",
+        "QA-09",
+        "QA-15",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-67",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/updateProductMediaLink.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-67"
+    },
+    {
+      "operationId": "detachProductMedia",
+      "method": "DELETE",
+      "path": "/brands/{brandId}/products/{productId}/media/{linkId}",
+      "sourceIds": [
+        "A2",
+        "QA-09",
+        "QA-15",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-67",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/detachProductMedia.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-67"
+    },
+    {
+      "operationId": "decideVariantPrice",
+      "method": "POST",
+      "path": "/admin/brands/{brandId}/variant-prices/{priceId}/decision",
+      "sourceIds": [
+        "A2",
+        "QA-08",
+        "QA-14",
+        "A5"
+      ],
+      "ownerIssue": "REN2-65",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/decideVariantPrice.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-65"
+    },
+    {
+      "operationId": "proposeCategorySchemaVersion",
+      "method": "POST",
+      "path": "/admin/catalog/categories/{categoryId}/schema-versions",
+      "sourceIds": [
+        "A1",
+        "QA-01",
+        "QA-10",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-56",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/proposeCategorySchemaVersion.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-56"
+    },
+    {
+      "operationId": "publishCategorySchemaVersion",
+      "method": "POST",
+      "path": "/admin/catalog/categories/{categoryId}/schema-versions/{version}/publish",
+      "sourceIds": [
+        "A1",
+        "QA-01",
+        "QA-10",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-58",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/publishCategorySchemaVersion.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-58"
+    },
+    {
+      "operationId": "updateProductVariant",
+      "method": "PATCH",
+      "path": "/brands/{brandId}/products/{productId}/variants/{variantId}",
+      "sourceIds": [
+        "A2",
+        "QA-02",
+        "QA-07",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-62",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/updateProductVariant.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-62"
+    },
+    {
+      "operationId": "deactivateProductVariant",
+      "method": "DELETE",
+      "path": "/brands/{brandId}/products/{productId}/variants/{variantId}",
+      "sourceIds": [
+        "A2",
+        "QA-02",
+        "QA-07",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-62",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/deactivateProductVariant.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-62"
+    },
+    {
+      "operationId": "proposeProductClaim",
+      "method": "POST",
+      "path": "/brands/{brandId}/products/{productId}/claims",
+      "sourceIds": [
+        "A2",
+        "QA-13",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-68",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/proposeProductClaim.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-68"
+    },
+    {
+      "operationId": "listProductClaims",
+      "method": "GET",
+      "path": "/brands/{brandId}/products/{productId}/claims",
+      "sourceIds": [
+        "A2",
+        "QA-13",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-68",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/listProductClaims.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-68"
+    },
+    {
+      "operationId": "decideProductClaim",
+      "method": "POST",
+      "path": "/admin/brands/{brandId}/claims/{claimId}/decision",
+      "sourceIds": [
+        "A2",
+        "QA-13",
+        "QA-15",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-69",
+      "implementation": {
+        "status": "design_only",
+        "test": {
+          "status": "pending",
+          "path": "tests/w2/decideProductClaim.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-69"
+    }
+  ],
+  "backlogSnapshotVerifiedAt": "2026-11-03"
+}
