@@ -10,3 +10,9 @@ REN2-24 provides `@RequireMfa(action)` and `MfaGuard` for `brand.manage`, `staff
 The guard is an early request check, not the data boundary. Repositories must use `buildBrandScopePredicate` in the same SQL statement for every protected resource alias so permissions are rechecked at query time. Permissions are deliberately not cached. Use short autocommit/READ COMMITTED operations: fresh statements see committed revocations, while in-flight statements and older transaction snapshots cannot be cancelled retroactively. The underlying view evaluates time windows using transaction-start `CURRENT_TIMESTAMP`. Keep CSRF and privileged MFA checks separate and apply them to the relevant mutation handlers.
 
 There are no brand business routes in this slice. The guard and query contract are exercised by unit tests and disposable PostgreSQL fixtures rather than example production endpoints.
+
+# Platform-global permission guard
+
+`PlatformPermissionGuard` is exported by `AccessModule` for operations with no brand scope, such as platform taxonomy administration. Declare the exact permission with `@RequirePlatformPermission('taxonomy.manage')` and apply the guard to the route. It derives the actor from the same opaque W1 session but accepts only an `access.effective_permissions` row with `scope_type = 'global'` and `brand_id IS NULL`; a brand-scoped grant, path/body/query claim, or client role cannot authorize it. The guard fails closed on missing policy and repository/session failures.
+
+W1 currently seeds no taxonomy permission, so a taxonomy route remains denied until an approved permission grant is added. This guard does not replace CSRF, MFA, audit, or mutation transaction controls, and does not imply that W2 taxonomy routes exist.

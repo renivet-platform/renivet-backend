@@ -3,6 +3,7 @@ const test = require('node:test');
 const { randomBytes, randomUUID } = require('node:crypto');
 const { Pool } = require('pg');
 const { BrandAccessGuard, REQUIRE_BRAND_PERMISSION, buildBrandScopePredicate } = require('../dist/modules/access/brand-access.guard.js');
+const { PlatformPermissionGuard, REQUIRE_PLATFORM_PERMISSION } = require('../dist/modules/access/platform-permission.guard.js');
 const { BrandAccessRepository } = require('../dist/modules/access/brand-access.repository.js');
 const { IdentityRepository } = require('../dist/modules/identity/identity.repository.js');
 const { SessionService, hashSessionToken } = require('../dist/modules/identity/session.service.js');
@@ -145,6 +146,22 @@ test('REN2-27/28 derives identity from session and rejects cross-tenant and inac
 
     const sessions = new SessionService(new IdentityRepository({ pool }), 'synthetic-brand-access-csrf-key-at-least-32-bytes');
     const accessRepository = new BrandAccessRepository({ pool });
+    const platformRequest = (userId, requestedPermission) => {
+      const request = { headers: { cookie: `__Host-renivet_session=${sessionTokens.get(userId)}` }, body: { userId: 'forged', role: 'renivet_admin', scope: 'global' } };
+      const reflector = { get: (key) => key === REQUIRE_PLATFORM_PERMISSION ? requestedPermission : undefined };
+      const context = { getHandler: () => ({}), getClass: () => ({}), switchToHttp: () => ({ getRequest: () => request }) };
+      return { request, context, guard: new PlatformPermissionGuard(reflector, sessions, accessRepository) };
+    };
+    const brandRoleOnPlatformPermission = platformRequest(actorId, 'brand_membership.read');
+    await assert.rejects(brandRoleOnPlatformPermission.guard.canActivate(brandRoleOnPlatformPermission.context), (error) => error.getStatus() === 403,
+      'a brand-scoped grant must not authorize a platform action');
+    const brandRoleOnTaxonomy = platformRequest(actorId, 'taxonomy.manage');
+    await assert.rejects(brandRoleOnTaxonomy.guard.canActivate(brandRoleOnTaxonomy.context), (error) => error.getStatus() === 403,
+      'brand membership must not authorize platform taxonomy mutation');
+    const actualGlobalGrant = platformRequest(globalId, 'staff_access.manage');
+    assert.equal(await actualGlobalGrant.guard.canActivate(actualGlobalGrant.context), true,
+      'an explicit global-scope W1 permission is accepted');
+
     const guard = new BrandAccessGuard({ get: (key) => key === REQUIRE_BRAND_PERMISSION ? permission : undefined }, sessions, accessRepository);
     const authorize = async (userId, brandId, requestedPermission = permission) => {
       const harness = requestContext(`__Host-renivet_session=${sessionTokens.get(userId)}`, brandId, requestedPermission);

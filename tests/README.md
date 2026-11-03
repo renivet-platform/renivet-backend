@@ -6,6 +6,8 @@ The same disposable PostgreSQL 16 job runs `node --test tests/brand-access-schem
 
 REN2-27 adds `tests/session-cookie.test.cjs` and `tests/brand-access-guard.test.cjs` to the local unit suite, plus `tests/brand-access.integration.test.cjs` to the PostgreSQL 16 disposable CI job. The integration test creates and removes synthetic users, memberships, role assignments and brands; its resource rows live only in a temporary table. It verifies session-derived identity, brand-specific and global permissions, multi-brand isolation, detail/list/search/count/nested/bulk-write/export scopes, and that committed grant expiry or membership suspension blocks the next SQL statement using an already issued context. It must only use the loopback `renivet_ci` disposable database.
 
+REN2-49 adds `tests/platform-permission-guard.test.cjs`, `tests/brand-access-global-permission.test.cjs`, and `tests/ren2-49-authorization-matrix.test.cjs` to the local unit suite. The platform guard accepts only a global-scope W1 permission; it does not fall back to brand grants. `tests/brand-access.integration.test.cjs` also verifies against disposable PostgreSQL that a brand-scoped membership permission cannot satisfy the platform guard, a taxonomy mutation is denied to a brand principal, and an explicit current W1 global permission passes. No taxonomy permission is seeded, so no taxonomy handler is enabled by this task. The matrix check enforces 44 unique candidate operation IDs and requires each row to declare a permission, guard lane, and mapped or explicitly denied role status.
+
 REN2-28 maps the W1 authorization-abuse matrix into executable checks:
 
 | Scenario | Executable evidence |
