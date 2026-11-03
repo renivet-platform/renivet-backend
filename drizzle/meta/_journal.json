@@ -43,6 +43,13 @@
       "when": 1793440461623,
       "tag": "0005_ren2_26_brand_membership_permissions_audit",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793703283726,
+      "tag": "0006_ren2_50_w2_catalog_inventory",
+      "breakpoints": true
     }
   ]
 }

@@ -82,6 +82,10 @@ jobs:
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
         run: node --test tests/brand-access-schema.integration.cjs
+      - name: Verify REN2-50 W1-to-W2 schema, foreign keys, and price exclusion
+        env:
+          RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
+        run: node --test tests/w2-schema.integration.cjs
       - name: Verify REN2-27/28 session-derived authorization, live query scope, and T-AZ/T-ID denials
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
@@ -147,6 +151,10 @@ jobs:
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
         run: node --test tests/brand-access-schema.integration.cjs
+      - name: Re-verify REN2-50 W1-to-W2 schema after recovery
+        env:
+          RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
+        run: node --test tests/w2-schema.integration.cjs
       - name: Re-verify REN2-27 live brand query scope after recovery
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
