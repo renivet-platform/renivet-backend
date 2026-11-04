@@ -1230,8 +1230,8 @@
           "path": "tests/w2/claims-service.test.cjs"
         },
         "pullRequest": {
-          "status": "pending",
-          "url": null
+          "status": "open",
+          "url": "https://github.com/renivet-platform/renivet-backend/pull/55"
         }
       },
       "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-68"
@@ -1254,8 +1254,8 @@
           "path": "tests/w2/claims-service.test.cjs"
         },
         "pullRequest": {
-          "status": "pending",
-          "url": null
+          "status": "open",
+          "url": "https://github.com/renivet-platform/renivet-backend/pull/55"
         }
       },
       "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-68"
