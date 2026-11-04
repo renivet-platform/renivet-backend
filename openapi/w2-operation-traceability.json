@@ -359,10 +359,10 @@
       ],
       "ownerIssue": "REN2-64",
       "implementation": {
-        "status": "design_only",
+        "status": "implemented",
         "test": {
-          "status": "pending",
-          "path": "tests/w2/proposeVariantPrice.test.cjs"
+          "status": "verified",
+          "path": "tests/w2/price.integration.test.cjs"
         },
         "pullRequest": {
           "status": "pending",
@@ -383,10 +383,10 @@
       ],
       "ownerIssue": "REN2-64",
       "implementation": {
-        "status": "design_only",
+        "status": "implemented",
         "test": {
-          "status": "pending",
-          "path": "tests/w2/listVariantPrices.test.cjs"
+          "status": "verified",
+          "path": "tests/w2/price.integration.test.cjs"
         },
         "pullRequest": {
           "status": "pending",

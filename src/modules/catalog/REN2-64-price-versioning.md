@@ -1,0 +1,9 @@
+# REN2-64 price versioning
+
+`PATCH /api/v1/brands/{brandId}/variants/{variantId}/prices` records an INR price proposal in paise. It requires the live brand-scoped W1 `pricing.write` permission, a session-bound CSRF token, an `Idempotency-Key`, and an `If-Match` variant row version. Price and MRP must be safe integer paise values, selling price cannot exceed MRP, and effective timestamps must include a timezone. Replays with the same key and request return the original receipt; changed payloads conflict.
+
+`GET /api/v1/brands/{brandId}/variants/{variantId}/prices` lists price history only after a live, brand-scoped `pricing.read` permission check in the query. Both endpoints conceal variants outside the authorized brand. The W1 pricing permissions are defined by the migration but intentionally receive no role grants; requests remain denied until the owner-approved W1 role map grants them.
+
+Migration `0015_ren2_64_price_versions.sql` adds audit attribution, compare-and-swap row versions, idempotency receipts, append-only price audit events, and lifecycle checks. PostgreSQL 16 retains the approved-window GiST exclusion from REN2-50 over `[valid_from, valid_to)`, treating a missing end as infinity. Pending proposals may overlap; concurrent approvals that overlap fail at the database constraint. Approved price rows are immutable. The independent reviewer decision API and its permission checks belong to REN2-65; this task does not activate or implement that endpoint.
+
+The disposable PostgreSQL 16 integration is `tests/w2/price.integration.test.cjs`; it covers persistence, tenant scoping, replay/conflict behavior, stale row versions, concurrent approved-window exclusion, adjacency, and audit immutability. `proposeVariantPrice` and `listVariantPrices` remain subject to the W2 contract activation and permission approval gates; this PR is implementation evidence, not production activation authorization.

@@ -408,6 +408,30 @@ export interface paths {
         patch: operations["updateProductVariant"];
         trace?: never;
     };
+    "/api/v1/brands/{brandId}/variants/{variantId}/prices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List price history for a brand-owned variant
+         * @description Returns all price versions for a brand-owned variant after rechecking live W1 pricing.read permission in the scoped query. Linear: REN2-64.
+         */
+        get: operations["listVariantPrices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Propose a versioned INR price for a brand-owned variant
+         * @description Creates an immutable pending price proposal. The current variant row version is checked with If-Match; approval is a separate REN2-65 reviewer action. Linear: REN2-64.
+         */
+        patch: operations["proposeVariantPrice"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -658,6 +682,21 @@ export interface components {
             validatorVersion: string;
             rulesetSha256: string;
             attributes: components["schemas"]["AttributeDefinitionDto"][];
+        };
+        PriceActionReceiptDto: {
+            /** Format: uuid */
+            id: string;
+            status: string;
+            requestId: string;
+            rowVersion?: number;
+        };
+        PriceErrorDto: {
+            code: string;
+            message: string;
+            requestId: string;
+            details?: {
+                [key: string]: unknown;
+            };
         };
     };
     responses: never;
@@ -2772,6 +2811,215 @@ export interface operations {
                             [key: string]: unknown;
                         };
                     };
+                };
+            };
+        };
+    };
+    listVariantPrices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                brandId: string;
+                variantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Price history for the authorized variant. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            variantId: string;
+                            /** @constant */
+                            currency: "INR";
+                            amountMinor: number;
+                            mrpMinor: number;
+                            /** @enum {string} */
+                            priceState: "DRAFT" | "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED";
+                            /** Format: date-time */
+                            validFrom: string;
+                            /** Format: date-time */
+                            validTo?: string | null;
+                            rowVersion?: number;
+                        }[];
+                        nextCursor?: string | null;
+                    };
+                };
+            };
+            /** @description The price query is invalid. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceErrorDto"];
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceErrorDto"];
+                };
+            };
+            /** @description Brand permission denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceErrorDto"];
+                };
+            };
+            /** @description Brand or variant resource was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceErrorDto"];
+                };
+            };
+            /** @description Price history cannot be returned in the current state. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceErrorDto"];
+                };
+            };
+            /** @description The supplied resource version does not match. */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceErrorDto"];
+                };
+            };
+            /** @description The price query is invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceErrorDto"];
+                };
+            };
+            /** @description Price storage is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceErrorDto"];
+                };
+            };
+        };
+    };
+    proposeVariantPrice: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                "If-Match": string;
+            };
+            path: {
+                brandId: string;
+                variantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @constant */
+                    currency: "INR";
+                    sellingPriceMinor: number;
+                    mrpMinor: number;
+                    /** Format: date-time */
+                    validFrom: string;
+                    /** Format: date-time */
+                    validTo?: string | null;
+                    ruleVersion: number;
+                    reasonCode?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Versioned outcome / accepted command. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceActionReceiptDto"];
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceErrorDto"];
+                };
+            };
+            /** @description Brand permission or CSRF denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceErrorDto"];
+                };
+            };
+            /** @description Brand or variant resource was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceErrorDto"];
+                };
+            };
+            /** @description Stale version, idempotency conflict or approved-price overlap. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceErrorDto"];
+                };
+            };
+            /** @description The price proposal is invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceErrorDto"];
+                };
+            };
+            /** @description Price storage is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceErrorDto"];
                 };
             };
         };
