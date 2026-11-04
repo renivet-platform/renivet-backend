@@ -4,6 +4,12 @@ Brand-owned products only; no universal SKU or brand catalog mutation route is i
 
 The NestJS module is registered in `AppModule` for REN2-58 global taxonomy schema operations and REN2-59 brand-scoped category reads. Other catalog and product APIs remain inactive.
 
+## REN2-60 product and variant persistence
+
+`catalogue.products` and `catalogue.product_variants` use stable UUIDs, brand-scoped normalized style/SKU keys, same-brand composite foreign keys, and an exact category/schema-version pin. Variant option-signature uniqueness is scoped to the parent product; callers must use the catalog's deterministic canonical option-signature function before persistence. These records remain brand-owned and do not represent multi-seller offers.
+
+Migration `0010_ren2_60_variant_sku_order_lock.sql` adds a one-way `sku_locked_at` marker. The transaction that first accepts an order referencing a variant must set this marker atomically with the order reference. Once set, the database rejects SKU changes and attempts to clear or rewrite the lock. Order and checkout persistence are not implemented by this catalog slice, so the marker is a persistence contract for that future transaction, not an order workflow.
+
 ## REN2-56 taxonomy persistence
 
 The shared taxonomy tree is persisted by `0008_ren2_56_canonical_taxonomy.sql`. New categories start inactive and without a current schema pointer. Only leaf categories can publish a schema version; publication computes a SHA-256 hash over the ruleset, validator version, and typed attribute rules, then advances the category pointer. Published schema versions and their rules are immutable. Products and revisions retain an exact category/version pin, and revisions must match their parent product's pin.
