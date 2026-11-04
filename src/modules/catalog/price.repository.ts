@@ -200,6 +200,11 @@ export class PricePostgresRepository implements PriceRepository {
       if (before.created_by === context.userId) throw new PriceError('PRICE_MAKER_CHECKER_CONFLICT');
       if (before.price_state !== 'PENDING') throw new PriceError('PRICE_REVIEW_STATE_CONFLICT');
 
+      // Serialize approvals in the same exclusion-constraint key space before changing
+      // different pending rows, preventing a PostgreSQL exclusion-check deadlock.
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+        [`price-approval:${context.brandId}:${before.variant_id}:${before.currency}`]);
+
       const nextState = input.decision === 'APPROVE' ? 'APPROVED' : 'REJECTED';
       const updated = await client.query<DecisionRow>(
         `UPDATE catalogue.variant_prices AS vp
