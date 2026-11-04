@@ -120,6 +120,13 @@
       "when": 1793800500000,
       "tag": "0016_ren2_65_price_review",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1793800600000,
+      "tag": "0017_ren2_66_secure_media_lifecycle",
+      "breakpoints": true
     }
   ]
 }

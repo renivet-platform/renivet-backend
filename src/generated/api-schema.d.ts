@@ -452,6 +452,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/brands/{brandId}/media/uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue a short-lived private image upload intent
+         * @description Creates a brand-owned pending media asset and returns a five-minute DigitalOcean Spaces PUT capability. Linear: REN2-66.
+         */
+        post: operations["beginMediaUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/brands/{brandId}/media/{mediaId}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Validate and scan a completed media upload
+         * @description Checks brand-bound object metadata, byte length, magic bytes, SHA-256, ClamAV result, rights attestation and private derivatives. Linear: REN2-66.
+         */
+        post: operations["completeMediaUpload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/brands/{brandId}/media/{mediaId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read brand-owned media processing status
+         * @description Returns scan and rights state, derivative state, and a short-lived private preview URL only for clean assets. Linear: REN2-66.
+         */
+        get: operations["getMediaAssetStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3148,6 +3208,474 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PriceErrorDto"];
+                };
+            };
+        };
+    };
+    beginMediaUpload: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                brandId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    fileName: string;
+                    mimeType: string;
+                    /** @description Images are limited to 10 MiB. */
+                    byteLength: number;
+                    rightsAttested: boolean;
+                    sha256?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Short-lived private storage upload intent. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        mediaAssetId: string;
+                        /** @constant */
+                        uploadMethod: "PUT";
+                        /** Format: uri */
+                        uploadUrl: string;
+                        /** Format: date-time */
+                        expiresAt: string;
+                        headers: {
+                            [key: string]: string;
+                        };
+                    };
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Brand permission, MFA, or CSRF denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Brand was not found or is not accessible. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Idempotency conflict or expired intent. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Image request failed validation. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Storage or malware scanning is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    completeMediaUpload: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                mediaId: string;
+                brandId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    sha256: string;
+                    sizeBytes: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Media scan lifecycle receipt. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id: string;
+                        status: string;
+                        requestId: string;
+                        rowVersion?: number;
+                    };
+                };
+            };
+            /** @description Malformed media ID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Brand permission, MFA, or CSRF denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Media asset is not accessible. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Upload is not available, expired, or conflicts with an earlier request. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Media version is stale. */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Media content, malware scan, or rights validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Storage, scanner, or database is temporarily unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    getMediaAssetStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mediaId: string;
+                brandId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Media asset status. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id: string;
+                        scanState: string;
+                        rightsState: string;
+                        derivativeState?: string;
+                        /** Format: uri */
+                        safePreviewUrl?: string | null;
+                    };
+                };
+            };
+            /** @description Malformed media ID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Brand permission denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Media asset is not accessible. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Media resource conflict. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Media version is stale. */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Media identifier failed validation. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Media status storage is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
                 };
             };
         };

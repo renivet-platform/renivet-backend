@@ -5,6 +5,7 @@ import { HealthModule } from './modules/health/health.module';
 import { IdentityModule } from './modules/identity/identity.module';
 import { AccessModule } from './modules/access/access.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
+import { MediaModule } from './modules/media/media.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { CatalogModule } from './modules/catalog/catalog.module';
     IdentityModule,
     AccessModule,
     CatalogModule,
+    MediaModule,
   ],
 })
 export class AppModule {}
