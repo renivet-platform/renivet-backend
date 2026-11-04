@@ -1,8 +1,8 @@
-# Catalog module — taxonomy routes
+# Catalog module — W2 taxonomy and product draft routes
 
-Brand-owned products only; no universal SKU or brand catalog mutation route is implemented.
+Brand-owned products only; no universal SKU or broad catalog workflow is implemented.
 
-The NestJS module is registered in `AppModule` for REN2-58 global taxonomy schema operations and REN2-59 brand-scoped category reads. Other catalog and product APIs remain inactive.
+The NestJS module is registered in `AppModule` for REN2-58 global taxonomy schema operations, REN2-59 brand-scoped category reads, and the REN2-61 parent-product draft lifecycle. Other catalog and product APIs remain inactive.
 
 ## REN2-60 product and variant persistence
 
@@ -39,3 +39,5 @@ No categories, attributes or pilot seed data are inserted by this slice. Product
 `GET /api/v1/brands/{brandId}/categories` returns the shared tree in stable UUID keyset pages. Each item includes its parent, leaf and active flags, path codes, the current schema pointer, and the schema version (version 1 is the initial schema generation when a category has no publication yet). Inactive and non-leaf entries are informational and cannot be selected for product submission. Every request requires a live W1 `catalog.read` grant for the brand; the SQL read also checks the effective permission in the same statement.
 
 `GET /api/v1/brands/{brandId}/categories/{categoryId}/attributes` pages only the current published version's frozen typed rules. Its opaque cursor is bound to that schema snapshot and becomes stale after publication. `GET /api/v1/brands/{brandId}/categories/{categoryId}/schema-versions/{version}` returns only the exact requested published snapshot, including its immutable ruleset hash and validator version; it never substitutes the latest version. These GET routes use private revalidation (`Cache-Control: private, no-cache`, `ETag`); requests re-read storage before returning 304, so category or schema changes are immediately visible.
+
+See [REN2-61 progressive product drafts](REN2-61-product-draft.md) for the create/update contract and persistence behavior.

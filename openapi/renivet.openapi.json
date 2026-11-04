@@ -1929,6 +1929,937 @@
         "x-renivet-implementation-wave": "W2",
         "x-renivet-permission": "catalog.read"
       }
+    },
+    "/api/v1/brands/{brandId}/products": {
+      "post": {
+        "description": "Creates an incomplete brand-owned draft with its immutable category schema pin; variants, price and media are not required until later workflow steps. Linear: REN2-61.",
+        "operationId": "createBrandProduct",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
+          },
+          {
+            "name": "brandId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "styleCode",
+                  "categoryCode",
+                  "categorySchemaVersion",
+                  "title"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "styleCode": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "categoryCode": {
+                    "type": "string"
+                  },
+                  "categorySchemaVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "attributes": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "variants": {
+                    "type": "array",
+                    "minItems": 0,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "sku",
+                        "options"
+                      ],
+                      "additionalProperties": false,
+                      "properties": {
+                        "sku": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 40,
+                          "pattern": "^[A-Za-z0-9_.-]+$"
+                        },
+                        "options": {
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "weightG": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Draft created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "productId",
+                    "publicationState",
+                    "contentVersion",
+                    "qcState",
+                    "categorySchemaVersion"
+                  ],
+                  "properties": {
+                    "productId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "publicationState": {
+                      "type": "string",
+                      "const": "DRAFT"
+                    },
+                    "contentVersion": {
+                      "type": "integer",
+                      "const": 1
+                    },
+                    "rowVersion": {
+                      "type": "integer",
+                      "const": 1
+                    },
+                    "variantIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "format": "uuid"
+                      }
+                    },
+                    "qcState": {
+                      "type": "string",
+                      "const": "NOT_SUBMITTED"
+                    },
+                    "categorySchemaVersion": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid first-party session.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Brand permission or CSRF denied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Brand was not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Duplicate style or changed idempotent replay.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Brand state, category or attributes prevent this draft.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Product draft storage is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "Create a progressive parent product draft",
+        "tags": [
+          "Catalog"
+        ],
+        "x-renivet-csrf-policy": "Allowlisted origin, same-origin fetch metadata and W1 session-bound X-CSRF-Token; live brand permission and approved brand checked again in transaction.",
+        "x-renivet-implementation-wave": "W2",
+        "x-renivet-permission": "catalog.write"
+      }
+    },
+    "/api/v1/brands/{brandId}/products/{productId}": {
+      "patch": {
+        "description": "Saves normalized draft fields with a row-version If-Match compare-and-swap. Historical published category schema versions remain valid pins. Linear: REN2-61.",
+        "operationId": "updateBrandProduct",
+        "parameters": [
+          {
+            "name": "productId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "Quoted rowVersion returned in ProductDetail.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "\"1\""
+            }
+          },
+          {
+            "name": "brandId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "minProperties": 1,
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "categorySchemaVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "attributes": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Draft updated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "brandId",
+                        "styleCode",
+                        "title",
+                        "publicationState",
+                        "contentVersion"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "brandId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "styleCode": {
+                          "type": "string"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "publicationState": {
+                          "type": "string",
+                          "enum": [
+                            "DRAFT",
+                            "INCOMPLETE",
+                            "PENDING_REVIEW",
+                            "APPROVED",
+                            "PUBLISHED",
+                            "RE_REVIEW",
+                            "REJECTED",
+                            "RESTRICTED",
+                            "ARCHIVED"
+                          ]
+                        },
+                        "contentVersion": {
+                          "type": "integer",
+                          "minimum": 1
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "categoryId",
+                        "categorySchemaVersion",
+                        "rowVersion",
+                        "variants",
+                        "mediaLinks",
+                        "attributes",
+                        "qcState"
+                      ],
+                      "properties": {
+                        "categoryId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "categorySchemaVersion": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "rowVersion": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "qcState": {
+                          "type": "string"
+                        },
+                        "draftRevisionId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "nullable": true
+                        },
+                        "publishedRevisionId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "nullable": true
+                        },
+                        "approvedReviewId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "nullable": true
+                        },
+                        "variants": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "id",
+                              "productId",
+                              "brandId",
+                              "sku",
+                              "options",
+                              "variantState"
+                            ],
+                            "additionalProperties": false,
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "productId": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "brandId": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "sku": {
+                                "type": "string"
+                              },
+                              "options": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
+                              },
+                              "variantState": {
+                                "type": "string"
+                              },
+                              "priceVersions": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "required": [
+                                    "id",
+                                    "variantId",
+                                    "currency",
+                                    "amountMinor",
+                                    "mrpMinor",
+                                    "priceState",
+                                    "validFrom"
+                                  ],
+                                  "properties": {
+                                    "id": {
+                                      "type": "string",
+                                      "format": "uuid"
+                                    },
+                                    "variantId": {
+                                      "type": "string",
+                                      "format": "uuid"
+                                    },
+                                    "currency": {
+                                      "type": "string",
+                                      "const": "INR"
+                                    },
+                                    "amountMinor": {
+                                      "type": "integer",
+                                      "minimum": 0
+                                    },
+                                    "mrpMinor": {
+                                      "type": "integer",
+                                      "minimum": 1
+                                    },
+                                    "priceState": {
+                                      "type": "string",
+                                      "enum": [
+                                        "DRAFT",
+                                        "PENDING",
+                                        "APPROVED",
+                                        "REJECTED",
+                                        "EXPIRED"
+                                      ]
+                                    },
+                                    "validFrom": {
+                                      "type": "string",
+                                      "format": "date-time"
+                                    },
+                                    "validTo": {
+                                      "type": "string",
+                                      "format": "date-time",
+                                      "nullable": true
+                                    },
+                                    "rowVersion": {
+                                      "type": "integer",
+                                      "minimum": 1
+                                    }
+                                  }
+                                }
+                              },
+                              "mediaLinks": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "required": [
+                                    "id",
+                                    "mediaAssetId",
+                                    "productId",
+                                    "displayRole",
+                                    "displayOrder",
+                                    "scanState",
+                                    "rightsState"
+                                  ],
+                                  "properties": {
+                                    "id": {
+                                      "type": "string",
+                                      "format": "uuid"
+                                    },
+                                    "mediaAssetId": {
+                                      "type": "string",
+                                      "format": "uuid"
+                                    },
+                                    "productId": {
+                                      "type": "string",
+                                      "format": "uuid"
+                                    },
+                                    "variantId": {
+                                      "type": "string",
+                                      "format": "uuid",
+                                      "nullable": true
+                                    },
+                                    "displayRole": {
+                                      "type": "string"
+                                    },
+                                    "displayOrder": {
+                                      "type": "integer",
+                                      "minimum": 0
+                                    },
+                                    "scanState": {
+                                      "type": "string",
+                                      "enum": [
+                                        "PENDING",
+                                        "CLEAN",
+                                        "REJECTED"
+                                      ]
+                                    },
+                                    "rightsState": {
+                                      "type": "string",
+                                      "enum": [
+                                        "UNVERIFIED",
+                                        "ATTESTED",
+                                        "REVIEWED",
+                                        "REVOKED"
+                                      ]
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "mediaLinks": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "id",
+                              "mediaAssetId",
+                              "productId",
+                              "displayRole",
+                              "displayOrder",
+                              "scanState",
+                              "rightsState"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "mediaAssetId": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "productId": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "variantId": {
+                                "type": "string",
+                                "format": "uuid",
+                                "nullable": true
+                              },
+                              "displayRole": {
+                                "type": "string"
+                              },
+                              "displayOrder": {
+                                "type": "integer",
+                                "minimum": 0
+                              },
+                              "scanState": {
+                                "type": "string",
+                                "enum": [
+                                  "PENDING",
+                                  "CLEAN",
+                                  "REJECTED"
+                                ]
+                              },
+                              "rightsState": {
+                                "type": "string",
+                                "enum": [
+                                  "UNVERIFIED",
+                                  "ATTESTED",
+                                  "REVIEWED",
+                                  "REVOKED"
+                                ]
+                              }
+                            }
+                          }
+                        },
+                        "attributes": {
+                          "type": "object",
+                          "additionalProperties": true
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid first-party session.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Brand permission or CSRF denied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Product was not found in this brand.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale row version, duplicate style or changed idempotent replay.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Brand state, category, attributes or product state prevent the update.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Product draft storage is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "Update a progressive product draft",
+        "tags": [
+          "Catalog"
+        ],
+        "x-renivet-csrf-policy": "Allowlisted origin, same-origin fetch metadata and W1 session-bound X-CSRF-Token; live brand permission and approved brand checked again in transaction.",
+        "x-renivet-implementation-wave": "W2",
+        "x-renivet-permission": "catalog.write"
+      }
     }
   },
   "info": {

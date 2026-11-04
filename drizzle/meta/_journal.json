@@ -78,6 +78,20 @@
       "when": 1793750601680,
       "tag": "0010_ren2_60_variant_sku_order_lock",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793800000000,
+      "tag": "0011_ren2_61_product_draft_lifecycle",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793800100000,
+      "tag": "0012_ren2_61_product_draft_receipt_immutability",
+      "breakpoints": true
     }
   ]
 }

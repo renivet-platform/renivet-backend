@@ -5,6 +5,7 @@
   "candidateBlob": "b3b5ddd1a77d570c604692cb543215d9e2a30234",
   "expectedOperationCount": 44,
   "qualityGates": [
+    "G07",
     "G08",
     "G17"
   ],
@@ -231,14 +232,14 @@
       ],
       "ownerIssue": "REN2-61",
       "implementation": {
-        "status": "design_only",
+        "status": "implemented",
         "test": {
-          "status": "pending",
-          "path": "tests/w2/createBrandProduct.test.cjs"
+          "status": "verified",
+          "path": "tests/w2/product-draft.integration.test.cjs"
         },
         "pullRequest": {
-          "status": "pending",
-          "url": null
+          "status": "open",
+          "url": "https://github.com/renivet-platform/renivet-backend/pull/47"
         }
       },
       "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-61"
@@ -309,14 +310,14 @@
       ],
       "ownerIssue": "REN2-61",
       "implementation": {
-        "status": "design_only",
+        "status": "implemented",
         "test": {
-          "status": "pending",
-          "path": "tests/w2/updateBrandProduct.test.cjs"
+          "status": "verified",
+          "path": "tests/w2/product-draft.integration.test.cjs"
         },
         "pullRequest": {
-          "status": "pending",
-          "url": null
+          "status": "open",
+          "url": "https://github.com/renivet-platform/renivet-backend/pull/47"
         }
       },
       "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-61"
@@ -1287,3 +1288,4 @@
   ],
   "backlogSnapshotVerifiedAt": "2026-11-03"
 }
+

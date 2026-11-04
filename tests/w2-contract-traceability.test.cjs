@@ -177,7 +177,7 @@ test('REN2-52 permits a live slice only with a matching operation, verified test
   const candidate = structuredClone(candidateSpec);
   const manifest = structuredClone(traceability);
   const active = structuredClone(activeSpec);
-  for (const entry of manifest.operations.filter(({ ownerIssue }) => ['REN2-58', 'REN2-59'].includes(ownerIssue))) {
+  for (const entry of manifest.operations.filter(({ ownerIssue }) => ['REN2-58', 'REN2-59', 'REN2-61'].includes(ownerIssue))) {
     entry.implementation = {
       status: 'design_only',
       test: { status: 'pending', path: `tests/w2/${entry.operationId}.test.cjs` },
