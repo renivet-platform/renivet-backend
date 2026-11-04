@@ -14,7 +14,7 @@ const W2_TABLES = [
   'catalogue.products', 'catalogue.product_variants', 'catalogue.variant_prices',
   'catalogue.product_field_lineage', 'catalogue.product_mutation_receipts',
   'catalogue.product_revisions', 'catalogue.product_qc_reviews',
-  'catalogue.price_audit_events', 'catalogue.product_attribute_values',
+  'catalogue.price_audit_events', 'catalogue.price_mutation_receipts', 'catalogue.product_attribute_values',
   'catalogue.taxonomy_admin_events',
   'catalogue.variant_attribute_values', 'catalogue.sustainability_claims',
   'catalogue.claim_evidence', 'catalogue.claim_review_events', 'catalogue.publication_events',
@@ -48,7 +48,7 @@ async function w1SchemaSignature(client) {
   return result.rows;
 }
 
-test('REN2-60 brand-owned products and variants enforce schema, tenant, uniqueness, SKU-lock, and rollback invariants', {
+test('W2 brand-owned catalogue schemas enforce reviewed tables, tenant, uniqueness, price exclusion, and rollback invariants', {
   timeout: 30_000,
   skip: !process.env.RENIVET_TEST_DATABASE_URL,
 }, async () => {

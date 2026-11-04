@@ -3837,6 +3837,386 @@
         "x-renivet-implementation-wave": "W2",
         "x-renivet-permission": "catalog.write"
       }
+    },
+    "/api/v1/brands/{brandId}/variants/{variantId}/prices": {
+      "patch": {
+        "description": "Creates an immutable pending price proposal. The current variant row version is checked with If-Match; approval is a separate REN2-65 reviewer action. Linear: REN2-64.",
+        "operationId": "proposeVariantPrice",
+        "parameters": [
+          {
+            "name": "brandId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "variantId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "\"1\""
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "currency",
+                  "sellingPriceMinor",
+                  "mrpMinor",
+                  "validFrom",
+                  "ruleVersion"
+                ],
+                "properties": {
+                  "currency": {
+                    "type": "string",
+                    "const": "INR"
+                  },
+                  "sellingPriceMinor": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "mrpMinor": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "validFrom": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "validTo": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "date-time"
+                  },
+                  "ruleVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "reasonCode": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Versioned outcome / accepted command.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceActionReceiptDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Brand permission or CSRF denied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Brand or variant resource was not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, idempotency conflict or approved-price overlap.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceErrorDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The price proposal is invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceErrorDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Price storage is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "Propose a versioned INR price for a brand-owned variant",
+        "tags": [
+          "Pricing"
+        ],
+        "x-renivet-csrf-policy": "W1 validateCsrfRequest: allowlisted Origin, sec-fetch-site same-origin, x-csrf-token session-bound; permission and MFA still required",
+        "x-renivet-implementation-wave": "W2",
+        "x-renivet-permission": "pricing.write"
+      },
+      "get": {
+        "description": "Returns all price versions for a brand-owned variant after rechecking live W1 pricing.read permission in the scoped query. Linear: REN2-64.",
+        "operationId": "listVariantPrices",
+        "parameters": [
+          {
+            "name": "brandId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "variantId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Price history for the authorized variant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "variantId",
+                          "currency",
+                          "amountMinor",
+                          "mrpMinor",
+                          "priceState",
+                          "validFrom"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "variantId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "currency": {
+                            "type": "string",
+                            "const": "INR"
+                          },
+                          "amountMinor": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "mrpMinor": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "priceState": {
+                            "type": "string",
+                            "enum": [
+                              "DRAFT",
+                              "PENDING",
+                              "APPROVED",
+                              "REJECTED",
+                              "EXPIRED"
+                            ]
+                          },
+                          "validFrom": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "validTo": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date-time"
+                          },
+                          "rowVersion": {
+                            "type": "integer",
+                            "minimum": 1
+                          }
+                        }
+                      }
+                    },
+                    "nextCursor": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The price query is invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Brand permission denied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Brand or variant resource was not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Price history cannot be returned in the current state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceErrorDto"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "The supplied resource version does not match.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceErrorDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The price query is invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceErrorDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Price storage is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "List price history for a brand-owned variant",
+        "tags": [
+          "Pricing"
+        ],
+        "x-renivet-guard": "brand",
+        "x-renivet-implementation-wave": "W2",
+        "x-renivet-permission": "pricing.read"
+      }
     }
   },
   "info": {
@@ -4489,6 +4869,53 @@
           "validatorVersion",
           "rulesetSha256",
           "attributes"
+        ]
+      },
+      "PriceActionReceiptDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "rowVersion": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "requestId"
+        ]
+      },
+      "PriceErrorDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "details": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "requestId"
         ]
       }
     }

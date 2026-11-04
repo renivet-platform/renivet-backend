@@ -16,11 +16,14 @@ import { TAXONOMY_ADMIN_REPOSITORY, TaxonomyAdminService } from './taxonomy-admi
 import { ProductDraftController } from './product-draft.controller';
 import { ProductDraftPostgresRepository } from './product-draft.repository';
 import { PRODUCT_DRAFT_REPOSITORY, ProductDraftService } from './product-draft.service';
+import { PriceController } from './price.controller';
+import { PricePostgresRepository } from './price.repository';
+import { PRICE_REPOSITORY, PriceService } from './price.service';
 
 // W2 taxonomy administration, brand reads, and progressive parent draft writes.
 @Module({
   imports: [ConfigModule, IdentityModule, AccessModule],
-  controllers: [TaxonomyAdminController, CatalogReadController, ProductDraftController],
+  controllers: [TaxonomyAdminController, CatalogReadController, ProductDraftController, PriceController],
   providers: [
     TaxonomyAdminPostgresRepository,
     { provide: TAXONOMY_ADMIN_REPOSITORY, useExisting: TaxonomyAdminPostgresRepository },
@@ -31,6 +34,9 @@ import { PRODUCT_DRAFT_REPOSITORY, ProductDraftService } from './product-draft.s
     ProductDraftPostgresRepository,
     { provide: PRODUCT_DRAFT_REPOSITORY, useExisting: ProductDraftPostgresRepository },
     ProductDraftService,
+    PricePostgresRepository,
+    { provide: PRICE_REPOSITORY, useExisting: PricePostgresRepository },
+    PriceService,
     {
       provide: PlatformPermissionGuard,
       useFactory: (reflector: Reflector, sessions: SessionService, access: BrandAccessRepository) =>
