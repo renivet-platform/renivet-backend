@@ -238,8 +238,8 @@
           "path": "tests/w2/product-draft.integration.test.cjs"
         },
         "pullRequest": {
-          "status": "pending",
-          "url": null
+          "status": "open",
+          "url": "https://github.com/renivet-platform/renivet-backend/pull/47"
         }
       },
       "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-61"
@@ -316,8 +316,8 @@
           "path": "tests/w2/product-draft.integration.test.cjs"
         },
         "pullRequest": {
-          "status": "pending",
-          "url": null
+          "status": "open",
+          "url": "https://github.com/renivet-platform/renivet-backend/pull/47"
         }
       },
       "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-61"
@@ -1288,3 +1288,4 @@
   ],
   "backlogSnapshotVerifiedAt": "2026-11-03"
 }
+
