@@ -1,13 +1,13 @@
 import {
-  Body, Controller, ForbiddenException, HttpCode, Headers, Param, Patch, Post, UnprocessableEntityException,
+  Body, Controller, Delete, ForbiddenException, HttpCode, Headers, Param, Patch, Post, UnprocessableEntityException,
   Req, UseFilters, UseGuards, UsePipes, ValidationPipe,
 } from '@nestjs/common';
-import { ApiBody, ApiCookieAuth, ApiExtension, ApiHeader, ApiNotFoundResponse, ApiOperation,
+import { ApiBody, ApiCookieAuth, ApiExtension, ApiHeader, ApiNotFoundResponse, ApiOperation, ApiUnauthorizedResponse,
   ApiParam, ApiResponse, ApiServiceUnavailableResponse, ApiTags, SchemaObject } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { BrandAccessGuard, BrandAccessRequest, RequireBrandPermission } from '../access/brand-access.guard';
 import { csrfMatches, readSessionToken, SessionService } from '../identity/session.service';
-import { CreateProductDraftDto, UpdateProductDraftDto } from './product-draft.dto';
+import { CreateProductDraftDto, CreateProductVariantDto, DeactivateProductVariantDto, UpdateProductDraftDto, UpdateProductVariantDto } from './product-draft.dto';
 import { ProductDraftService } from './product-draft.service';
 import { ProductDraftExceptionFilter } from './product-draft-exception.filter';
 
@@ -17,6 +17,8 @@ const createValidation = new ValidationPipe({ transform: true, whitelist: true, 
   exceptionFactory: () => new UnprocessableEntityException({ code: 'PRODUCT_DRAFT_INVALID', message: 'The product draft request is invalid.' }) });
 const patchValidation = new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true,
   exceptionFactory: () => new UnprocessableEntityException({ code: 'PRODUCT_DRAFT_INVALID', message: 'The product draft request is invalid.' }) });
+const variantValidation = new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true,
+  exceptionFactory: () => new UnprocessableEntityException({ code: 'PRODUCT_DRAFT_INVALID', message: 'The product variant request is invalid.' }) });
 
 const ERROR_SCHEMA = { type: 'object', required: ['code', 'message', 'requestId'], properties: {
   code: { type: 'string' }, message: { type: 'string' }, requestId: { type: 'string' },
@@ -102,6 +104,104 @@ export class ProductDraftController {
     @Headers('Idempotency-Key') key?: string, @Headers('If-Match') ifMatch?: string | string[]) {
     const context = await this.mutationContext(request, key, 'update');
     return this.products.update(productId, body, ifMatch, context);
+  }
+
+  @Post(':productId/variants')
+  @HttpCode(201)
+  @UsePipes(variantValidation)
+  @RequireBrandPermission('catalog.write')
+  @ApiParam({ name: 'brandId', type: 'string', format: 'uuid' })
+  @ApiParam({ name: 'productId', type: 'string', format: 'uuid' })
+  @ApiExtension('x-renivet-permission', 'catalog.write')
+  @ApiExtension('x-renivet-csrf-policy', 'W1 session-bound X-CSRF-Token, Origin and Sec-Fetch-Site validation required')
+  @ApiExtension('x-renivet-implementation-wave', 'W2')
+  @ApiOperation({ operationId: 'createProductVariant', summary: 'Create a product SKU variant', description: 'Creates a brand-scoped variant with category-validated typed attributes and a sorted canonical option signature. Linear: REN2-62.' })
+  @ApiHeader({ name: 'Idempotency-Key', required: true, schema: { type: 'string', minLength: 1, maxLength: 120 } })
+  @ApiHeader({ name: 'If-Match', required: true, schema: { type: 'string', example: '"1"' }, description: 'Quoted parent product rowVersion.' })
+  @ApiBody({ schema: { type: 'object', required: ['sku','options'], additionalProperties: false, properties: {
+    sku: { type: 'string', minLength: 1, maxLength: 40, pattern: '^[A-Za-z0-9_.-]+$' },
+    options: { type: 'object', additionalProperties: { type: 'string' } }, weightG: { type: 'integer', minimum: 0 },
+  } } })
+  @ApiResponse({ status: 201, description: 'Success', schema: { type: 'object', required: ['id','status','requestId'], properties: {
+    id: { type: 'string', format: 'uuid' }, status: { type: 'string' }, requestId: { type: 'string' }, rowVersion: { type: 'integer', minimum: 1 },
+  } } })
+  @ApiUnauthorizedResponse({ description: 'Authentication is required.', schema: ERROR_SCHEMA })
+  @ApiResponse({ status: 403, description: 'Brand permission or CSRF denied.', schema: ERROR_SCHEMA })
+  @ApiResponse({ status: 404, description: 'Product not found in this brand.', schema: ERROR_SCHEMA })
+  @ApiResponse({ status: 409, description: 'SKU or option signature conflicts.', schema: ERROR_SCHEMA })
+  @ApiResponse({ status: 422, description: 'Variant does not match category schema.', schema: ERROR_SCHEMA })
+  @ApiServiceUnavailableResponse({ description: 'Variant storage is unavailable.', schema: ERROR_SCHEMA })
+  async createVariant(@Param('productId') productId: string, @Body() body: CreateProductVariantDto, @Req() request: ProductRequest,
+    @Headers('Idempotency-Key') key?: string, @Headers('If-Match') ifMatch?: string | string[]) {
+    const context = await this.mutationContext(request, key, 'createVariant');
+    return this.products.createVariant(productId, body, ifMatch, context);
+  }
+
+  @Patch(':productId/variants/:variantId')
+  @UsePipes(variantValidation)
+  @RequireBrandPermission('catalog.write')
+  @ApiParam({ name: 'brandId', type: 'string', format: 'uuid' })
+  @ApiParam({ name: 'productId', type: 'string', format: 'uuid' })
+  @ApiParam({ name: 'variantId', type: 'string', format: 'uuid' })
+  @ApiExtension('x-renivet-permission', 'catalog.write')
+  @ApiExtension('x-renivet-guard', 'brand')
+  @ApiExtension('x-renivet-csrf-policy', 'W1 session-bound X-CSRF-Token, Origin and Sec-Fetch-Site validation required')
+  @ApiExtension('x-renivet-implementation-wave', 'W2')
+  @ApiOperation({ operationId: 'updateProductVariant', summary: 'Update a draft product variant', description: 'Compare-and-swaps permitted variant fields with If-Match. SKU is immutable through this API. Linear: REN2-62.' })
+  @ApiHeader({ name: 'Idempotency-Key', required: true, schema: { type: 'string', minLength: 1, maxLength: 120 } })
+  @ApiHeader({ name: 'If-Match', required: true, schema: { type: 'string', example: '"1"' } })
+  @ApiBody({ schema: { type: 'object', minProperties: 1, additionalProperties: false, properties: {
+    options: { type: 'object', additionalProperties: { type: 'string' } }, weightG: { type: 'integer', minimum: 0 },
+    gtin: { type: ['string','null'] }, reasonCode: { type: 'string' },
+  } } })
+  @ApiResponse({ status: 200, description: 'Success', schema: { type: 'object', required: ['id','status','requestId'], properties: {
+    id: { type: 'string', format: 'uuid' }, status: { type: 'string' }, requestId: { type: 'string' }, rowVersion: { type: 'integer', minimum: 1 },
+  } } })
+  @ApiUnauthorizedResponse({ description: 'Authentication is required.', schema: ERROR_SCHEMA })
+  @ApiResponse({ status: 403, description: 'Brand permission or CSRF denied.', schema: ERROR_SCHEMA })
+  @ApiResponse({ status: 404, description: 'Variant not found in this brand and product.', schema: ERROR_SCHEMA })
+  @ApiResponse({ status: 409, description: 'Stale variant version or SKU/option conflict.', schema: ERROR_SCHEMA })
+  @ApiResponse({ status: 412, description: 'If-Match version is stale.', schema: ERROR_SCHEMA })
+  @ApiResponse({ status: 422, description: 'Variant state or category schema prevents update.', schema: ERROR_SCHEMA })
+  @ApiServiceUnavailableResponse({ description: 'Variant storage is unavailable.', schema: ERROR_SCHEMA })
+  async updateVariant(@Param('productId') productId: string, @Param('variantId') variantId: string,
+    @Body() body: UpdateProductVariantDto, @Req() request: ProductRequest, @Headers('Idempotency-Key') key?: string,
+    @Headers('If-Match') ifMatch?: string | string[]) {
+    const context = await this.mutationContext(request, key, 'updateVariant');
+    return this.products.updateVariant(productId, variantId, body, ifMatch, context);
+  }
+
+  @Delete(':productId/variants/:variantId')
+  @UsePipes(variantValidation)
+  @RequireBrandPermission('catalog.write')
+  @ApiParam({ name: 'brandId', type: 'string', format: 'uuid' })
+  @ApiParam({ name: 'productId', type: 'string', format: 'uuid' })
+  @ApiParam({ name: 'variantId', type: 'string', format: 'uuid' })
+  @ApiExtension('x-renivet-permission', 'catalog.write')
+  @ApiExtension('x-renivet-guard', 'brand')
+  @ApiExtension('x-renivet-csrf-policy', 'W1 session-bound X-CSRF-Token, Origin and Sec-Fetch-Site validation required')
+  @ApiExtension('x-renivet-implementation-wave', 'W2')
+  @ApiOperation({ operationId: 'deactivateProductVariant', summary: 'Soft-deactivate a SKU variant', description: 'Deactivates an unreferenced draft SKU without deleting or recycling its normalized SKU or option signature. Linear: REN2-62.' })
+  @ApiHeader({ name: 'Idempotency-Key', required: true, schema: { type: 'string', minLength: 1, maxLength: 120 } })
+  @ApiHeader({ name: 'If-Match', required: true, schema: { type: 'string', example: '"1"' } })
+  @ApiBody({ schema: { type: 'object', required: ['reasonCode'], properties: {
+    reasonCode: { type: 'string' }, expectedVariantVersion: { type: 'integer', minimum: 1 },
+  } } })
+  @ApiResponse({ status: 200, description: 'Success', schema: { type: 'object', required: ['id','status','requestId'], properties: {
+    id: { type: 'string', format: 'uuid' }, status: { type: 'string' }, requestId: { type: 'string' }, rowVersion: { type: 'integer', minimum: 1 },
+  } } })
+  @ApiUnauthorizedResponse({ description: 'Authentication is required.', schema: ERROR_SCHEMA })
+  @ApiResponse({ status: 403, description: 'Brand permission or CSRF denied.', schema: ERROR_SCHEMA })
+  @ApiResponse({ status: 404, description: 'Variant not found in this brand and product.', schema: ERROR_SCHEMA })
+  @ApiResponse({ status: 409, description: 'Stale version or variant has dependent records.', schema: ERROR_SCHEMA })
+  @ApiResponse({ status: 412, description: 'If-Match version is stale.', schema: ERROR_SCHEMA })
+  @ApiResponse({ status: 422, description: 'Variant cannot be deactivated in its current state.', schema: ERROR_SCHEMA })
+  @ApiServiceUnavailableResponse({ description: 'Variant storage is unavailable.', schema: ERROR_SCHEMA })
+  async deactivateVariant(@Param('productId') productId: string, @Param('variantId') variantId: string,
+    @Body() body: DeactivateProductVariantDto, @Req() request: ProductRequest, @Headers('Idempotency-Key') key?: string,
+    @Headers('If-Match') ifMatch?: string | string[]) {
+    const context = await this.mutationContext(request, key, 'deactivateVariant');
+    return this.products.deactivateVariant(productId, variantId, body, ifMatch, context);
   }
 
   private async mutationContext(request: ProductRequest, key: string | undefined, action: string) {

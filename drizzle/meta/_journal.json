@@ -92,6 +92,13 @@
       "when": 1793800100000,
       "tag": "0012_ren2_61_product_draft_receipt_immutability",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793800200000,
+      "tag": "0013_ren2_62_variant_lifecycle_receipts",
+      "breakpoints": true
     }
   ]
 }

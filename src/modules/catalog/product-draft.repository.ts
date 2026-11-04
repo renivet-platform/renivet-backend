@@ -3,10 +3,11 @@ import { Injectable } from '@nestjs/common';
 import { PoolClient } from 'pg';
 import { IdentityInfrastructure } from '../identity/identity-infrastructure';
 import { canonicalizeOptionSignature, CategoryAttributeRule } from './category-attribute-validator';
-import { NormalizedProductCreate, ProductMutationContext, validateProductAttributes } from './product-draft.service';
-import { UpdateProductDraftDto } from './product-draft.dto';
+import { NormalizedProductCreate, ProductMutationContext, validateProductAttributes, validateVariantAttributes } from './product-draft.service';
+import { CreateProductVariantDto, DeactivateProductVariantDto, UpdateProductDraftDto, UpdateProductVariantDto } from './product-draft.dto';
 
 interface ProductRow { id: string; brand_id: string; category_id: string; style_code: string; title: string; description: string; category_schema_version: number; content_version: number; row_version: string; publication_state: string; qc_state: string; }
+interface VariantRow { id: string; brand_id: string; product_id: string; sku: string; options: Record<string, string>; option_signature: string; weight_g: number | null; gtin: string | null; variant_state: string; row_version: string; sku_locked_at: string | null; category_id: string; category_schema_version: number; }
 
 @Injectable()
 export class ProductDraftPostgresRepository {
@@ -45,6 +46,10 @@ export class ProductDraftPostgresRepository {
            VALUES($1,$2,$3,$4,$5::jsonb,$6) RETURNING id`,
           [context.brandId, product.id, candidate.sku.normalize('NFC').trim(), optionSignature, JSON.stringify(candidate.options), candidate.weightG ?? null]);
         variantIds.push(variant.rows[0].id);
+        const variantValues = candidate.options as Record<string, unknown>;
+        const variantAttributes = validateVariantAttributes(category.id, category.schema_version_id, category.version,
+          category.validator_version, category.rules, variantValues);
+        await this.saveVariantAttributes(client, context.brandId, product, variant.rows[0].id, category, variantAttributes);
         await this.lineage(client, context, product.id, [
           `variants.${variant.rows[0].id}.sku`, `variants.${variant.rows[0].id}.options`,
           ...(candidate.weightG === undefined ? [] : [`variants.${variant.rows[0].id}.weightG`]),
@@ -106,6 +111,189 @@ export class ProductDraftPostgresRepository {
       await this.receipt(client, context, 'updateBrandProduct', requestHash, productId, response);
       return response;
     });
+  }
+
+  async createVariant(productId: string, input: CreateProductVariantDto, expectedProductVersion: number,
+    context: ProductMutationContext): Promise<Record<string, unknown>> {
+    return this.transaction(async (client) => {
+      await this.authorize(client, context);
+      const requestHash = hash({ productId, input, sourceKind: context.sourceKind ?? 'MANUAL', sourceReference: context.sourceReference ?? null });
+      const replay = await this.replay(client, context, 'createProductVariant', requestHash);
+      if (replay) return replay;
+      const productResult = await client.query<ProductRow>(
+        `SELECT p.id,p.brand_id,p.category_id,p.style_code,p.title,p.description,p.category_schema_version,p.content_version,p.row_version,p.publication_state,p.qc_state
+           FROM catalogue.products p WHERE p.id=$1 AND p.brand_id=$2 FOR UPDATE`, [productId, context.brandId]);
+      const product = productResult.rows[0];
+      if (!product) throw failure('PRODUCT_NOT_FOUND');
+      if (product.publication_state !== 'DRAFT' && product.publication_state !== 'INCOMPLETE') throw failure('PRODUCT_STATE_RESTRICTED');
+      if (Number(product.row_version) !== expectedProductVersion) throw failure('PRODUCT_ROW_VERSION_CONFLICT');
+      const category = await this.categoryById(client, context, product.category_id, product.category_schema_version);
+      const attributes = validateVariantAttributes(category.id, category.schema_version_id, category.version, category.validator_version, category.rules, input.options);
+      const signature = canonicalizeOptionSignature(input.options);
+      const inserted = await client.query<VariantRow>(
+        `INSERT INTO catalogue.product_variants(brand_id,product_id,sku,option_signature,options,weight_g)
+         SELECT $1,$2,$3,$4,$5::jsonb,$6
+          WHERE EXISTS (SELECT 1 FROM access.effective_permissions ep WHERE ep.user_id=$7 AND ep.permission_code='catalog.write'
+            AND ((ep.scope_type='global' AND ep.brand_id IS NULL) OR (ep.scope_type='brand' AND ep.brand_id=$1)))
+            AND EXISTS (SELECT 1 FROM brands.brands b WHERE b.id=$1 AND b.onboarding_state='approved')
+         RETURNING id,brand_id,product_id,sku,options,option_signature,weight_g,gtin,variant_state,row_version,sku_locked_at`,
+        [context.brandId, productId, input.sku, signature, JSON.stringify(input.options), input.weightG ?? null, context.userId]);
+      const variant = inserted.rows[0];
+      if (!variant) throw failure('VARIANT_ACCESS_DENIED');
+      await this.saveVariantAttributes(client, context.brandId, product, variant.id, category, attributes);
+      const bumped = await client.query(
+        `UPDATE catalogue.products p SET row_version=p.row_version+1,content_version=p.content_version+1,updated_at=now()
+          WHERE p.id=$1 AND p.brand_id=$2 AND p.row_version=$3
+            AND EXISTS (SELECT 1 FROM access.effective_permissions ep WHERE ep.user_id=$4 AND ep.permission_code='catalog.write'
+              AND ((ep.scope_type='global' AND ep.brand_id IS NULL) OR (ep.scope_type='brand' AND ep.brand_id=$2)))
+            AND EXISTS (SELECT 1 FROM brands.brands b WHERE b.id=$2 AND b.onboarding_state='approved')`,
+        [productId, context.brandId, expectedProductVersion, context.userId]);
+      if (bumped.rowCount !== 1) throw failure('PRODUCT_ROW_VERSION_CONFLICT');
+      await this.lineage(client, context, productId, [
+        `variants.${variant.id}.sku`, `variants.${variant.id}.options`,
+        ...(input.weightG === undefined ? [] : [`variants.${variant.id}.weightG`]),
+        ...Object.keys(attributes).map((key) => `variants.${variant.id}.attributes.${key}`),
+      ]);
+      const response = { ...variantDetail(variant, attributes, 'created', context.requestId), parentRowVersion: expectedProductVersion + 1 };
+      await this.receipt(client, context, 'createProductVariant', requestHash, productId, response);
+      return response;
+    });
+  }
+
+  async updateVariant(productId: string, variantId: string, patch: UpdateProductVariantDto, expectedRowVersion: number,
+    context: ProductMutationContext): Promise<Record<string, unknown>> {
+    return this.transaction(async (client) => {
+      await this.authorize(client, context);
+      const requestHash = hash({ productId, variantId, expectedRowVersion, patch, sourceKind: context.sourceKind ?? 'MANUAL', sourceReference: context.sourceReference ?? null });
+      const replay = await this.replay(client, context, 'updateProductVariant', requestHash);
+      if (replay) return replay;
+      const found = await this.variantForUpdate(client, productId, variantId, context);
+      if (!found) throw failure('VARIANT_NOT_FOUND');
+      if (Number(found.row_version) !== expectedRowVersion) throw failure('VARIANT_ROW_VERSION_CONFLICT');
+      if (found.variant_state !== 'DRAFT') throw failure('VARIANT_STATE_RESTRICTED');
+      if (found.sku_locked_at !== null && patch.options !== undefined) throw failure('VARIANT_STATE_RESTRICTED');
+      const category = await this.categoryById(client, context, found.category_id, found.category_schema_version);
+      const existingAttributes = await this.loadVariantAttributes(client, found.id);
+      for (const key of Object.keys(found.options)) delete existingAttributes[key];
+      const options = patch.options ?? found.options;
+      const nextValues = { ...existingAttributes, ...options };
+      const attributes = validateVariantAttributes(category.id, category.schema_version_id, category.version, category.validator_version, category.rules, nextValues);
+      const signature = canonicalizeOptionSignature(options);
+      const updated = await client.query<VariantRow>(
+        `UPDATE catalogue.product_variants v SET options=$5::jsonb,option_signature=$6,weight_g=$7,gtin=$8,
+             row_version=v.row_version+1,updated_at=now()
+          WHERE v.id=$1 AND v.product_id=$2 AND v.brand_id=$3 AND v.row_version=$4 AND v.variant_state='DRAFT'
+            AND EXISTS (SELECT 1 FROM access.effective_permissions ep WHERE ep.user_id=$9 AND ep.permission_code='catalog.write'
+              AND ((ep.scope_type='global' AND ep.brand_id IS NULL) OR (ep.scope_type='brand' AND ep.brand_id=$3)))
+            AND EXISTS (SELECT 1 FROM brands.brands b WHERE b.id=$3 AND b.onboarding_state='approved')
+          RETURNING v.id,v.brand_id,v.product_id,v.sku,v.options,v.option_signature,v.weight_g,v.gtin,v.variant_state,v.row_version,v.sku_locked_at`,
+        [variantId, productId, context.brandId, expectedRowVersion, JSON.stringify(options), signature,
+          patch.weightG ?? found.weight_g, patch.gtin === undefined ? found.gtin : patch.gtin, context.userId]);
+      if (!updated.rows[0]) throw failure('VARIANT_ROW_VERSION_CONFLICT');
+      await this.saveVariantAttributes(client, context.brandId,
+        { id: found.product_id, category_id: found.category_id, category_schema_version: found.category_schema_version },
+        variantId, category, attributes);
+      const paths = [
+        ...(patch.options === undefined ? [] : ['options']), ...(patch.weightG === undefined ? [] : ['weightG']),
+        ...(patch.gtin === undefined ? [] : ['gtin']), ...(patch.reasonCode === undefined ? [] : ['reasonCode']),
+      ].map((path) => `variants.${variantId}.${path}`);
+      await this.lineage(client, context, productId, paths);
+      const response = variantDetail(updated.rows[0], attributes, 'updated', context.requestId);
+      await this.receipt(client, context, 'updateProductVariant', requestHash, productId, response);
+      return response;
+    });
+  }
+
+  async deactivateVariant(productId: string, variantId: string, input: DeactivateProductVariantDto, expectedRowVersion: number,
+    context: ProductMutationContext): Promise<Record<string, unknown>> {
+    return this.transaction(async (client) => {
+      await this.authorize(client, context);
+      const requestHash = hash({ productId, variantId, expectedRowVersion, input, sourceKind: context.sourceKind ?? 'MANUAL', sourceReference: context.sourceReference ?? null });
+      const replay = await this.replay(client, context, 'deactivateProductVariant', requestHash);
+      if (replay) return replay;
+      const found = await this.variantForUpdate(client, productId, variantId, context);
+      if (!found) throw failure('VARIANT_NOT_FOUND');
+      if (Number(found.row_version) !== expectedRowVersion) throw failure('VARIANT_ROW_VERSION_CONFLICT');
+      if (found.variant_state !== 'DRAFT') throw failure('VARIANT_STATE_RESTRICTED');
+      const references = await client.query<{ referenced: boolean }>(
+        `SELECT (
+          EXISTS(SELECT 1 FROM catalogue.variant_prices p WHERE p.brand_id=$1 AND p.variant_id=$2)
+          OR EXISTS(SELECT 1 FROM media.product_media m WHERE m.brand_id=$1 AND m.variant_id=$2)
+          OR EXISTS(SELECT 1 FROM inventory.stock_balances s WHERE s.brand_id=$1 AND s.variant_id=$2)
+          OR EXISTS(SELECT 1 FROM imports.import_rows i WHERE i.brand_id=$1 AND i.target_variant_id=$2)
+          OR EXISTS(SELECT 1 FROM imports.external_variant_maps m WHERE m.brand_id=$1 AND m.variant_id=$2)
+          OR EXISTS(SELECT 1 FROM imports.import_effect_receipts r WHERE r.brand_id=$1 AND r.target_variant_id=$2)
+          OR $3::timestamptz IS NOT NULL
+        ) AS referenced`, [context.brandId, variantId, found.sku_locked_at]);
+      if (references.rows[0]?.referenced) throw failure('VARIANT_REFERENCED');
+      const updated = await client.query<VariantRow>(
+        `UPDATE catalogue.product_variants v SET variant_state='INACTIVE',row_version=v.row_version+1,updated_at=now()
+          WHERE v.id=$1 AND v.product_id=$2 AND v.brand_id=$3 AND v.row_version=$4 AND v.variant_state='DRAFT'
+            AND EXISTS (SELECT 1 FROM access.effective_permissions ep WHERE ep.user_id=$5 AND ep.permission_code='catalog.write'
+              AND ((ep.scope_type='global' AND ep.brand_id IS NULL) OR (ep.scope_type='brand' AND ep.brand_id=$3)))
+            AND EXISTS (SELECT 1 FROM brands.brands b WHERE b.id=$3 AND b.onboarding_state='approved')
+          RETURNING v.id,v.brand_id,v.product_id,v.sku,v.options,v.option_signature,v.weight_g,v.gtin,v.variant_state,v.row_version,v.sku_locked_at`,
+        [variantId, productId, context.brandId, expectedRowVersion, context.userId]);
+      if (!updated.rows[0]) throw failure('VARIANT_ROW_VERSION_CONFLICT');
+      await this.lineage(client, context, productId, [`variants.${variantId}.variantState`, `variants.${variantId}.deactivationReason`]);
+      const response = { ...variantDetail(updated.rows[0], {}, 'deactivated', context.requestId), reasonCode: input.reasonCode };
+      await this.receipt(client, context, 'deactivateProductVariant', requestHash, productId, response);
+      return response;
+    });
+  }
+
+  private async variantForUpdate(client: PoolClient, productId: string, variantId: string, context: ProductMutationContext): Promise<VariantRow | undefined> {
+    const result = await client.query<VariantRow>(
+      `SELECT v.id,v.brand_id,v.product_id,v.sku,v.options,v.option_signature,v.weight_g,v.gtin,v.variant_state,v.row_version,v.sku_locked_at,
+              p.category_id,p.category_schema_version
+         FROM catalogue.product_variants v JOIN catalogue.products p ON p.id=v.product_id AND p.brand_id=v.brand_id
+        WHERE v.id=$1 AND v.product_id=$2 AND v.brand_id=$3 AND p.publication_state IN ('DRAFT','INCOMPLETE') FOR UPDATE OF v,p`,
+      [variantId, productId, context.brandId]);
+    return result.rows[0];
+  }
+
+  private async saveVariantAttributes(client: PoolClient, brandId: string, product: Pick<ProductRow, 'id'|'category_id'|'category_schema_version'>,
+    variantId: string, category: SchemaInfo, values: Record<string, unknown>): Promise<void> {
+    await client.query('DELETE FROM catalogue.variant_attribute_values WHERE brand_id=$1 AND variant_id=$2', [brandId, variantId]);
+    const rules = new Map(category.rules.filter((rule) => rule.scope === 'variant').map((rule) => [rule.code, rule]));
+    for (const [code, value] of Object.entries(values)) {
+      const rule = rules.get(code); if (!rule) throw failure('VARIANT_ATTRIBUTE_INVALID');
+      const typed: Record<string, unknown> = { val_text: null, val_integer: null, val_decimal: null, val_bool: null, val_date: null, val_enum: null, val_json: null, unit_code: null };
+      switch (rule.valueType) {
+        case 'text': typed.val_text = value; break;
+        case 'integer': typed.val_integer = value; break;
+        case 'decimal': typed.val_decimal = value; break;
+        case 'boolean': typed.val_bool = value; break;
+        case 'enum': typed.val_enum = value; break;
+        case 'date': typed.val_date = value; break;
+        case 'multi_enum': typed.val_json = JSON.stringify(value); break;
+        case 'measurement': typed.val_json = JSON.stringify(value); typed.unit_code = (value as { unitCode: string }).unitCode; break;
+      }
+      await client.query(
+        `INSERT INTO catalogue.variant_attribute_values(brand_id,product_id,variant_id,category_id,category_schema_version,attribute_id,schema_version_id,frozen_rule_id,val_text,val_integer,val_decimal,val_bool,val_date,val_enum,val_json,unit_code)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16)`,
+        [brandId, product.id, variantId, category.id, category.version, rule.attributeId, category.schema_version_id, rule.id,
+          typed.val_text, typed.val_integer, typed.val_decimal, typed.val_bool, typed.val_date, typed.val_enum, typed.val_json, typed.unit_code]);
+    }
+  }
+
+  private async loadVariantAttributes(client: PoolClient, variantId: string): Promise<Record<string, unknown>> {
+    const result = await client.query<Record<string, unknown>>(
+      `SELECT r.attribute_code AS code,r.value_type,v.val_text,v.val_integer,v.val_decimal,v.val_bool,v.val_date,v.val_enum,v.val_json,v.unit_code
+         FROM catalogue.variant_attribute_values v JOIN catalogue.category_schema_attribute_rules r ON r.id=v.frozen_rule_id
+        WHERE v.variant_id=$1`, [variantId]);
+    return Object.fromEntries(result.rows.map((row) => {
+      let value: unknown;
+      switch (row.value_type) {
+        case 'text': value = row.val_text; break; case 'integer': value = Number(row.val_integer); break;
+        case 'decimal': value = Number(row.val_decimal); break; case 'boolean': value = row.val_bool; break;
+        case 'enum': value = row.val_enum; break; case 'date': value = row.val_date; break;
+        case 'multi_enum': value = row.val_json; break;
+        case 'measurement': value = { ...(row.val_json as object), unitCode: row.unit_code }; break;
+        default: value = null;
+      }
+      return [String(row.code), value];
+    }));
   }
 
   private async authorize(client: PoolClient, context: ProductMutationContext): Promise<void> {
@@ -251,6 +439,11 @@ function productDetail(product: ProductRow, attributes: Record<string, unknown>,
     variants: variants.map((variant) => ({ id: variant.id, productId: product.id,
       brandId: product.brand_id, sku: variant.sku, options: variant.options, variantState: variant.variant_state })),
     mediaLinks: [], attributes, qcState: product.qc_state };
+}
+function variantDetail(variant: VariantRow, attributes: Record<string, unknown>, status: string, requestId: string): Record<string, unknown> {
+  return { id: variant.id, brandId: variant.brand_id, productId: variant.product_id, sku: variant.sku,
+    options: variant.options, optionSignature: variant.option_signature, weightG: variant.weight_g, gtin: variant.gtin,
+    variantState: variant.variant_state, rowVersion: Number(variant.row_version), attributes, status, requestId };
 }
 function hash(value: unknown): string { return createHash('sha256').update(stable(value)).digest('hex'); }
 function stable(value: unknown): string {

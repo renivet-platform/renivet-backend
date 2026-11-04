@@ -335,10 +335,10 @@
       ],
       "ownerIssue": "REN2-62",
       "implementation": {
-        "status": "design_only",
+        "status": "implemented",
         "test": {
-          "status": "pending",
-          "path": "tests/w2/createProductVariant.test.cjs"
+          "status": "verified",
+          "path": "tests/w2/product-draft.integration.test.cjs"
         },
         "pullRequest": {
           "status": "pending",
@@ -1175,10 +1175,10 @@
       ],
       "ownerIssue": "REN2-62",
       "implementation": {
-        "status": "design_only",
+        "status": "implemented",
         "test": {
-          "status": "pending",
-          "path": "tests/w2/updateProductVariant.test.cjs"
+          "status": "verified",
+          "path": "tests/w2/product-draft.integration.test.cjs"
         },
         "pullRequest": {
           "status": "pending",
@@ -1200,10 +1200,10 @@
       ],
       "ownerIssue": "REN2-62",
       "implementation": {
-        "status": "design_only",
+        "status": "implemented",
         "test": {
-          "status": "pending",
-          "path": "tests/w2/deactivateProductVariant.test.cjs"
+          "status": "verified",
+          "path": "tests/w2/product-draft.integration.test.cjs"
         },
         "pullRequest": {
           "status": "pending",
@@ -1288,4 +1288,3 @@
   ],
   "backlogSnapshotVerifiedAt": "2026-11-03"
 }
-
