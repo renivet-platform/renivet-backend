@@ -5,6 +5,9 @@ import { IdentityModule } from '../identity/identity.module';
 import { ClamAvMediaScanner } from './clamav-media-scanner';
 import { MediaController } from './media.controller';
 import { MediaPostgresRepository } from './media.repository';
+import { ProductMediaController } from './product-media.controller';
+import { ProductMediaPostgresRepository } from './product-media.repository';
+import { ProductMediaService } from './product-media.service';
 import { MEDIA_IMAGE_PROCESSOR, MEDIA_SCANNER, MEDIA_STORAGE } from './media-ports';
 import { MediaService } from './media.service';
 import { SharpMediaImageProcessor } from './sharp-media-image-processor';
@@ -12,9 +15,10 @@ import { SpacesMediaStorage } from './spaces-media-storage';
 
 @Module({
   imports: [ConfigModule, IdentityModule, AccessModule],
-  controllers: [MediaController],
+  controllers: [MediaController, ProductMediaController],
   providers: [
     MediaPostgresRepository,
+    ProductMediaPostgresRepository,
     SpacesMediaStorage,
     ClamAvMediaScanner,
     SharpMediaImageProcessor,
@@ -27,6 +31,11 @@ import { SpacesMediaStorage } from './spaces-media-storage';
         scanner: ClamAvMediaScanner, processor: SharpMediaImageProcessor) =>
         new MediaService(repository, storage, scanner, processor),
       inject: [MediaPostgresRepository, MEDIA_STORAGE, MEDIA_SCANNER, MEDIA_IMAGE_PROCESSOR],
+    },
+    {
+      provide: ProductMediaService,
+      useFactory: (repository: ProductMediaPostgresRepository) => new ProductMediaService(repository),
+      inject: [ProductMediaPostgresRepository],
     },
   ],
 })
