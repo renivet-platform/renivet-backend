@@ -21,12 +21,37 @@ function assertDisposable(value) {
   assert.equal(parsed.username, 'renivet_ci');
 }
 
+function adminConnectionString(value) {
+  const parsed = new URL(value);
+  parsed.pathname = '/postgres';
+  return parsed.toString();
+}
+
 test('REN2-64 persists INR proposals, scopes price history, enforces CAS and approved-window exclusion on PostgreSQL 16', {
   skip: !url && 'requires the disposable PostgreSQL 16 database', timeout: 90_000,
 }, async (t) => {
   assertDisposable(url);
-  const pool = new Pool({ connectionString: url, max: 8, connectionTimeoutMillis: 5_000 });
-  t.after(() => pool.end());
+  const databaseName = `ren2_64_${randomUUID().replaceAll('-', '')}`;
+  const adminUrl = adminConnectionString(url);
+  const adminPool = new Pool({ connectionString: adminUrl, max: 1, connectionTimeoutMillis: 5_000 });
+  const sourcePool = new Pool({ connectionString: url, max: 1, connectionTimeoutMillis: 5_000 });
+  const sourceVersion = await sourcePool.query('SHOW server_version_num');
+  assert.ok(Number(sourceVersion.rows[0].server_version_num) >= 160000 && Number(sourceVersion.rows[0].server_version_num) < 170000);
+  await sourcePool.end();
+  try {
+    const role = await adminPool.query('SELECT rolsuper FROM pg_roles WHERE rolname=current_user');
+    assert.equal(role.rows[0]?.rolsuper, true, 'isolated integration clone requires the disposable PostgreSQL superuser');
+    await adminPool.query(`CREATE DATABASE ${databaseName} TEMPLATE renivet_ci`);
+  } finally { await adminPool.end(); }
+  const isolatedUrl = new URL(url);
+  isolatedUrl.pathname = `/${databaseName}`;
+  const pool = new Pool({ connectionString: isolatedUrl.toString(), max: 8, connectionTimeoutMillis: 5_000 });
+  t.after(async () => {
+    await pool.end();
+    const cleanup = new Pool({ connectionString: adminUrl, max: 1, connectionTimeoutMillis: 5_000 });
+    try { await cleanup.query(`DROP DATABASE ${databaseName} WITH (FORCE)`); }
+    finally { await cleanup.end(); }
+  });
   const version = await pool.query('SHOW server_version_num');
   assert.ok(Number(version.rows[0].server_version_num) >= 160000 && Number(version.rows[0].server_version_num) < 170000);
 
