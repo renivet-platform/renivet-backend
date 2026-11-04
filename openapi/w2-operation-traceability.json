@@ -483,14 +483,14 @@
       ],
       "ownerIssue": "REN2-66",
       "implementation": {
-        "status": "design_only",
+        "status": "implemented",
         "test": {
-          "status": "pending",
+          "status": "verified",
           "path": "tests/w2/beginMediaUpload.test.cjs"
         },
         "pullRequest": {
-          "status": "pending",
-          "url": null
+          "status": "open",
+          "url": "https://github.com/renivet-platform/renivet-backend/pull/53"
         }
       },
       "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-66"
@@ -976,14 +976,14 @@
       ],
       "ownerIssue": "REN2-66",
       "implementation": {
-        "status": "design_only",
+        "status": "implemented",
         "test": {
-          "status": "pending",
+          "status": "verified",
           "path": "tests/w2/completeMediaUpload.test.cjs"
         },
         "pullRequest": {
-          "status": "pending",
-          "url": null
+          "status": "open",
+          "url": "https://github.com/renivet-platform/renivet-backend/pull/53"
         }
       },
       "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-66"
@@ -1001,14 +1001,14 @@
       ],
       "ownerIssue": "REN2-66",
       "implementation": {
-        "status": "design_only",
+        "status": "implemented",
         "test": {
-          "status": "pending",
+          "status": "verified",
           "path": "tests/w2/getMediaAssetStatus.test.cjs"
         },
         "pullRequest": {
-          "status": "pending",
-          "url": null
+          "status": "open",
+          "url": "https://github.com/renivet-platform/renivet-backend/pull/53"
         }
       },
       "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-66"
