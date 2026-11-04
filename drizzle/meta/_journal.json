@@ -127,6 +127,13 @@
       "when": 1793800600000,
       "tag": "0017_ren2_66_secure_media_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793800700000,
+      "tag": "0018_ren2_67_product_media_associations",
+      "breakpoints": true
     }
   ]
 }

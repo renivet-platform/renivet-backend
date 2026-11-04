@@ -512,6 +512,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/brands/{brandId}/products/{productId}/media": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Attach a clean brand-owned image to a product or exact variant
+         * @description Adds a parent or variant image at the requested order; order 0 is the primary image for that target. Linear: REN2-67.
+         */
+        post: operations["attachProductMedia"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/brands/{brandId}/products/{productId}/media/{linkId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Detach a product image without deleting its history
+         * @description Soft-detaches the active image link with the product row-version If-Match and retains revision snapshots and audit history. Linear: REN2-67.
+         */
+        delete: operations["detachProductMedia"];
+        options?: never;
+        head?: never;
+        /**
+         * Reorder or update a product image link
+         * @description Uses the product row-version If-Match compare-and-swap; setting displayOrder to 0 makes the image primary within its parent or exact-variant gallery. Linear: REN2-67.
+         */
+        patch: operations["updateProductMediaLink"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -777,6 +821,15 @@ export interface components {
             details?: {
                 [key: string]: unknown;
             };
+        };
+        AttachProductMediaDto: {
+            /** Format: uuid */
+            mediaAssetId: string;
+            /** Format: uuid */
+            variantId?: string | null;
+            displayRole: string;
+            displayOrder: number;
+            altText?: string;
         };
     };
     responses: never;
@@ -3663,6 +3716,517 @@ export interface operations {
                 };
             };
             /** @description Media status storage is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    attachProductMedia: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                productId: string;
+                brandId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttachProductMediaDto"];
+            };
+        };
+        responses: {
+            /** @description Image association created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id: string;
+                        /** Format: uuid */
+                        mediaAssetId: string;
+                        /** Format: uuid */
+                        productId: string;
+                        /** Format: uuid */
+                        variantId?: string | null;
+                        displayRole: string;
+                        displayOrder: number;
+                        /** @enum {string} */
+                        scanState: "PENDING" | "CLEAN" | "REJECTED";
+                        /** @enum {string} */
+                        rightsState: "UNVERIFIED" | "ATTESTED" | "REVIEWED" | "REVOKED";
+                    };
+                };
+            };
+            /** @description Malformed product or variant identifier. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Brand permission or CSRF denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Product, asset or variant is not accessible. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Duplicate link, stale product state or idempotency conflict. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description The supplied product row version is stale. */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Asset is not clean or request failed validation. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Media association storage is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    detachProductMedia: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                "If-Match": string;
+            };
+            path: {
+                productId: string;
+                linkId: string;
+                brandId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Image association detached. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id: string;
+                        status: string;
+                        requestId: string;
+                        rowVersion?: number;
+                    };
+                };
+            };
+            /** @description Malformed identifier. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Brand permission or CSRF denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Image association is not accessible. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Idempotency conflict or product state conflict. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description The supplied product row version is stale. */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Request failed validation. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Media association storage is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    updateProductMediaLink: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                "If-Match": string;
+            };
+            path: {
+                productId: string;
+                linkId: string;
+                brandId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    displayOrder?: number;
+                    displayRole?: string;
+                    altText?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated image association. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id: string;
+                        /** Format: uuid */
+                        mediaAssetId: string;
+                        /** Format: uuid */
+                        productId: string;
+                        /** Format: uuid */
+                        variantId?: string | null;
+                        displayRole: string;
+                        displayOrder: number;
+                        /** @enum {string} */
+                        scanState: "PENDING" | "CLEAN" | "REJECTED";
+                        /** @enum {string} */
+                        rightsState: "UNVERIFIED" | "ATTESTED" | "REVIEWED" | "REVOKED";
+                    };
+                };
+            };
+            /** @description Malformed identifier. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Brand permission or CSRF denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Image association is not accessible. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Idempotency conflict or product state conflict. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description The supplied product row version is stale. */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Request failed validation. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Media association storage is unavailable. */
             503: {
                 headers: {
                     [name: string]: unknown;

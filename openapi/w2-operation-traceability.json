@@ -1026,9 +1026,9 @@
       ],
       "ownerIssue": "REN2-67",
       "implementation": {
-        "status": "design_only",
+        "status": "implemented",
         "test": {
-          "status": "pending",
+          "status": "verified",
           "path": "tests/w2/attachProductMedia.test.cjs"
         },
         "pullRequest": {
@@ -1051,9 +1051,9 @@
       ],
       "ownerIssue": "REN2-67",
       "implementation": {
-        "status": "design_only",
+        "status": "implemented",
         "test": {
-          "status": "pending",
+          "status": "verified",
           "path": "tests/w2/updateProductMediaLink.test.cjs"
         },
         "pullRequest": {
@@ -1076,9 +1076,9 @@
       ],
       "ownerIssue": "REN2-67",
       "implementation": {
-        "status": "design_only",
+        "status": "implemented",
         "test": {
-          "status": "pending",
+          "status": "verified",
           "path": "tests/w2/detachProductMedia.test.cjs"
         },
         "pullRequest": {
