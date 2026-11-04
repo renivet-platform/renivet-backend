@@ -432,6 +432,26 @@ export interface paths {
         patch: operations["proposeVariantPrice"];
         trace?: never;
     };
+    "/api/v1/admin/brands/{brandId}/variant-prices/{priceId}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve or reject a pending brand price proposal
+         * @description Requires current brand-scoped pricing.approve permission, a recent MFA step-up and session-bound CSRF. The price state compare-and-set, approval overlap constraint, audit event and idempotency receipt are committed together. Linear: REN2-65.
+         */
+        post: operations["decideVariantPrice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3014,6 +3034,114 @@ export interface operations {
                 };
             };
             /** @description Price storage is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceErrorDto"];
+                };
+            };
+        };
+    };
+    decideVariantPrice: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                brandId: string;
+                priceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    decision: "APPROVE" | "REJECT";
+                    reasonCode: string;
+                    comment?: string;
+                    /** @constant */
+                    expectedState?: "PENDING";
+                };
+            };
+        };
+        responses: {
+            /** @description Price decision receipt. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceActionReceiptDto"];
+                };
+            };
+            /** @description The price decision request could not be parsed. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceErrorDto"];
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceErrorDto"];
+                };
+            };
+            /** @description Brand permission, maker-checker or CSRF denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceErrorDto"];
+                };
+            };
+            /** @description The price proposal was not found in this brand. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceErrorDto"];
+                };
+            };
+            /** @description The proposal is no longer pending, an overlap exists or the idempotency key conflicts. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceErrorDto"];
+                };
+            };
+            /** @description The supplied expected state is stale. */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceErrorDto"];
+                };
+            };
+            /** @description The price decision is invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceErrorDto"];
+                };
+            };
+            /** @description Price or authentication storage is unavailable. */
             503: {
                 headers: {
                     [name: string]: unknown;

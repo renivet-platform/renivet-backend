@@ -1100,9 +1100,9 @@
       ],
       "ownerIssue": "REN2-65",
       "implementation": {
-        "status": "design_only",
+        "status": "implemented",
         "test": {
-          "status": "pending",
+          "status": "verified",
           "path": "tests/w2/decideVariantPrice.test.cjs"
         },
         "pullRequest": {

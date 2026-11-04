@@ -4217,6 +4217,182 @@
         "x-renivet-implementation-wave": "W2",
         "x-renivet-permission": "pricing.read"
       }
+    },
+    "/api/v1/admin/brands/{brandId}/variant-prices/{priceId}/decision": {
+      "post": {
+        "description": "Requires current brand-scoped pricing.approve permission, a recent MFA step-up and session-bound CSRF. The price state compare-and-set, approval overlap constraint, audit event and idempotency receipt are committed together. Linear: REN2-65.",
+        "operationId": "decideVariantPrice",
+        "parameters": [
+          {
+            "name": "brandId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "priceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "decision",
+                  "reasonCode"
+                ],
+                "properties": {
+                  "decision": {
+                    "type": "string",
+                    "enum": [
+                      "APPROVE",
+                      "REJECT"
+                    ]
+                  },
+                  "reasonCode": {
+                    "type": "string"
+                  },
+                  "comment": {
+                    "type": "string"
+                  },
+                  "expectedState": {
+                    "type": "string",
+                    "const": "PENDING"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Price decision receipt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceActionReceiptDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The price decision request could not be parsed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Brand permission, maker-checker or CSRF denied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The price proposal was not found in this brand.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The proposal is no longer pending, an overlap exists or the idempotency key conflicts.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceErrorDto"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "The supplied expected state is stale.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceErrorDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The price decision is invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceErrorDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Price or authentication storage is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "Approve or reject a pending brand price proposal",
+        "tags": [
+          "Pricing"
+        ],
+        "x-renivet-csrf-policy": "Require allowlisted Origin, Sec-Fetch-Site and X-CSRF-Token bound to W1 session; same-statement resource permission in W1.",
+        "x-renivet-guard": "brand",
+        "x-renivet-implementation-wave": "W2",
+        "x-renivet-mfa-required": true,
+        "x-renivet-permission": "pricing.approve"
+      }
     }
   },
   "info": {

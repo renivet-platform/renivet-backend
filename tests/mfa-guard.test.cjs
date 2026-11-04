@@ -56,7 +56,7 @@ test('guard admits only the server-authenticated session with fresh persisted el
   assert.equal(audited[0].allowed, true);
 });
 
-for (const action of ['taxonomy.manage', 'taxonomy.approve']) {
+for (const action of ['taxonomy.manage', 'taxonomy.approve', 'pricing.approve']) {
   test(`guard accepts a fresh persisted MFA step-up for ${action}`, async () => {
     const audited = [];
     const request = { headers: { cookie: '__Host-renivet_session=' + 'D'.repeat(43) }, ip: '127.0.0.1' };
