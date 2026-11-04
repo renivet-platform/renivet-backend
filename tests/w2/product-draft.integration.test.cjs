@@ -21,7 +21,17 @@ test('REN2-61/62 product drafts and SKU variants enforce category pins, CAS, ide
   skip: !url && 'requires the disposable PostgreSQL 16 database', timeout: 60_000,
 }, async (t) => {
   assertDisposable(url);
-  const pool = new Pool({ connectionString: url, max: 6 }); t.after(() => pool.end());
+  const pool = new Pool({ connectionString: url, max: 6 });
+  let testRoleId;
+  t.after(async () => {
+    try {
+      if (testRoleId) {
+        await pool.query('DELETE FROM access.role_assignments WHERE role_id = $1', [testRoleId]);
+      }
+    } finally {
+      await pool.end();
+    }
+  });
   const version = await pool.query('SHOW server_version_num');
   assert.ok(Number(version.rows[0].server_version_num) >= 160000 && Number(version.rows[0].server_version_num) < 170000);
   const suffix = randomUUID().replaceAll('-', '');
@@ -37,6 +47,7 @@ test('REN2-61/62 product drafts and SKU variants enforce category pins, CAS, ide
     VALUES($1,$2,'active',$3,now())`, [brand, owner, grantor]);
   const role = (await pool.query(`INSERT INTO access.roles(role_code,scope_kind,description,is_system)
     VALUES($1,'brand','REN2-61 disposable role',false) RETURNING id`, [`ren2_61_${suffix}`])).rows[0].id;
+  testRoleId = role;
   const permission = (await pool.query(`INSERT INTO access.permissions(permission_code,resource,action,description)
     VALUES('catalog.write','catalog','write','REN2-61 product draft test') ON CONFLICT(permission_code) DO UPDATE SET permission_code=EXCLUDED.permission_code RETURNING id`)).rows[0].id;
   await pool.query('INSERT INTO access.role_permissions(role_id,permission_id) VALUES($1,$2) ON CONFLICT DO NOTHING', [role, permission]);
@@ -212,3 +223,4 @@ test('REN2-61/62 product drafts and SKU variants enforce category pins, CAS, ide
   await assert.rejects(repository.create(normalizeProductCreate({ ...create, styleCode: 'suspended-membership' }),
     { ...accessContext, idempotencyKey: `suspended-membership-${suffix}` }), expectCode('PRODUCT_ACCESS_DENIED'));
 });
+
