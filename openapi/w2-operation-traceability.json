@@ -1032,8 +1032,8 @@
           "path": "tests/w2/attachProductMedia.test.cjs"
         },
         "pullRequest": {
-          "status": "pending",
-          "url": null
+          "status": "open",
+          "url": "https://github.com/renivet-platform/renivet-backend/pull/54"
         }
       },
       "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-67"
@@ -1057,8 +1057,8 @@
           "path": "tests/w2/updateProductMediaLink.test.cjs"
         },
         "pullRequest": {
-          "status": "pending",
-          "url": null
+          "status": "open",
+          "url": "https://github.com/renivet-platform/renivet-backend/pull/54"
         }
       },
       "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-67"
@@ -1082,8 +1082,8 @@
           "path": "tests/w2/detachProductMedia.test.cjs"
         },
         "pullRequest": {
-          "status": "pending",
-          "url": null
+          "status": "open",
+          "url": "https://github.com/renivet-platform/renivet-backend/pull/54"
         }
       },
       "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-67"
