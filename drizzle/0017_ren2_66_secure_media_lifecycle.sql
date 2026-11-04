@@ -52,9 +52,6 @@ ALTER TABLE media.media_assets
   );
 --> statement-breakpoint
 
-ALTER TABLE media.media_assets ALTER COLUMN file_name DROP DEFAULT;
---> statement-breakpoint
-
 CREATE UNIQUE INDEX media_assets_brand_upload_idempotency_uq
   ON media.media_assets(brand_id, upload_idempotency_key) WHERE upload_idempotency_key IS NOT NULL;
 --> statement-breakpoint
