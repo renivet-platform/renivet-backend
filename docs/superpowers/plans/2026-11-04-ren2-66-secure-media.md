@@ -72,4 +72,4 @@
 
 - [x] Run focused unit/integration/security tests plus repository lint, typecheck, full unit suite, build, API check, and CI-equivalent PG16 migration replay.
 - [x] Review the complete diff for scope, secret leakage, unsafe URL/network behavior, SQL tenant isolation, migration correctness, and retry/idempotency issues, including an independent review.
-- [ ] Stage only issue files, commit with REN2-66, push the fresh branch, open PR to main, report actual results and remaining release gates, then stop.
+- [x] Stage only issue files, commit with REN2-66, push the fresh branch, open PR to main, report actual results and remaining release gates, then stop.
