@@ -114,4 +114,7 @@ test('REN2-66 persists idempotent brand-owned media lifecycle and requires priva
   });
   await assert.rejects(pool.query(`UPDATE media.media_assets SET scan_state='CLEAN',derivative_state='READY',sha256=$2,
     completed_at=now(),row_version=row_version+1 WHERE id=$1`, [unsafe.id, sha256]), /MEDIA_CLEAN_REQUIRES_PREVIEW_AND_THUMBNAIL/);
+
+  await pool.query('DELETE FROM access.role_assignments WHERE user_id=$1 AND role_id=$2 AND brand_id=$3',
+    [actorId, roleId, brandId]);
 });
