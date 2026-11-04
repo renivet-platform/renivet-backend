@@ -47,7 +47,7 @@ async function w1SchemaSignature(client) {
   return result.rows;
 }
 
-test('REN2-50 applies W2 schema additively and enforces FK, price-window, and rollback invariants', {
+test('REN2-60 brand-owned products and variants enforce schema, tenant, uniqueness, SKU-lock, and rollback invariants', {
   timeout: 30_000,
   skip: !process.env.RENIVET_TEST_DATABASE_URL,
 }, async () => {
@@ -106,12 +106,17 @@ test('REN2-50 applies W2 schema additively and enforces FK, price-window, and ro
     );
 
     const migration = readFileSync(path.join(__dirname, '..', 'drizzle', '0006_ren2_50_w2_catalog_inventory.sql'), 'utf8');
+    const productVariantMigration = readFileSync(path.join(__dirname, '..', 'drizzle', '0010_ren2_60_variant_sku_order_lock.sql'), 'utf8');
     assert.doesNotMatch(migration, /^\s*DROP\s+(?:TABLE|SCHEMA|TYPE)\b/im, 'W2 migration must not drop schemas or tables');
     assert.doesNotMatch(migration, /^\s*ALTER\s+TABLE\s+(?:identity|platform|brands|access)\./im,
       'W2 migration must not alter W1 tables');
     assert.doesNotMatch(migration, /^\s*CREATE\s+TABLE\s+(?:brands\.brands|identity\.users)\b/im,
       'W2 migration must not create duplicate W1 roots');
     assert.doesNotMatch(migration, /ON\s+DELETE\s+CASCADE/i, 'candidate migration must not add unreviewed cascading deletes');
+    assert.doesNotMatch(productVariantMigration, /^\s*DROP\s+(?:TABLE|SCHEMA|TYPE)\b/im,
+      'REN2-60 must not drop schemas or tables');
+    assert.doesNotMatch(productVariantMigration, /^\s*ALTER\s+TABLE\s+(?:identity|platform|brands|access)\./im,
+      'REN2-60 must not alter W1 tables');
 
     const w1Before = await w1SchemaSignature(client);
     await client.query('BEGIN');
@@ -120,6 +125,11 @@ test('REN2-50 applies W2 schema additively and enforces FK, price-window, and ro
         `INSERT INTO brands.brands (slug, legal_name, display_name, onboarding_state)
          VALUES ($1, 'REN2-50 Synthetic Ltd', 'REN2-50 Synthetic', 'approved') RETURNING id`,
         [`ren2-50-${randomUUID()}`],
+      );
+      const otherBrand = await client.query(
+        `INSERT INTO brands.brands (slug, legal_name, display_name, onboarding_state)
+         VALUES ($1, 'REN2-60 Synthetic Ltd', 'REN2-60 Synthetic', 'approved') RETURNING id`,
+        [`ren2-60-${randomUUID()}`],
       );
       const category = await client.query(
         `INSERT INTO catalogue.categories (code, name) VALUES ($1, 'REN2-50 Synthetic') RETURNING id`,
@@ -150,12 +160,121 @@ test('REN2-50 applies W2 schema additively and enforces FK, price-window, and ro
          VALUES ($1, $2, 'REN2-50-STYLE', 'Valid fixture', 1) RETURNING id`,
         [brand.rows[0].id, category.rows[0].id],
       );
+      assert.match(product.rows[0].id, /^[0-9a-f-]{36}$/i, 'product IDs must be UUIDs');
+      await client.query('SAVEPOINT invalid_category_schema_pin');
+      await assert.rejects(
+        client.query(
+          `INSERT INTO catalogue.products (brand_id, category_id, style_code, title, category_schema_version)
+           VALUES ($1, $2, 'REN2-60-BAD-PIN', 'Invalid schema pin fixture', 99)`,
+          [brand.rows[0].id, category.rows[0].id],
+        ),
+        (error) => error.code === '23503',
+        'a product must reference an existing version of its selected category',
+      );
+      await client.query('ROLLBACK TO SAVEPOINT invalid_category_schema_pin');
+      await client.query('RELEASE SAVEPOINT invalid_category_schema_pin');
       const variant = await client.query(
         `INSERT INTO catalogue.product_variants
            (brand_id, product_id, sku, option_signature, options)
          VALUES ($1, $2, 'REN2-50-SKU', 'default', '{}'::jsonb) RETURNING id`,
         [brand.rows[0].id, product.rows[0].id],
       );
+
+      const otherProduct = await client.query(
+        `INSERT INTO catalogue.products (brand_id, category_id, style_code, title, category_schema_version)
+         VALUES ($1, $2, 'REN2-60-STYLE', 'Other brand fixture', 1) RETURNING id`,
+        [otherBrand.rows[0].id, category.rows[0].id],
+      );
+      const sameSkuOtherBrand = await client.query(
+        `INSERT INTO catalogue.product_variants
+           (brand_id, product_id, sku, option_signature, options)
+         VALUES ($1, $2, 'REN2-50-SKU', 'default', '{}'::jsonb) RETURNING id`,
+        [otherBrand.rows[0].id, otherProduct.rows[0].id],
+      );
+      assert.ok(sameSkuOtherBrand.rows[0].id, 'same SKU must be valid for a different brand');
+
+      await client.query('SAVEPOINT duplicate_brand_sku');
+      await assert.rejects(
+        client.query(
+          `INSERT INTO catalogue.product_variants
+             (brand_id, product_id, sku, option_signature, options)
+           VALUES ($1, $2, 'ren2-50-sku', 'other', '{}'::jsonb)`,
+          [brand.rows[0].id, product.rows[0].id],
+        ),
+        (error) => error.code === '23505',
+        'SKU uniqueness must be normalized and scoped to one brand',
+      );
+      await client.query('ROLLBACK TO SAVEPOINT duplicate_brand_sku');
+      await client.query('RELEASE SAVEPOINT duplicate_brand_sku');
+
+      await client.query('SAVEPOINT cross_brand_product');
+      await assert.rejects(
+        client.query(
+          `INSERT INTO catalogue.product_variants
+             (brand_id, product_id, sku, option_signature, options)
+           VALUES ($1, $2, 'REN2-60-CROSS', 'cross', '{}'::jsonb)`,
+          [otherBrand.rows[0].id, product.rows[0].id],
+        ),
+        (error) => error.code === '23503',
+        'a variant must reference a product from the same brand',
+      );
+      await client.query('ROLLBACK TO SAVEPOINT cross_brand_product');
+      await client.query('RELEASE SAVEPOINT cross_brand_product');
+
+      await client.query('SAVEPOINT duplicate_option_signature');
+      await assert.rejects(
+        client.query(
+          `INSERT INTO catalogue.product_variants
+             (brand_id, product_id, sku, option_signature, options)
+           VALUES ($1, $2, 'REN2-60-DUP-SIG', 'default', '{}'::jsonb)`,
+          [brand.rows[0].id, product.rows[0].id],
+        ),
+        (error) => error.code === '23505',
+        'one product must not contain duplicate canonical option signatures',
+      );
+      await client.query('ROLLBACK TO SAVEPOINT duplicate_option_signature');
+      await client.query('RELEASE SAVEPOINT duplicate_option_signature');
+
+      await client.query('SAVEPOINT duplicate_style_code');
+      await assert.rejects(
+        client.query(
+          `INSERT INTO catalogue.products (brand_id, category_id, style_code, title, category_schema_version)
+           VALUES ($1, $2, ' ren2-50-style ', 'Duplicate style fixture', 1)`,
+          [brand.rows[0].id, category.rows[0].id],
+        ),
+        (error) => error.code === '23505',
+        'style code uniqueness must use its normalized value within one brand',
+      );
+      await client.query('ROLLBACK TO SAVEPOINT duplicate_style_code');
+      await client.query('RELEASE SAVEPOINT duplicate_style_code');
+
+      await client.query(`UPDATE catalogue.product_variants SET sku_locked_at = now() WHERE id = $1`, [variant.rows[0].id]);
+      await client.query('SAVEPOINT ordered_sku_immutable');
+      await assert.rejects(
+        client.query(`UPDATE catalogue.product_variants SET sku = 'REN2-60-CHANGED' WHERE id = $1`, [variant.rows[0].id]),
+        (error) => error.code === '23514',
+        'an ordered variant SKU must be immutable',
+      );
+      await client.query('ROLLBACK TO SAVEPOINT ordered_sku_immutable');
+      await client.query('RELEASE SAVEPOINT ordered_sku_immutable');
+
+      await client.query('SAVEPOINT ordered_sku_lock_immutable');
+      await assert.rejects(
+        client.query(`UPDATE catalogue.product_variants SET sku_locked_at = NULL WHERE id = $1`, [variant.rows[0].id]),
+        (error) => error.code === '23514',
+        'an ordered variant SKU lock must not be cleared',
+      );
+      await client.query('ROLLBACK TO SAVEPOINT ordered_sku_lock_immutable');
+      await client.query('RELEASE SAVEPOINT ordered_sku_lock_immutable');
+
+      await client.query('SAVEPOINT ordered_sku_lock_rewrite');
+      await assert.rejects(
+        client.query(`UPDATE catalogue.product_variants SET sku_locked_at = now() + interval '1 second' WHERE id = $1`, [variant.rows[0].id]),
+        (error) => error.code === '23514',
+        'an ordered variant lock timestamp must not be rewritten',
+      );
+      await client.query('ROLLBACK TO SAVEPOINT ordered_sku_lock_rewrite');
+      await client.query('RELEASE SAVEPOINT ordered_sku_lock_rewrite');
       await client.query(
         `INSERT INTO catalogue.variant_prices
            (brand_id, variant_id, amount_minor, mrp_minor, valid_from, valid_to, price_state, rule_version)
