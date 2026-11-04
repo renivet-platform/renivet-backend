@@ -324,6 +324,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/brands/{brandId}/products": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a progressive parent product draft
+         * @description Creates an incomplete brand-owned draft with its immutable category schema pin; variants, price and media are not required until later workflow steps. Linear: REN2-61.
+         */
+        post: operations["createBrandProduct"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/brands/{brandId}/products/{productId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update a progressive product draft
+         * @description Saves normalized draft fields with a row-version If-Match compare-and-swap. Historical published category schema versions remain valid pins. Linear: REN2-61.
+         */
+        patch: operations["updateBrandProduct"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1867,6 +1907,380 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+        };
+    };
+    createBrandProduct: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                brandId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    styleCode: string;
+                    categoryCode: string;
+                    categorySchemaVersion: number;
+                    title: string;
+                    description?: string;
+                    attributes?: {
+                        [key: string]: unknown;
+                    };
+                    variants?: {
+                        sku: string;
+                        options: {
+                            [key: string]: string;
+                        };
+                        weightG?: number;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description Draft created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        productId: string;
+                        /** @constant */
+                        publicationState: "DRAFT";
+                        /** @constant */
+                        contentVersion: 1;
+                        /** @constant */
+                        rowVersion?: 1;
+                        variantIds?: string[];
+                        /** @constant */
+                        qcState: "NOT_SUBMITTED";
+                        categorySchemaVersion: number;
+                    };
+                };
+            };
+            /** @description Missing or invalid first-party session. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Brand permission or CSRF denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Brand was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Duplicate style or changed idempotent replay. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Brand state, category or attributes prevent this draft. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Product draft storage is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    updateBrandProduct: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                /** @description Quoted rowVersion returned in ProductDetail. */
+                "If-Match": string;
+            };
+            path: {
+                productId: string;
+                brandId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    title?: string;
+                    description?: string;
+                    categorySchemaVersion?: number;
+                    attributes?: {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+        responses: {
+            /** @description Draft updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id: string;
+                        /** Format: uuid */
+                        brandId: string;
+                        styleCode: string;
+                        title: string;
+                        /** @enum {string} */
+                        publicationState: "DRAFT" | "INCOMPLETE" | "PENDING_REVIEW" | "APPROVED" | "PUBLISHED" | "RE_REVIEW" | "REJECTED" | "RESTRICTED" | "ARCHIVED";
+                        contentVersion: number;
+                    } & {
+                        /** Format: uuid */
+                        categoryId: string;
+                        categorySchemaVersion: number;
+                        rowVersion: number;
+                        qcState: string;
+                        /** Format: uuid */
+                        draftRevisionId?: string | null;
+                        /** Format: uuid */
+                        publishedRevisionId?: string | null;
+                        /** Format: uuid */
+                        approvedReviewId?: string | null;
+                        variants: {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            productId: string;
+                            /** Format: uuid */
+                            brandId: string;
+                            sku: string;
+                            options: {
+                                [key: string]: string;
+                            };
+                            variantState: string;
+                            priceVersions?: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: uuid */
+                                variantId: string;
+                                /** @constant */
+                                currency: "INR";
+                                amountMinor: number;
+                                mrpMinor: number;
+                                /** @enum {string} */
+                                priceState: "DRAFT" | "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED";
+                                /** Format: date-time */
+                                validFrom: string;
+                                /** Format: date-time */
+                                validTo?: string | null;
+                                rowVersion?: number;
+                            }[];
+                            mediaLinks?: {
+                                /** Format: uuid */
+                                id: string;
+                                /** Format: uuid */
+                                mediaAssetId: string;
+                                /** Format: uuid */
+                                productId: string;
+                                /** Format: uuid */
+                                variantId?: string | null;
+                                displayRole: string;
+                                displayOrder: number;
+                                /** @enum {string} */
+                                scanState: "PENDING" | "CLEAN" | "REJECTED";
+                                /** @enum {string} */
+                                rightsState: "UNVERIFIED" | "ATTESTED" | "REVIEWED" | "REVOKED";
+                            }[];
+                        }[];
+                        mediaLinks: {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            mediaAssetId: string;
+                            /** Format: uuid */
+                            productId: string;
+                            /** Format: uuid */
+                            variantId?: string | null;
+                            displayRole: string;
+                            displayOrder: number;
+                            /** @enum {string} */
+                            scanState: "PENDING" | "CLEAN" | "REJECTED";
+                            /** @enum {string} */
+                            rightsState: "UNVERIFIED" | "ATTESTED" | "REVIEWED" | "REVOKED";
+                        }[];
+                        attributes: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Missing or invalid first-party session. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Brand permission or CSRF denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Product was not found in this brand. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Stale row version, duplicate style or changed idempotent replay. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Brand state, category, attributes or product state prevent the update. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Product draft storage is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
                 };
             };
         };

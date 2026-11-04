@@ -13,11 +13,14 @@ import { CATALOG_READ_REPOSITORY, CatalogReadService } from './catalog-read.serv
 import { TaxonomyAdminController } from './taxonomy-admin.controller';
 import { TaxonomyAdminPostgresRepository } from './taxonomy-admin.repository';
 import { TAXONOMY_ADMIN_REPOSITORY, TaxonomyAdminService } from './taxonomy-admin.service';
+import { ProductDraftController } from './product-draft.controller';
+import { ProductDraftPostgresRepository } from './product-draft.repository';
+import { PRODUCT_DRAFT_REPOSITORY, ProductDraftService } from './product-draft.service';
 
-// REN2-59 adds only the approved brand-scoped taxonomy read operations.
+// W2 taxonomy administration, brand reads, and progressive parent draft writes.
 @Module({
   imports: [ConfigModule, IdentityModule, AccessModule],
-  controllers: [TaxonomyAdminController, CatalogReadController],
+  controllers: [TaxonomyAdminController, CatalogReadController, ProductDraftController],
   providers: [
     TaxonomyAdminPostgresRepository,
     { provide: TAXONOMY_ADMIN_REPOSITORY, useExisting: TaxonomyAdminPostgresRepository },
@@ -25,6 +28,9 @@ import { TAXONOMY_ADMIN_REPOSITORY, TaxonomyAdminService } from './taxonomy-admi
     CatalogReadPostgresRepository,
     { provide: CATALOG_READ_REPOSITORY, useExisting: CatalogReadPostgresRepository },
     CatalogReadService,
+    ProductDraftPostgresRepository,
+    { provide: PRODUCT_DRAFT_REPOSITORY, useExisting: ProductDraftPostgresRepository },
+    ProductDraftService,
     {
       provide: PlatformPermissionGuard,
       useFactory: (reflector: Reflector, sessions: SessionService, access: BrandAccessRepository) =>
