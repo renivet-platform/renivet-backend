@@ -12,6 +12,7 @@ const W2_TABLES = [
   'catalogue.category_availability_events',
   'catalogue.category_schema_versions', 'catalogue.category_schema_attribute_rules',
   'catalogue.products', 'catalogue.product_variants', 'catalogue.variant_prices',
+  'catalogue.product_field_lineage', 'catalogue.product_mutation_receipts',
   'catalogue.product_revisions', 'catalogue.product_qc_reviews',
   'catalogue.price_audit_events', 'catalogue.product_attribute_values',
   'catalogue.taxonomy_admin_events',
@@ -310,3 +311,4 @@ test('REN2-60 brand-owned products and variants enforce schema, tenant, uniquene
     await pool.end();
   }
 });
+
