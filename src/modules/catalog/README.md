@@ -41,3 +41,5 @@ No categories, attributes or pilot seed data are inserted by this slice. Product
 `GET /api/v1/brands/{brandId}/categories/{categoryId}/attributes` pages only the current published version's frozen typed rules. Its opaque cursor is bound to that schema snapshot and becomes stale after publication. `GET /api/v1/brands/{brandId}/categories/{categoryId}/schema-versions/{version}` returns only the exact requested published snapshot, including its immutable ruleset hash and validator version; it never substitutes the latest version. These GET routes use private revalidation (`Cache-Control: private, no-cache`, `ETag`); requests re-read storage before returning 304, so category or schema changes are immediately visible.
 
 See [REN2-61 progressive product drafts](REN2-61-product-draft.md) for the create/update contract and persistence behavior.
+
+See [REN2-68 sustainability claims](REN2-68-sustainability-claims.md) for the proposal/evidence lifecycle and effective verified-state rules.

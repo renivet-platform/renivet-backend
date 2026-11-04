@@ -134,6 +134,13 @@
       "when": 1793800700000,
       "tag": "0018_ren2_67_product_media_associations",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793800800000,
+      "tag": "0019_ren2_68_sustainability_claim_lifecycle",
+      "breakpoints": true
     }
   ]
 }
