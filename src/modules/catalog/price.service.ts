@@ -34,9 +34,25 @@ export interface PriceReadContext {
   readonly permission: 'pricing.read';
 }
 
+export interface PriceDecisionInput {
+  readonly decision: 'APPROVE' | 'REJECT';
+  readonly reasonCode: string;
+  readonly comment?: string;
+  readonly expectedState?: 'PENDING';
+}
+
+export interface PriceDecisionContext {
+  readonly userId: string;
+  readonly brandId: string;
+  readonly permission: 'pricing.approve';
+  readonly requestId: string;
+  readonly idempotencyKey: string;
+}
+
 export interface PriceRepository {
   propose(variantId: string, input: NormalizedPriceProposal, expectedVariantVersion: number, context: PriceMutationContext): Promise<Record<string, unknown>>;
   list(variantId: string, context: PriceReadContext): Promise<Record<string, unknown>>;
+  decide(priceId: string, input: PriceDecisionInput, context: PriceDecisionContext): Promise<Record<string, unknown>>;
 }
 
 export const PRICE_REPOSITORY = Symbol('PRICE_REPOSITORY');
@@ -45,6 +61,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const IDEMPOTENCY_KEY = /^[A-Za-z0-9._:-]{1,120}$/;
 const RFC3339_WITH_ZONE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-](?:0\d|1\d|2[0-3]):[0-5]\d)$/;
 const PROPOSAL_FIELDS = new Set(['currency', 'sellingPriceMinor', 'mrpMinor', 'validFrom', 'validTo', 'ruleVersion', 'reasonCode']);
+const DECISION_FIELDS = new Set(['decision', 'reasonCode', 'comment', 'expectedState']);
 
 export class PriceError extends Error {
   constructor(readonly code: string) { super(code); }
@@ -101,6 +118,19 @@ export function parsePriceIfMatch(value: string | string[] | undefined): number 
   return parsed;
 }
 
+export function normalizePriceDecision(value: unknown): PriceDecisionInput {
+  if (!isRecord(value) || Object.keys(value).some((key) => !DECISION_FIELDS.has(key))) throw new PriceError('PRICE_DECISION_INVALID');
+  const { decision, reasonCode, comment, expectedState } = value;
+  const validText = (item: unknown, max: number) => typeof item === 'string' && item.trim().length > 0
+    && item.trim().length <= max && ![...item].some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127);
+  if ((decision !== 'APPROVE' && decision !== 'REJECT') || !validText(reasonCode, 100)
+    || (comment !== undefined && !validText(comment, 500))
+    || (expectedState !== undefined && expectedState !== 'PENDING')) throw new PriceError('PRICE_DECISION_INVALID');
+  return { decision, reasonCode: (reasonCode as string).trim(),
+    ...(comment === undefined ? {} : { comment: (comment as string).trim() }),
+    ...(expectedState === undefined ? {} : { expectedState: 'PENDING' }) };
+}
+
 function assertUuid(value: string): void {
   if (!UUID.test(value)) throw new PriceError('PRICE_REQUEST_INVALID');
 }
@@ -120,5 +150,11 @@ export class PriceService {
   async list(variantId: string, context: PriceReadContext): Promise<Record<string, unknown>> {
     assertUuid(variantId);
     return this.repository.list(variantId, context);
+  }
+
+  async decide(priceId: string, input: unknown, context: PriceDecisionContext): Promise<Record<string, unknown>> {
+    assertUuid(priceId);
+    if (!IDEMPOTENCY_KEY.test(context.idempotencyKey)) throw new PriceError('PRICE_REQUEST_INVALID');
+    return this.repository.decide(priceId, normalizePriceDecision(input), context);
   }
 }

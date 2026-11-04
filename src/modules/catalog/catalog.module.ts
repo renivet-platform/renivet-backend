@@ -17,13 +17,14 @@ import { ProductDraftController } from './product-draft.controller';
 import { ProductDraftPostgresRepository } from './product-draft.repository';
 import { PRODUCT_DRAFT_REPOSITORY, ProductDraftService } from './product-draft.service';
 import { PriceController } from './price.controller';
+import { PriceReviewController } from './price-review.controller';
 import { PricePostgresRepository } from './price.repository';
 import { PRICE_REPOSITORY, PriceService } from './price.service';
 
 // W2 taxonomy administration, brand reads, and progressive parent draft writes.
 @Module({
   imports: [ConfigModule, IdentityModule, AccessModule],
-  controllers: [TaxonomyAdminController, CatalogReadController, ProductDraftController, PriceController],
+  controllers: [TaxonomyAdminController, CatalogReadController, ProductDraftController, PriceController, PriceReviewController],
   providers: [
     TaxonomyAdminPostgresRepository,
     { provide: TAXONOMY_ADMIN_REPOSITORY, useExisting: TaxonomyAdminPostgresRepository },

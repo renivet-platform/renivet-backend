@@ -1100,14 +1100,14 @@
       ],
       "ownerIssue": "REN2-65",
       "implementation": {
-        "status": "design_only",
+        "status": "implemented",
         "test": {
-          "status": "pending",
+          "status": "verified",
           "path": "tests/w2/decideVariantPrice.test.cjs"
         },
         "pullRequest": {
-          "status": "pending",
-          "url": null
+          "status": "open",
+          "url": "https://github.com/renivet-platform/renivet-backend/pull/52"
         }
       },
       "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-65"

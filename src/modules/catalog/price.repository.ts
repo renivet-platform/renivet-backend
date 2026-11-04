@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { PoolClient } from 'pg';
 import { IdentityInfrastructure } from '../identity/identity-infrastructure';
-import { NormalizedPriceProposal, PriceError, PriceMutationContext, PriceReadContext, PriceRepository } from './price.service';
+import { NormalizedPriceProposal, PriceDecisionContext, PriceDecisionInput, PriceError, PriceMutationContext, PriceReadContext, PriceRepository } from './price.service';
 
 interface PriceRow {
   id: string;
@@ -14,6 +14,24 @@ interface PriceRow {
   valid_from: Date;
   valid_to: Date | null;
   row_version: string | number;
+}
+
+interface DecisionRow extends PriceRow {
+  brand_id: string;
+  rule_version: number;
+  created_by: string | null;
+  reason_code: string | null;
+  decided_by: string | null;
+  decision_reason_code: string | null;
+  decided_at: Date | null;
+}
+
+function decisionSnapshot(row: DecisionRow): Record<string, unknown> {
+  return {
+    ...priceVersion(row), ruleVersion: row.rule_version, createdBy: row.created_by,
+    reasonCode: row.reason_code, decidedBy: row.decided_by,
+    decisionReasonCode: row.decision_reason_code, decidedAt: row.decided_at?.toISOString() ?? null,
+  };
 }
 
 function hash(value: unknown): string {
@@ -143,6 +161,88 @@ export class PricePostgresRepository implements PriceRepository {
     } catch (error) { throw this.normalizeError(error); }
   }
 
+  async decide(priceId: string, input: PriceDecisionInput, context: PriceDecisionContext): Promise<Record<string, unknown>> {
+    return this.transaction(async (client) => {
+      const requestHash = hash({ priceId, input });
+      const lockKey = `${context.brandId}:${context.userId}:decideVariantPrice:${context.idempotencyKey}`;
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [lockKey]);
+      const replay = await client.query<{ request_sha256: string; response_payload: Record<string, unknown> }>(
+        `SELECT r.request_sha256, r.response_payload FROM catalogue.price_mutation_receipts AS r
+          JOIN brands.brands AS b ON b.id = r.brand_id AND b.onboarding_state = 'approved'
+         WHERE r.brand_id = $1 AND r.actor_user_id = $2 AND r.price_id = $3
+           AND r.operation = 'decideVariantPrice' AND r.idempotency_key = $4
+           AND EXISTS (SELECT 1 FROM access.effective_permissions AS ep WHERE ep.user_id = $2
+             AND ep.permission_code = $5
+             AND ((ep.scope_type = 'global' AND ep.brand_id IS NULL) OR (ep.scope_type = 'brand' AND ep.brand_id = $1)))`,
+        [context.brandId, context.userId, priceId, context.idempotencyKey, context.permission]);
+      if (replay.rows[0]) {
+        if (replay.rows[0].request_sha256.trim() !== requestHash) throw new PriceError('PRICE_IDEMPOTENCY_CONFLICT');
+        return replay.rows[0].response_payload;
+      }
+
+      const authorized = await client.query(
+        `SELECT 1 FROM brands.brands AS b
+          WHERE b.id = $1 AND b.onboarding_state = 'approved'
+            AND EXISTS (SELECT 1 FROM access.effective_permissions AS ep WHERE ep.user_id = $2
+              AND ep.permission_code = $3
+              AND ((ep.scope_type = 'global' AND ep.brand_id IS NULL) OR (ep.scope_type = 'brand' AND ep.brand_id = $1)))`,
+        [context.brandId, context.userId, context.permission]);
+      if (!authorized.rowCount) throw new PriceError('PRICE_PERMISSION_REVOKED');
+
+      const current = await client.query<DecisionRow>(
+        `SELECT vp.id, vp.brand_id, vp.variant_id, vp.currency, vp.amount_minor, vp.mrp_minor, vp.price_state,
+                vp.valid_from, vp.valid_to, vp.row_version, vp.rule_version, vp.created_by, vp.reason_code,
+                vp.decided_by, vp.decision_reason_code, vp.decided_at
+           FROM catalogue.variant_prices AS vp
+          WHERE vp.id = $1 AND vp.brand_id = $2 FOR UPDATE`, [priceId, context.brandId]);
+      const before = current.rows[0];
+      if (!before) throw new PriceError('PRICE_PRICE_NOT_FOUND');
+      if (before.created_by === context.userId) throw new PriceError('PRICE_MAKER_CHECKER_CONFLICT');
+      if (before.price_state !== 'PENDING') throw new PriceError('PRICE_REVIEW_STATE_CONFLICT');
+
+      // Serialize approvals in the same exclusion-constraint key space before changing
+      // different pending rows, preventing a PostgreSQL exclusion-check deadlock.
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+        [`price-approval:${context.brandId}:${before.variant_id}:${before.currency}`]);
+
+      const nextState = input.decision === 'APPROVE' ? 'APPROVED' : 'REJECTED';
+      const updated = await client.query<DecisionRow>(
+        `UPDATE catalogue.variant_prices AS vp
+            SET price_state = $3, row_version = vp.row_version + 1,
+                decided_by = $4, decision_reason_code = $5, decided_at = now(), updated_at = now()
+          WHERE vp.id = $1 AND vp.brand_id = $2 AND vp.price_state = 'PENDING'
+            AND vp.row_version < 9007199254740991
+            AND EXISTS (SELECT 1 FROM brands.brands AS b WHERE b.id = vp.brand_id AND b.onboarding_state = 'approved')
+            AND EXISTS (SELECT 1 FROM access.effective_permissions AS ep WHERE ep.user_id = $4
+              AND ep.permission_code = $6
+              AND ((ep.scope_type = 'global' AND ep.brand_id IS NULL) OR (ep.scope_type = 'brand' AND ep.brand_id = vp.brand_id)))
+          RETURNING vp.id, vp.brand_id, vp.variant_id, vp.currency, vp.amount_minor, vp.mrp_minor, vp.price_state,
+                    vp.valid_from, vp.valid_to, vp.row_version, vp.rule_version, vp.created_by, vp.reason_code,
+                    vp.decided_by, vp.decision_reason_code, vp.decided_at`,
+        [priceId, context.brandId, nextState, context.userId, input.reasonCode, context.permission]);
+      const after = updated.rows[0];
+      if (!after) throw new PriceError('PRICE_PERMISSION_REVOKED');
+      const priorSnapshot = decisionSnapshot(before);
+      const nextSnapshot = { ...decisionSnapshot(after), ...(input.comment ? { decisionComment: input.comment } : {}) };
+      const action = input.decision === 'APPROVE' ? 'APPROVED' : 'REJECTED';
+      const businessEffectKey = `decision:${context.userId}:${context.idempotencyKey}`;
+      const audit = await client.query(
+        `INSERT INTO catalogue.price_audit_events
+           (brand_id, variant_id, price_id, action, prior_snapshot, next_snapshot, actor_user_id, business_effect_key)
+         VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8)`,
+        [context.brandId, after.variant_id, priceId, action, JSON.stringify(priorSnapshot), JSON.stringify(nextSnapshot), context.userId, businessEffectKey]);
+      if (audit.rowCount !== 1) throw new PriceError('PRICE_INTERNAL_ERROR');
+      const response = { id: priceId, status: nextState, requestId: context.requestId, rowVersion: Number(after.row_version) };
+      const receipt = await client.query(
+        `INSERT INTO catalogue.price_mutation_receipts
+           (brand_id, variant_id, actor_user_id, operation, idempotency_key, request_sha256, price_id, response_payload)
+         VALUES ($1, $2, $3, 'decideVariantPrice', $4, $5, $6, $7::jsonb)`,
+        [context.brandId, after.variant_id, context.userId, context.idempotencyKey, requestHash, priceId, JSON.stringify(response)]);
+      if (receipt.rowCount !== 1) throw new PriceError('PRICE_INTERNAL_ERROR');
+      return response;
+    });
+  }
+
   private async replay(client: PoolClient, context: PriceMutationContext, variantId: string, requestHash: string): Promise<Record<string, unknown> | null> {
     await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
       [`${context.brandId}:${context.userId}:proposeVariantPrice:${context.idempotencyKey}`]);
@@ -175,7 +275,10 @@ export class PricePostgresRepository implements PriceRepository {
 
   private normalizeError(error: unknown): PriceError {
     if (error instanceof PriceError) return error;
-    const code = (error as { code?: string } | null)?.code;
+    const candidate = error as { code?: string; message?: string } | null;
+    const code = candidate?.code;
+    if (candidate?.message?.includes('PRICE_MAKER_CHECKER_CONFLICT')) return new PriceError('PRICE_MAKER_CHECKER_CONFLICT');
+    if (candidate?.message?.includes('PRICE_PENDING_DECISION_REQUIRED')) return new PriceError('PRICE_DECISION_INVALID');
     if (code === '23P01') return new PriceError('PRICE_WINDOW_CONFLICT');
     if (code === '23505') return new PriceError('PRICE_IDEMPOTENCY_CONFLICT');
     if (code === '23503') return new PriceError('PRICE_VARIANT_NOT_FOUND');
