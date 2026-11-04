@@ -7,7 +7,7 @@ const { BrandAccessGuard, REQUIRE_BRAND_PERMISSION } = require('../../dist/modul
 
 test('REN2-61 product mutations require the W1 brand-scoped catalog.write guard', () => {
   assert.deepEqual(Reflect.getMetadata('__guards__', ProductDraftController), [BrandAccessGuard]);
-  for (const method of ['create', 'update']) {
+  for (const method of ['create', 'update', 'createVariant', 'updateVariant', 'deactivateVariant']) {
     assert.equal(Reflect.getMetadata(REQUIRE_BRAND_PERMISSION, ProductDraftController.prototype[method]), 'catalog.write');
   }
 });
@@ -32,4 +32,12 @@ test('REN2-61 mutation context requires a session-bound same-origin CSRF proof a
   await assert.rejects(controller.create({}, { ...request, headers: { ...request.headers, origin: 'https://attacker.example' } }, 'denied'),
     (error) => error.getStatus?.() === 403);
   await assert.rejects(controller.create({}, request, 'bad key'), (error) => error.getStatus?.() === 422);
+});
+
+test('REN2-62 variant mutations remain nested, brand-scoped and require catalog.write', () => {
+  for (const method of ['createVariant', 'updateVariant', 'deactivateVariant']) {
+    assert.equal(Reflect.getMetadata(REQUIRE_BRAND_PERMISSION, ProductDraftController.prototype[method]), 'catalog.write');
+    const path = Reflect.getMetadata('path', ProductDraftController.prototype[method]);
+    assert.match(path, /^:productId\/variants(?:\/:variantId)?$/);
+  }
 });

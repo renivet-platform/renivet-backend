@@ -17,11 +17,21 @@ function assertDisposable(value) {
 }
 function expectCode(code) { return (error) => error?.code === code; }
 
-test('REN2-61 creates progressive drafts, updates with CAS, replays idempotently, and isolates brand state', {
+test('REN2-61/62 product drafts and SKU variants enforce category pins, CAS, idempotency, and brand isolation', {
   skip: !url && 'requires the disposable PostgreSQL 16 database', timeout: 60_000,
 }, async (t) => {
   assertDisposable(url);
-  const pool = new Pool({ connectionString: url, max: 6 }); t.after(() => pool.end());
+  const pool = new Pool({ connectionString: url, max: 6 });
+  let testRoleId;
+  t.after(async () => {
+    try {
+      if (testRoleId) {
+        await pool.query('DELETE FROM access.role_assignments WHERE role_id = $1', [testRoleId]);
+      }
+    } finally {
+      await pool.end();
+    }
+  });
   const version = await pool.query('SHOW server_version_num');
   assert.ok(Number(version.rows[0].server_version_num) >= 160000 && Number(version.rows[0].server_version_num) < 170000);
   const suffix = randomUUID().replaceAll('-', '');
@@ -37,6 +47,7 @@ test('REN2-61 creates progressive drafts, updates with CAS, replays idempotently
     VALUES($1,$2,'active',$3,now())`, [brand, owner, grantor]);
   const role = (await pool.query(`INSERT INTO access.roles(role_code,scope_kind,description,is_system)
     VALUES($1,'brand','REN2-61 disposable role',false) RETURNING id`, [`ren2_61_${suffix}`])).rows[0].id;
+  testRoleId = role;
   const permission = (await pool.query(`INSERT INTO access.permissions(permission_code,resource,action,description)
     VALUES('catalog.write','catalog','write','REN2-61 product draft test') ON CONFLICT(permission_code) DO UPDATE SET permission_code=EXCLUDED.permission_code RETURNING id`)).rows[0].id;
   await pool.query('INSERT INTO access.role_permissions(role_id,permission_id) VALUES($1,$2) ON CONFLICT DO NOTHING', [role, permission]);
@@ -50,9 +61,17 @@ test('REN2-61 creates progressive drafts, updates with CAS, replays idempotently
   const category = (await pool.query(`INSERT INTO catalogue.categories(code,name) VALUES($1,$1) RETURNING id`, [`r61-${suffix}`])).rows[0].id;
   const attribute = (await pool.query(`INSERT INTO catalogue.attributes(code,label,value_type,scope_type,allowed_values)
     VALUES($1,'Material','enum','product','["cotton","linen"]'::jsonb) RETURNING id,code`, [`r61-material-${suffix}`])).rows[0];
+  const sizeAttribute = (await pool.query(`INSERT INTO catalogue.attributes(code,label,value_type,scope_type,allowed_values)
+    VALUES($1,'Size','enum','variant','["M","L"]'::jsonb) RETURNING id,code`, [`r62-size-${suffix}`])).rows[0];
+  const colorAttribute = (await pool.query(`INSERT INTO catalogue.attributes(code,label,value_type,scope_type,allowed_values)
+    VALUES($1,'Color','enum','variant','["Blue","Red"]'::jsonb) RETURNING id,code`, [`r62-color-${suffix}`])).rows[0];
+  const variantRules = [
+    { attributeId: sizeAttribute.id, code: sizeAttribute.code, scope: 'variant', valueType: 'enum', allowedValues: ['M','L'], requiredByDefault: false },
+    { attributeId: colorAttribute.id, code: colorAttribute.code, scope: 'variant', valueType: 'enum', allowedValues: ['Blue','Red'], requiredByDefault: false },
+  ];
   const admin = new TaxonomyAdminPostgresRepository({ pool });
   await admin.propose({ categoryId: category, version: 1, validatorVersion: 'w2-attribute-validator-v1',
-    ruleset: { attributes: [{ attributeId: attribute.id, code: attribute.code, scope: 'product', valueType: 'enum', allowedValues: ['cotton','linen'], requiredByDefault: true }] } },
+    ruleset: { attributes: [{ attributeId: attribute.id, code: attribute.code, scope: 'product', valueType: 'enum', allowedValues: ['cotton','linen'], requiredByDefault: true }, ...variantRules] } },
   { actorId: proposer, requestId: `r61:${randomUUID()}`, idempotencyKey: `r61-propose-${suffix}` });
   await admin.publish({ categoryId: category, version: 1 }, { actorId: approver, requestId: `r61:${randomUUID()}`, idempotencyKey: `r61-publish-${suffix}` });
   const activate = await pool.connect();
@@ -63,7 +82,7 @@ test('REN2-61 creates progressive drafts, updates with CAS, replays idempotently
     await activate.query('COMMIT');
   } catch (error) { await activate.query('ROLLBACK'); throw error; } finally { activate.release(); }
   await admin.propose({ categoryId: category, version: 2, validatorVersion: 'w2-attribute-validator-v1',
-    ruleset: { attributes: [{ attributeId: attribute.id, code: attribute.code, scope: 'product', valueType: 'enum', allowedValues: ['cotton','linen'], requiredByDefault: true }] } },
+    ruleset: { attributes: [{ attributeId: attribute.id, code: attribute.code, scope: 'product', valueType: 'enum', allowedValues: ['cotton','linen'], requiredByDefault: true }, ...variantRules] } },
   { actorId: proposer, requestId: `r61:${randomUUID()}`, idempotencyKey: `r61-propose-v2-${suffix}` });
   await admin.publish({ categoryId: category, version: 2 }, { actorId: approver, requestId: `r61:${randomUUID()}`, idempotencyKey: `r61-publish-v2-${suffix}` });
   const accessContext = { userId: owner, brandId: brand, permission: 'catalog.write', requestId: `r61:${randomUUID()}` };
@@ -137,11 +156,62 @@ test('REN2-61 creates progressive drafts, updates with CAS, replays idempotently
   await assert.rejects(pool.query('DELETE FROM catalogue.product_field_lineage WHERE id=$1', [immutableLineage.rows[0].id]), /IMMUTABLE_RECORD/);
 
   const withVariant = await repository.create(normalizeProductCreate({ ...create, styleCode: `variant-${suffix}`,
-    variants: [{ sku: `sku-${suffix.slice(0, 20)}`, options: { size: 'M' }, weightG: 250 }] }),
+    variants: [{ sku: `sku-${suffix.slice(0, 20)}`, options: { [sizeAttribute.code]: 'M' }, weightG: 250 }] }),
   { ...accessContext, idempotencyKey: `optional-variant-${suffix}` });
   assert.equal(withVariant.variantIds.length, 1, 'optional initial variants remain supported');
   const variantLineage = await pool.query(`SELECT count(*)::int AS count FROM catalogue.product_field_lineage WHERE product_id=$1 AND field_path LIKE 'variants.%'`, [withVariant.productId]);
   assert.equal(variantLineage.rows[0].count, 3, 'each supplied initial-variant field has lineage');
+
+  const blueM = await repository.createVariant(withVariant.productId,
+    { sku: `blue-m-${suffix.slice(0, 12)}`, options: { [sizeAttribute.code]: 'M', [colorAttribute.code]: 'Blue' }, weightG: 250 },
+    1, { ...accessContext, idempotencyKey: `blue-m-${suffix}` });
+  const blueL = await repository.createVariant(withVariant.productId,
+    { sku: `blue-l-${suffix.slice(0, 12)}`, options: { [colorAttribute.code]: 'Blue', [sizeAttribute.code]: 'L' } },
+    2, { ...accessContext, idempotencyKey: `blue-l-${suffix}` });
+  assert.notEqual(blueM.optionSignature, blueL.optionSignature, 'different option values create different canonical signatures');
+  const blueMReplay = await repository.createVariant(withVariant.productId,
+    { sku: `blue-m-${suffix.slice(0, 12)}`, options: { [colorAttribute.code]: 'Blue', [sizeAttribute.code]: 'M' }, weightG: 250 },
+    1, { ...accessContext, idempotencyKey: `blue-m-${suffix}` });
+  assert.equal(blueMReplay.id, blueM.id, 'idempotent create returns the original variant identity');
+  assert.equal(blueMReplay.parentRowVersion, 2, 'idempotent replay does not increment the parent again');
+  await assert.rejects(repository.createVariant(withVariant.productId,
+    { sku: `dupe-${suffix.slice(0, 12)}`, options: { [colorAttribute.code]: 'Blue', [sizeAttribute.code]: 'M' } },
+    3, { ...accessContext, idempotencyKey: `duplicate-options-${suffix}` }), expectCode('PRODUCT_CONFLICT'));
+  await assert.rejects(repository.createVariant(withVariant.productId,
+    { sku: `bad-${suffix.slice(0, 12)}`, options: { [colorAttribute.code]: 'Green', [sizeAttribute.code]: 'M' } },
+    3, { ...accessContext, idempotencyKey: `invalid-category-option-${suffix}` }), expectCode('VARIANT_ATTRIBUTE_INVALID'));
+  const updatedVariant = await repository.updateVariant(withVariant.productId, blueM.id,
+    { options: { [colorAttribute.code]: 'Red', [sizeAttribute.code]: 'M' }, weightG: 275 }, 1,
+    { ...accessContext, idempotencyKey: `update-variant-${suffix}` });
+  assert.equal(updatedVariant.rowVersion, 2);
+  await assert.rejects(repository.updateVariant(withVariant.productId, blueM.id, { weightG: 300 }, 1,
+    { ...accessContext, idempotencyKey: `stale-variant-${suffix}` }), expectCode('VARIANT_ROW_VERSION_CONFLICT'));
+  await assert.rejects(repository.updateVariant(withVariant.productId, blueM.id, { weightG: 300 }, 2,
+    { ...accessContext, brandId: otherBrand, idempotencyKey: `cross-brand-variant-${suffix}` }), expectCode('VARIANT_NOT_FOUND'));
+  const concurrentVariantUpdates = await Promise.allSettled([
+    repository.updateVariant(withVariant.productId, blueL.id, { weightG: 100 }, 1, { ...accessContext, idempotencyKey: `parallel-a-${suffix}` }),
+    repository.updateVariant(withVariant.productId, blueL.id, { weightG: 110 }, 1, { ...accessContext, idempotencyKey: `parallel-b-${suffix}` }),
+  ]);
+  assert.equal(concurrentVariantUpdates.filter((item) => item.status === 'fulfilled').length, 1);
+  assert.equal(concurrentVariantUpdates.filter((item) => item.status === 'rejected' && item.reason.code === 'VARIANT_ROW_VERSION_CONFLICT').length, 1);
+  const inactiveVariant = await repository.deactivateVariant(withVariant.productId, blueL.id, { reasonCode: 'NO_LONGER_SOLD', expectedVariantVersion: 2 }, 2,
+    { ...accessContext, idempotencyKey: `deactivate-variant-${suffix}` });
+  assert.equal(inactiveVariant.variantState, 'INACTIVE');
+  const retainedSku = await pool.query('SELECT sku,variant_state FROM catalogue.product_variants WHERE id=$1', [blueL.id]);
+  assert.equal(retainedSku.rows[0].sku, `blue-l-${suffix.slice(0, 12)}`, 'soft deactivation retains the SKU identity');
+  assert.equal(retainedSku.rows[0].variant_state, 'INACTIVE');
+  await assert.rejects(repository.createVariant(withVariant.productId,
+    { sku: `blue-l-${suffix.slice(0, 12)}`, options: { [colorAttribute.code]: 'Blue', [sizeAttribute.code]: 'L' } },
+    3, { ...accessContext, idempotencyKey: `recycle-inactive-sku-${suffix}` }), expectCode('PRODUCT_CONFLICT'));
+  await pool.query(`INSERT INTO catalogue.variant_prices(brand_id,variant_id,currency,amount_minor,mrp_minor,valid_from,price_state,rule_version)
+    VALUES($1,$2,'INR',50,100,now(),'DRAFT',1)`, [brand, blueM.id]);
+  await assert.rejects(repository.deactivateVariant(withVariant.productId, blueM.id, { reasonCode: 'HAS_PRICE' }, 2,
+    { ...accessContext, idempotencyKey: `referenced-deactivate-${suffix}` }), expectCode('VARIANT_REFERENCED'));
+  await pool.query('UPDATE catalogue.product_variants SET sku_locked_at=now() WHERE id=$1', [blueM.id]);
+  await assert.rejects(pool.query('UPDATE catalogue.product_variants SET sku=$2 WHERE id=$1', [blueM.id, `changed-${suffix.slice(0, 12)}`]),
+    /ordered variant SKU and its lock are immutable/);
+  await assert.rejects(repository.deactivateVariant(withVariant.productId, blueM.id, { reasonCode: 'ORDERED' }, 2,
+    { ...accessContext, idempotencyKey: `ordered-deactivate-${suffix}` }), expectCode('VARIANT_REFERENCED'));
 
   for (const state of ['suspended', 'restricted', 'archived']) {
     await pool.query('UPDATE brands.brands SET onboarding_state=$2 WHERE id=$1', [brand, state]);
@@ -153,3 +223,4 @@ test('REN2-61 creates progressive drafts, updates with CAS, replays idempotently
   await assert.rejects(repository.create(normalizeProductCreate({ ...create, styleCode: 'suspended-membership' }),
     { ...accessContext, idempotencyKey: `suspended-membership-${suffix}` }), expectCode('PRODUCT_ACCESS_DENIED'));
 });
+

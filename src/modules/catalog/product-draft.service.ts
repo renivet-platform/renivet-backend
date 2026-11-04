@@ -1,9 +1,9 @@
 import {
-  ConflictException, ForbiddenException, Inject, Injectable,
+  ConflictException, ForbiddenException, Inject, Injectable, PreconditionFailedException,
   NotFoundException, ServiceUnavailableException, UnprocessableEntityException,
 } from '@nestjs/common';
-import { CategoryAttributeRule, CategorySchemaSnapshot, compileCategorySchema } from './category-attribute-validator';
-import { CreateProductDraftDto, UpdateProductDraftDto } from './product-draft.dto';
+import { canonicalizeOptionSignature, CategoryAttributeRule, CategorySchemaSnapshot, compileCategorySchema } from './category-attribute-validator';
+import { CreateProductDraftDto, CreateProductVariantDto, DeactivateProductVariantDto, UpdateProductDraftDto, UpdateProductVariantDto } from './product-draft.dto';
 import { ProductDraftPostgresRepository } from './product-draft.repository';
 
 export interface ProductMutationContext {
@@ -31,6 +31,7 @@ export const PRODUCT_DRAFT_REPOSITORY = Symbol('PRODUCT_DRAFT_REPOSITORY');
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const KEYS = new Set(['styleCode', 'categoryCode', 'categorySchemaVersion', 'title', 'description', 'attributes', 'variants']);
 const PATCH_KEYS = new Set(['title', 'description', 'categorySchemaVersion', 'attributes']);
+const VARIANT_PATCH_KEYS = new Set(['options', 'weightG', 'gtin', 'reasonCode']);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -100,6 +101,65 @@ export function parseProductIfMatch(value: string | string[] | undefined): numbe
   return parsed;
 }
 
+export function normalizeVariantCreate(value: unknown): CreateProductVariantDto {
+  if (!isRecord(value) || Object.keys(value).some((key) => !['sku', 'options', 'weightG'].includes(key))) throw productError('PRODUCT_DRAFT_INVALID');
+  const sku = normalizedText(value.sku, 40);
+  const options = normalizeVariantOptions(value.options);
+  if (!sku || !/^[A-Za-z0-9_.-]{1,40}$/.test(sku)
+    || (value.weightG !== undefined && (!Number.isSafeInteger(value.weightG) || Number(value.weightG) < 0))
+    ) throw productError('PRODUCT_DRAFT_INVALID');
+  return { sku, options, ...(value.weightG === undefined ? {} : { weightG: Number(value.weightG) }) };
+}
+
+export function normalizeVariantPatch(value: unknown): UpdateProductVariantDto {
+  if (!isRecord(value) || Object.keys(value).length === 0 || Object.keys(value).some((key) => !VARIANT_PATCH_KEYS.has(key))) throw productError('PRODUCT_DRAFT_INVALID');
+  const result: UpdateProductVariantDto = {};
+  if (value.options !== undefined) result.options = normalizeVariantOptions(value.options);
+  if (value.weightG !== undefined) {
+    if (!Number.isSafeInteger(value.weightG) || Number(value.weightG) < 0) throw productError('PRODUCT_DRAFT_INVALID');
+    result.weightG = Number(value.weightG);
+  }
+  if (value.gtin !== undefined) {
+    if (value.gtin === null) result.gtin = null;
+    else {
+      const gtin = normalizedText(value.gtin, 14);
+      if (!gtin || !/^\d{8}(?:\d{4})?(?:\d{1,2})?$/.test(gtin)) throw productError('PRODUCT_DRAFT_INVALID');
+      result.gtin = gtin;
+    }
+  }
+  if (value.reasonCode !== undefined) {
+    const reasonCode = normalizedText(value.reasonCode, 64);
+    if (!reasonCode || !/^[A-Za-z0-9_.-]+$/.test(reasonCode)) throw productError('PRODUCT_DRAFT_INVALID');
+    result.reasonCode = reasonCode;
+  }
+  return result;
+}
+
+export function normalizeVariantDeactivate(value: unknown): DeactivateProductVariantDto {
+  if (!isRecord(value) || Object.keys(value).some((key) => !['reasonCode', 'expectedVariantVersion'].includes(key)) || !Object.hasOwn(value, 'reasonCode')) throw productError('PRODUCT_DRAFT_INVALID');
+  const reasonCode = normalizedText(value.reasonCode, 64);
+  if (!reasonCode || !/^[A-Za-z0-9_.-]+$/.test(reasonCode)
+    || (value.expectedVariantVersion !== undefined && (!Number.isSafeInteger(value.expectedVariantVersion) || Number(value.expectedVariantVersion) < 1))) throw productError('PRODUCT_DRAFT_INVALID');
+  return { reasonCode, ...(value.expectedVariantVersion === undefined ? {} : { expectedVariantVersion: Number(value.expectedVariantVersion) }) };
+}
+
+export function parseVariantIfMatch(value: string | string[] | undefined): number {
+  return parseProductIfMatch(value);
+}
+
+function normalizeVariantOptions(value: unknown): Record<string, string> {
+  if (!isRecord(value) || Object.keys(value).length === 0 || Object.keys(value).length > 32) throw productError('PRODUCT_DRAFT_INVALID');
+  const options = Object.create(null) as Record<string, string>;
+  for (const [rawKey, rawValue] of Object.entries(value)) {
+    const key = normalizedText(rawKey, 128);
+    const optionValue = normalizedText(rawValue, 128);
+    if (!key || !optionValue || Object.hasOwn(options, key)) throw productError('PRODUCT_DRAFT_INVALID');
+    options[key] = optionValue;
+  }
+  try { canonicalizeOptionSignature(options); } catch { throw productError('PRODUCT_DRAFT_INVALID'); }
+  return Object.fromEntries(Object.entries(options).sort(([left], [right]) => left.localeCompare(right)));
+}
+
 function productError(code: string): Error & { code: string } {
   return Object.assign(new Error(code), { code });
 }
@@ -119,6 +179,32 @@ export class ProductDraftService {
     try { return await this.repository.update(productId, normalizeProductPatch(input), parseProductIfMatch(ifMatch), context); }
     catch (error) { throw mapProductError(error); }
   }
+
+  async createVariant(productId: string, input: CreateProductVariantDto | unknown, ifMatch: string | string[] | undefined,
+    context: ProductMutationContext): Promise<Record<string, unknown>> {
+    if (!UUID.test(productId)) throw new NotFoundException({ code: 'PRODUCT_NOT_FOUND', message: 'The requested product was not found.' });
+    try { return await this.repository.createVariant(productId, normalizeVariantCreate(input), parseProductIfMatch(ifMatch), context); }
+    catch (error) { throw mapProductError(error); }
+  }
+
+  async updateVariant(productId: string, variantId: string, input: UpdateProductVariantDto | unknown,
+    ifMatch: string | string[] | undefined, context: ProductMutationContext): Promise<Record<string, unknown>> {
+    if (!UUID.test(productId) || !UUID.test(variantId)) throw new NotFoundException({ code: 'PRODUCT_NOT_FOUND', message: 'The requested variant was not found.' });
+    try { return await this.repository.updateVariant(productId, variantId, normalizeVariantPatch(input), parseVariantIfMatch(ifMatch), context); }
+    catch (error) { throw mapProductError(error); }
+  }
+
+  async deactivateVariant(productId: string, variantId: string, input: DeactivateProductVariantDto | unknown,
+    ifMatch: string | string[] | undefined, context: ProductMutationContext): Promise<Record<string, unknown>> {
+    if (!UUID.test(productId) || !UUID.test(variantId)) throw new NotFoundException({ code: 'PRODUCT_NOT_FOUND', message: 'The requested variant was not found.' });
+    try {
+      const normalized = normalizeVariantDeactivate(input);
+      const expectedVersion = parseVariantIfMatch(ifMatch);
+      if (normalized.expectedVariantVersion !== undefined && normalized.expectedVariantVersion !== expectedVersion) throw productError('PRODUCT_IF_MATCH_INVALID');
+      return await this.repository.deactivateVariant(productId, variantId, normalized, expectedVersion, context);
+    }
+    catch (error) { throw mapProductError(error); }
+  }
 }
 
 function mapProductError(error: unknown): unknown {
@@ -129,6 +215,12 @@ function mapProductError(error: unknown): unknown {
   if (code === 'PRODUCT_ACCESS_DENIED') return new ForbiddenException({ code, message: 'The operation could not be authorized.' });
   if (code === 'PRODUCT_CATEGORY_INVALID' || code === 'PRODUCT_ATTRIBUTE_INVALID' || code === 'PRODUCT_STATE_RESTRICTED') return new UnprocessableEntityException({ code, message: 'The product draft does not match an active category or brand state.' });
   if (code === 'PRODUCT_DATABASE_UNAVAILABLE') return new ServiceUnavailableException({ code, message: 'Product draft storage is temporarily unavailable.' });
+  if (code === 'VARIANT_NOT_FOUND') return new NotFoundException({ code, message: 'The requested variant was not found.' });
+  if (code === 'VARIANT_ACCESS_DENIED') return new ForbiddenException({ code, message: 'The operation could not be authorized.' });
+  if (code === 'VARIANT_ROW_VERSION_CONFLICT') return new PreconditionFailedException({ code, message: 'The variant version no longer matches If-Match.' });
+  if (code === 'VARIANT_REFERENCED') return new ConflictException({ code, message: 'The variant has dependent records.' });
+  if (code === 'VARIANT_STATE_RESTRICTED') return new UnprocessableEntityException({ code, message: 'The variant cannot be changed in its current state.' });
+  if (code === 'VARIANT_CATEGORY_INVALID' || code === 'VARIANT_ATTRIBUTE_INVALID') return new UnprocessableEntityException({ code, message: 'The variant does not match the pinned category schema.' });
   return error;
 }
 
@@ -139,4 +231,13 @@ export function validateProductAttributes(categoryId: string, versionId: string,
   const result = schema.validate({ product: values }, { mode: 'draft' });
   if (!result.valid) throw productError('PRODUCT_ATTRIBUTE_INVALID');
   return { ...result.normalizedValues.product };
+}
+
+export function validateVariantAttributes(categoryId: string, versionId: string, version: number,
+  validatorVersion: string, rules: CategoryAttributeRule[], values: Record<string, unknown>): Record<string, unknown> {
+  const snapshot: CategorySchemaSnapshot = { categoryId, categorySchemaVersionId: versionId, categorySchemaVersion: version, validatorVersion, rules };
+  const schema = compileCategorySchema(snapshot);
+  const result = schema.validate({ variant: values }, { mode: 'draft' });
+  if (!result.valid) throw productError('VARIANT_ATTRIBUTE_INVALID');
+  return { ...result.normalizedValues.variant };
 }

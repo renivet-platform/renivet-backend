@@ -18,4 +18,22 @@ export class UpdateProductDraftDto {
   @ApiPropertyOptional({ type: 'object', additionalProperties: true }) @IsOptional() @IsObject() attributes?: Record<string, unknown>;
 }
 
+export class CreateProductVariantDto {
+  @ApiProperty({ maxLength: 40, pattern: '^[A-Za-z0-9_.-]+$' }) @IsString() @MinLength(1) sku!: string;
+  @ApiProperty({ type: 'object', additionalProperties: true }) @IsObject() options!: Record<string, unknown>;
+  @ApiPropertyOptional({ minimum: 0 }) @IsOptional() @IsInt() @Min(0) weightG?: number;
+}
+
+export class UpdateProductVariantDto {
+  @ApiPropertyOptional({ type: 'object', additionalProperties: true }) @IsOptional() @IsObject() options?: Record<string, unknown>;
+  @ApiPropertyOptional({ minimum: 0 }) @IsOptional() @IsInt() @Min(0) weightG?: number;
+  @ApiPropertyOptional({ maxLength: 14, nullable: true }) @IsOptional() @IsString() gtin?: string | null;
+  @ApiPropertyOptional() @IsOptional() @IsString() reasonCode?: string;
+}
+
+export class DeactivateProductVariantDto {
+  @ApiProperty({ maxLength: 64 }) @IsString() @MinLength(1) reasonCode!: string;
+  @ApiPropertyOptional({ minimum: 1 }) @IsOptional() @IsInt() @Min(1) expectedVariantVersion?: number;
+}
+
 export class ProductDraftErrorDto { @ApiProperty() code!: string; @ApiProperty() message!: string; @ApiProperty() requestId!: string; }
