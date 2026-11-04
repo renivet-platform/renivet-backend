@@ -334,10 +334,10 @@ export class ProductDraftPostgresRepository {
 
   private async loadSchemaRules(client: PoolClient, id: string, code: string, versionId: string, version: number, validatorVersion: string): Promise<SchemaInfo> {
     const result = await client.query<Record<string, unknown>>(
-      `SELECT id,attribute_id,attribute_code AS code,scope_type AS scope,value_type,allowed_values,unit_code,required_by_default,conditional_ast,min_values,max_values
+      `SELECT id,attribute_id,attribute_code AS code,display_label AS "displayLabel",scope_type AS scope,value_type,allowed_values,unit_code,required_by_default,conditional_ast,min_values,max_values
          FROM catalogue.category_schema_attribute_rules WHERE schema_version_id=$1 ORDER BY scope_type,attribute_code`, [versionId]);
     const rules = result.rows.map((row) => ({ id: String(row.id), attributeId: String(row.attribute_id), code: String(row.code),
-      scope: row.scope as 'product'|'variant', valueType: row.value_type as CategoryAttributeRule['valueType'],
+      scope: row.scope as 'product'|'variant', displayLabel: String(row.displayLabel), valueType: row.value_type as CategoryAttributeRule['valueType'],
       allowedValues: row.allowed_values as unknown[]|null, unitCode: row.unit_code as string|null,
       requiredByDefault: row.required_by_default as boolean, conditionalAst: row.conditional_ast,
       minValues: row.min_values as number|null, maxValues: row.max_values as number|null }));

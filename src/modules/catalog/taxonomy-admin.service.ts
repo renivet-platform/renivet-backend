@@ -67,6 +67,7 @@ function stable(value: unknown): string {
 function semanticRule(rule: CategorySchemaRuleSnapshot): Record<string, unknown> {
   return {
     code: rule.code,
+    displayLabel: rule.displayLabel ?? rule.code,
     scope: rule.scope,
     valueType: rule.valueType,
     allowedValues: rule.allowedValues ?? null,
@@ -144,6 +145,7 @@ export function normalizeCategorySchemaProposal(input: CategorySchemaProposalInp
 
 export interface CategorySchemaRuleSnapshot {
   readonly code: string;
+  readonly displayLabel?: string;
   readonly scope: 'product' | 'variant';
   readonly valueType: string;
   readonly allowedValues?: readonly unknown[] | null;

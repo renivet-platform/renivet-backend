@@ -84,6 +84,8 @@ test('REN2-58 drafts, previews, publishes atomically, replays idempotently, and 
   const draft = await repository.propose(input, proposalContext);
   assert.equal(draft.status, 'draft_submitted');
   assert.deepEqual(draft.previewDiff.added.map(({ code }) => code), [attribute.code]);
+  const proposedLabel = await pool.query('SELECT display_label FROM catalogue.category_schema_attribute_rules WHERE schema_version_id=$1 AND attribute_code=$2', [draft.id, attribute.code]);
+  assert.equal(proposedLabel.rows[0].display_label, 'Material');
   const draftReplay = await repository.propose(input, { ...proposalContext, requestId: `replay-${randomUUID()}` });
   assert.equal(draftReplay.id, draft.id);
   assert.deepEqual(draftReplay.previewDiff, draft.previewDiff);
@@ -108,6 +110,11 @@ test('REN2-58 drafts, previews, publishes atomically, replays idempotently, and 
   assert.match(published.rows[0].ruleset_sha256, /^[0-9a-f]{64}$/);
   assert.equal(published.rows[0].notice_count, 1);
   assert.equal(published.rows[0].audit_count, 1);
+  await pool.query('UPDATE catalogue.attributes SET label=$2 WHERE id=$1', [attribute.attributeId, 'Renamed Material']);
+  const frozenLabel = await pool.query('SELECT display_label FROM catalogue.category_schema_attribute_rules WHERE schema_version_id=$1 AND attribute_code=$2', [draft.id, attribute.code]);
+  assert.equal(frozenLabel.rows[0].display_label, 'Material', 'renaming the live attribute does not change the published label snapshot');
+  const stableHash = await pool.query('SELECT ruleset_sha256=catalogue.category_schema_content_sha256(id,ruleset,validator_version) AS matches FROM catalogue.category_schema_versions WHERE id=$1', [draft.id]);
+  assert.equal(stableHash.rows[0].matches, true, 'published snapshot hash includes its frozen display label');
   const auditEvent = await pool.query(
     `SELECT id FROM catalogue.taxonomy_admin_events WHERE category_id=$1 AND action='publish'`, [categoryId],
   );

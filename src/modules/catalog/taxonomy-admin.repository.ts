@@ -37,7 +37,7 @@ export class TaxonomyAdminPostgresRepository implements TaxonomyAdminRepository 
       if (!row.is_leaf || row.retired || input.version !== (row.schema_version ?? 0) + 1) {
         throw taxonomyError('TAXONOMY_VERSION_CONFLICT');
       }
-      await this.assertAttributes(client, input.ruleset.attributes);
+      const labels = await this.assertAttributes(client, input.ruleset.attributes);
 
       const versionId = randomUUID();
       await client.query(
@@ -49,10 +49,10 @@ export class TaxonomyAdminPostgresRepository implements TaxonomyAdminRepository 
       for (const rule of input.ruleset.attributes) {
         await client.query(
           `INSERT INTO catalogue.category_schema_attribute_rules
-             (schema_version_id, attribute_id, attribute_code, scope_type, value_type, allowed_values,
+             (schema_version_id, attribute_id, attribute_code, display_label, scope_type, value_type, allowed_values,
               unit_code, required_by_default, conditional_ast, min_values, max_values)
-           VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9::jsonb,$10,$11)`,
-          [versionId, rule.attributeId, rule.code, rule.scope, rule.valueType,
+           VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10::jsonb,$11,$12)`,
+          [versionId, rule.attributeId, rule.code, labels.get(rule.attributeId), rule.scope, rule.valueType,
             rule.allowedValues == null ? null : JSON.stringify(rule.allowedValues), rule.unitCode ?? null,
             rule.requiredByDefault ?? false, rule.conditionalAst == null ? null : JSON.stringify(rule.conditionalAst),
             rule.minValues ?? null, rule.maxValues ?? null],
@@ -62,7 +62,9 @@ export class TaxonomyAdminPostgresRepository implements TaxonomyAdminRepository 
       await client.query(`UPDATE catalogue.category_schema_versions SET ruleset=ruleset WHERE id=$1`, [versionId]);
 
       const previous = row.schema_version === null ? [] : await this.loadRules(client, input.categoryId, row.schema_version);
-      const diff = buildCategorySchemaDiff(previous, input.ruleset.attributes);
+      const diff = buildCategorySchemaDiff(previous, input.ruleset.attributes.map((rule) => ({
+        ...rule, displayLabel: labels.get(rule.attributeId),
+      })));
       const receipt = { id: versionId, status: 'draft_submitted', requestId: context.requestId, rowVersion: 1, previewDiff: diff };
       await this.recordEvent(client, context, 'propose', input.categoryId, input.version, requestHash, receipt, diff);
       return receipt;
@@ -145,20 +147,21 @@ export class TaxonomyAdminPostgresRepository implements TaxonomyAdminRepository 
     }).catch((error: unknown) => { throw normalizeDbError(error); });
   }
 
-  private async assertAttributes(client: PoolClient, rules: readonly CategorySchemaProposalInput['ruleset']['attributes'][number][]): Promise<void> {
+  private async assertAttributes(client: PoolClient, rules: readonly CategorySchemaProposalInput['ruleset']['attributes'][number][]): Promise<Map<string, string>> {
     const ids = rules.map((rule) => rule.attributeId);
-    const result = await client.query<{ id: string; code: string; scope_type: string; value_type: string }>(
-      `SELECT id, code, scope_type, value_type FROM catalogue.attributes WHERE id=ANY($1::uuid[])`, [ids],
+    const result = await client.query<{ id: string; code: string; label: string; scope_type: string; value_type: string }>(
+      `SELECT id, code, label, scope_type, value_type FROM catalogue.attributes WHERE id=ANY($1::uuid[])`, [ids],
     );
     if (result.rowCount !== ids.length || result.rows.some((row) => {
       const rule = rules.find((item) => item.attributeId === row.id);
       return !rule || row.code !== rule.code || row.scope_type !== rule.scope || row.value_type !== rule.valueType;
     })) throw taxonomyError('CATEGORY_SCHEMA_INVALID');
+    return new Map(result.rows.map((row) => [row.id, row.label]));
   }
 
   private async loadRules(client: PoolClient, categoryId: string, version: number): Promise<CategorySchemaRuleSnapshot[]> {
     const result = await client.query(
-      `SELECT r.attribute_code AS code, r.scope_type AS scope, r.value_type AS "valueType",
+      `SELECT r.attribute_code AS code, r.display_label AS "displayLabel", r.scope_type AS scope, r.value_type AS "valueType",
               r.allowed_values AS "allowedValues", r.unit_code AS "unitCode",
               r.required_by_default AS "requiredByDefault", r.conditional_ast AS "conditionalAst",
               r.min_values AS "minValues", r.max_values AS "maxValues"
@@ -171,7 +174,7 @@ export class TaxonomyAdminPostgresRepository implements TaxonomyAdminRepository 
 
   private async loadStoredRules(client: PoolClient, versionId: string): Promise<CategoryAttributeRule[]> {
     const result = await client.query(
-      `SELECT r.id, r.attribute_id AS "attributeId", r.attribute_code AS code,
+      `SELECT r.id, r.attribute_id AS "attributeId", r.attribute_code AS code, r.display_label AS "displayLabel",
               r.scope_type AS scope, r.value_type AS "valueType", r.allowed_values AS "allowedValues",
               r.unit_code AS "unitCode", r.required_by_default AS "requiredByDefault",
               r.conditional_ast AS "conditionalAst", r.min_values AS "minValues", r.max_values AS "maxValues"

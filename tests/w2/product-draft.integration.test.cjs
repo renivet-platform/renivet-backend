@@ -115,6 +115,9 @@ test('REN2-61/62 product drafts and SKU variants enforce category pins, CAS, ide
   const updated = await repository.update(draft.productId, normalizeProductPatch(update), 1, updateContext);
   assert.equal(updated.rowVersion, 2); assert.equal(updated.contentVersion, 2);
   assert.equal(updated.title, 'Final draft title'); assert.equal(updated.attributes[attribute.code], 'cotton');
+  const productValue = await pool.query(`SELECT r.display_label,v.val_enum FROM catalogue.product_attribute_values v
+    JOIN catalogue.category_schema_attribute_rules r ON r.id=v.frozen_rule_id WHERE v.product_id=$1 AND r.attribute_code=$2`, [draft.productId, attribute.code]);
+  assert.deepEqual(productValue.rows[0], { display_label: 'Material', val_enum: 'cotton' }, 'human label remains separate from normalized machine value');
   const updateReplay = await repository.update(draft.productId, normalizeProductPatch(update), 1, updateContext);
   assert.equal(updateReplay.rowVersion, 2, 'an exact update retry returns the original receipt');
   await assert.rejects(repository.update(draft.productId, normalizeProductPatch({ title: 'different update' }), 1, updateContext), expectCode('PRODUCT_IDEMPOTENCY_CONFLICT'));
@@ -169,6 +172,10 @@ test('REN2-61/62 product drafts and SKU variants enforce category pins, CAS, ide
     { sku: `blue-l-${suffix.slice(0, 12)}`, options: { [colorAttribute.code]: 'Blue', [sizeAttribute.code]: 'L' } },
     2, { ...accessContext, idempotencyKey: `blue-l-${suffix}` });
   assert.notEqual(blueM.optionSignature, blueL.optionSignature, 'different option values create different canonical signatures');
+  assert.equal(blueM.attributes[sizeAttribute.code], 'M');
+  const variantValue = await pool.query(`SELECT r.display_label,v.val_enum FROM catalogue.variant_attribute_values v
+    JOIN catalogue.category_schema_attribute_rules r ON r.id=v.frozen_rule_id WHERE v.variant_id=$1 AND r.attribute_code=$2`, [blueM.id, sizeAttribute.code]);
+  assert.deepEqual(variantValue.rows[0], { display_label: 'Size', val_enum: 'M' }, 'variant label and normalized value are stored separately');
   const blueMReplay = await repository.createVariant(withVariant.productId,
     { sku: `blue-m-${suffix.slice(0, 12)}`, options: { [colorAttribute.code]: 'Blue', [sizeAttribute.code]: 'M' }, weightG: 250 },
     1, { ...accessContext, idempotencyKey: `blue-m-${suffix}` });
