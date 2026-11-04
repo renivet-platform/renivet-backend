@@ -160,8 +160,8 @@ function normalizeVariantOptions(value: unknown): Record<string, string> {
   return Object.fromEntries(Object.entries(options).sort(([left], [right]) => left.localeCompare(right)));
 }
 
-function productError(code: string): Error & { code: string } {
-  return Object.assign(new Error(code), { code });
+function productError(code: string, details?: Record<string, unknown>): Error & { code: string; details?: Record<string, unknown> } {
+  return Object.assign(new Error(code), { code, ...(details ? { details } : {}) });
 }
 
 @Injectable()
@@ -213,7 +213,7 @@ function mapProductError(error: unknown): unknown {
   if (code === 'PRODUCT_CONFLICT' || code === 'PRODUCT_IDEMPOTENCY_CONFLICT' || code === 'PRODUCT_ROW_VERSION_CONFLICT') return new ConflictException({ code, message: 'The product draft changed or conflicts with an earlier request.' });
   if (code === 'PRODUCT_NOT_FOUND') return new NotFoundException({ code, message: 'The requested product was not found.' });
   if (code === 'PRODUCT_ACCESS_DENIED') return new ForbiddenException({ code, message: 'The operation could not be authorized.' });
-  if (code === 'PRODUCT_CATEGORY_INVALID' || code === 'PRODUCT_ATTRIBUTE_INVALID' || code === 'PRODUCT_STATE_RESTRICTED') return new UnprocessableEntityException({ code, message: 'The product draft does not match an active category or brand state.' });
+  if (code === 'PRODUCT_CATEGORY_INVALID' || code === 'PRODUCT_ATTRIBUTE_INVALID' || code === 'PRODUCT_STATE_RESTRICTED') return new UnprocessableEntityException({ code, message: 'The product draft does not match an active category or brand state.', ...((error as { details?: Record<string, unknown> }).details ? { details: (error as { details: Record<string, unknown> }).details } : {}) });
   if (code === 'PRODUCT_DATABASE_UNAVAILABLE') return new ServiceUnavailableException({ code, message: 'Product draft storage is temporarily unavailable.' });
   if (code === 'VARIANT_NOT_FOUND') return new NotFoundException({ code, message: 'The requested variant was not found.' });
   if (code === 'VARIANT_ACCESS_DENIED') return new ForbiddenException({ code, message: 'The operation could not be authorized.' });
@@ -225,19 +225,19 @@ function mapProductError(error: unknown): unknown {
 }
 
 export function validateProductAttributes(categoryId: string, versionId: string, version: number,
-  validatorVersion: string, rules: CategoryAttributeRule[], values: Record<string, unknown>): Record<string, unknown> {
+  validatorVersion: string, rules: CategoryAttributeRule[], values: Record<string, unknown>, mode: 'draft' | 'submission' = 'draft'): Record<string, unknown> {
   const snapshot: CategorySchemaSnapshot = { categoryId, categorySchemaVersionId: versionId, categorySchemaVersion: version, validatorVersion, rules };
   const schema = compileCategorySchema(snapshot);
-  const result = schema.validate({ product: values }, { mode: 'draft' });
-  if (!result.valid) throw productError('PRODUCT_ATTRIBUTE_INVALID');
+  const result = schema.validate({ product: values }, { mode });
+  if (!result.valid) throw productError('PRODUCT_ATTRIBUTE_INVALID', { issues: result.issues });
   return { ...result.normalizedValues.product };
 }
 
 export function validateVariantAttributes(categoryId: string, versionId: string, version: number,
-  validatorVersion: string, rules: CategoryAttributeRule[], values: Record<string, unknown>): Record<string, unknown> {
+  validatorVersion: string, rules: CategoryAttributeRule[], values: Record<string, unknown>, mode: 'draft' | 'submission' = 'draft'): Record<string, unknown> {
   const snapshot: CategorySchemaSnapshot = { categoryId, categorySchemaVersionId: versionId, categorySchemaVersion: version, validatorVersion, rules };
   const schema = compileCategorySchema(snapshot);
-  const result = schema.validate({ variant: values }, { mode: 'draft' });
-  if (!result.valid) throw productError('VARIANT_ATTRIBUTE_INVALID');
+  const result = schema.validate({ variant: values }, { mode });
+  if (!result.valid) throw productError('VARIANT_ATTRIBUTE_INVALID', { issues: result.issues });
   return { ...result.normalizedValues.variant };
 }

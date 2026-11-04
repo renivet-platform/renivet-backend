@@ -15,6 +15,7 @@ export interface CategoryAttributeRule {
   readonly id: string;
   readonly attributeId: string;
   readonly code: string;
+  readonly displayLabel?: string;
   readonly scope: AttributeScope;
   readonly valueType: AttributeValueType;
   readonly allowedValues?: readonly unknown[] | null;
@@ -214,11 +215,12 @@ function validateValue(rule: CategoryAttributeRule, value: unknown): { valid: bo
 
 function validateRuleDefinition(rule: CategoryAttributeRule): void {
   if (!isRecord(rule)
-    || !hasOnlyKeys(rule, ['id', 'attributeId', 'code', 'scope', 'valueType', 'allowedValues', 'unitCode',
+    || !hasOnlyKeys(rule, ['id', 'attributeId', 'code', 'displayLabel', 'scope', 'valueType', 'allowedValues', 'unitCode',
       'requiredByDefault', 'conditionalAst', 'minValues', 'maxValues'])
     || typeof rule.id !== 'string' || rule.id.length === 0
     || typeof rule.attributeId !== 'string' || rule.attributeId.length === 0
     || !isValidCode(rule.code)
+    || (rule.displayLabel != null && (typeof rule.displayLabel !== 'string' || rule.displayLabel.length < 1 || rule.displayLabel.length > 200))
     || !['product', 'variant'].includes(rule.scope)
     || !['text', 'integer', 'decimal', 'boolean', 'enum', 'multi_enum', 'date', 'measurement'].includes(rule.valueType)
     || (rule.requiredByDefault != null && typeof rule.requiredByDefault !== 'boolean')

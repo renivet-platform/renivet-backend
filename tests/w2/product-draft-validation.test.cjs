@@ -49,3 +49,37 @@ test('REN2-62 exposes stale variant If-Match as HTTP 412', async () => {
     { weightG: 10 }, '"1"', { userId: 'user', brandId: 'brand', permission: 'catalog.write', requestId: 'r', idempotencyKey: 'k' }),
   (error) => error.getStatus?.() === 412 && error.getResponse?.().code === 'VARIANT_ROW_VERSION_CONFLICT');
 });
+
+test('REN2-63 reports stable field paths for submission-time missing typed attributes', () => {
+  const rule = { id: '33333333-3333-4333-8333-333333333333', attributeId: '44444444-4444-4444-8444-444444444444', code: 'material', displayLabel: 'Material',
+    scope: 'product', valueType: 'enum', allowedValues: ['cotton'], requiredByDefault: true };
+  assert.throws(() => service.validateProductAttributes('11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', 1,
+    'w2-attribute-validator-v1', [rule], {}, 'submission'), (error) => {
+    assert.equal(error.code, 'PRODUCT_ATTRIBUTE_INVALID');
+    assert.equal(error.details.issues[0].path, 'attributes.product.material');
+    return true;
+  });
+});
+
+test('REN2-63 rejects missing and noncanonical measurement units at submission with field paths', () => {
+  const rule = { id: '33333333-3333-4333-8333-333333333333', attributeId: '44444444-4444-4444-8444-444444444444',
+    code: 'length', displayLabel: 'Length', scope: 'product', valueType: 'measurement', unitCode: 'cm', requiredByDefault: true };
+  for (const values of [{}, { length: { value: 2, unitCode: 'in' } }]) {
+    assert.throws(() => service.validateProductAttributes('11111111-1111-4111-8111-111111111111',
+      '22222222-2222-4222-8222-222222222222', 1, 'w2-attribute-validator-v1', [rule], values, 'submission'),
+    (error) => error.code === 'PRODUCT_ATTRIBUTE_INVALID' && error.details.issues[0].path === 'attributes.product.length');
+  }
+});
+
+test('REN2-63 returns field-level validator diagnostics through safe HTTP errors', async () => {
+  const repository = { update: async () => { throw Object.assign(new Error('invalid'), {
+    code: 'PRODUCT_ATTRIBUTE_INVALID', details: { issues: [{ code: 'ATTRIBUTE_REQUIRED', path: 'attributes.product.material', message: 'A value is required.' }] },
+  }); } };
+  const products = new service.ProductDraftService(repository);
+  await assert.rejects(products.update('11111111-1111-4111-8111-111111111111', { title: 'Draft' }, '"1"',
+    { userId: 'user', brandId: 'brand', permission: 'catalog.write', requestId: 'r', idempotencyKey: 'k' }), (error) => {
+    const body = error.getResponse?.();
+    assert.equal(body?.details?.issues?.[0]?.path, 'attributes.product.material');
+    return true;
+  });
+});
