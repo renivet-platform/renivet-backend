@@ -166,13 +166,18 @@ function isValidDate(value: unknown): value is string {
   return day >= 1 && day <= monthDays[month - 1];
 }
 
-function isNumeric20_6(value: unknown): value is number {
-  if (typeof value !== 'number' || !Number.isFinite(value) || Math.abs(value) >= 1e14) return false;
-  const match = value.toString().toLowerCase().match(/^[+-]?\d*(?:\.(\d*))?(?:e([+-]?\d+))?$/);
-  if (!match) return false;
-  const fraction = match[1] ?? '';
-  const exponent = match[2] ? Number(match[2]) : 0;
-  return Math.max(0, fraction.length - exponent) <= 6;
+function normalizeNumeric20_6(value: unknown): string | null {
+  if (typeof value !== 'string' && (typeof value !== 'number' || !Number.isFinite(value))) return null;
+  const raw = String(value);
+  const match = /^([+-]?)(\d+)(?:\.(\d+))?$/.exec(raw);
+  if (!match) return null;
+  const negative = match[1] === '-';
+  const integer = match[2].replace(/^0+(?=\d)/, '');
+  let fraction = match[3] ?? '';
+  if (integer.length > 14 || fraction.length > 6) return null;
+  fraction = fraction.replace(/0+$/, '');
+  const zero = /^0+$/.test(integer) && fraction.length === 0;
+  return `${negative && !zero ? '-' : ''}${integer}${fraction ? `.${fraction}` : ''}`;
 }
 
 function validateValue(rule: CategoryAttributeRule, value: unknown): { valid: boolean; normalized?: unknown } {
@@ -184,9 +189,10 @@ function validateValue(rule: CategoryAttributeRule, value: unknown): { valid: bo
         ? { valid: true, normalized: value }
         : { valid: false };
     case 'decimal':
-      return isNumeric20_6(value)
-        ? { valid: true, normalized: value }
-        : { valid: false };
+      {
+        const normalized = normalizeNumeric20_6(value);
+        return normalized === null ? { valid: false } : { valid: true, normalized };
+      }
     case 'boolean':
       return typeof value === 'boolean' ? { valid: true, normalized: value } : { valid: false };
     case 'enum':

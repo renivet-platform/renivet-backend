@@ -64,6 +64,7 @@ export type EventHandler = {
 
 export type WorkerLog = (entry: Readonly<Record<string, string | number>>) => void;
 export type WorkerMetrics = (summary: Readonly<WorkerBatchSummary>) => void;
+export type DeadLetterAlert = (details: Readonly<{ jobId: string; jobKind: string; code: string; attemptCount: number; maxAttempts: number }>) => void | Promise<void>;
 
 export type RecoveryAuthorizer = (actorId: string, caseId: string) => Promise<boolean>;
 
@@ -90,6 +91,7 @@ export class DurableWorker {
       random?: () => number;
       log?: WorkerLog;
       metrics?: WorkerMetrics;
+      onDeadLetter?: DeadLetterAlert;
       authorizeRecovery?: RecoveryAuthorizer;
       workerAuthorization?: WorkerAuthorizationPort;
     } = {},
@@ -324,6 +326,10 @@ export class DurableWorker {
       await client.query('ROLLBACK').catch(() => undefined);
       const failure = await this.recordFailure(job, error);
       this.safeLog({ event: 'worker.job.failed', traceId: job.id, jobId: job.id, jobKind: job.jobKind, code: safeFailureCode(error), outcome: failure, attemptCount, maxAttempts, state: failure });
+      if (failure === 'dead_letter') {
+        try { await this.options.onDeadLetter?.({ jobId: job.id, jobKind: job.jobKind, code: safeFailureCode(error), attemptCount, maxAttempts }); }
+        catch { this.safeLog({ event: 'worker.dead_letter.alert_failed', traceId: job.id, jobId: job.id, jobKind: job.jobKind, code: 'ALERT_SINK_UNAVAILABLE' }); }
+      }
       return failure;
     } finally {
       client.release();

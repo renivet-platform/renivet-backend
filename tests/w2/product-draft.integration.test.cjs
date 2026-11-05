@@ -5,6 +5,8 @@ const test = require('node:test');
 const { randomUUID } = require('node:crypto');
 const { Pool } = require('pg');
 const { ProductDraftPostgresRepository } = require('../../dist/modules/catalog/product-draft.repository.js');
+const { CatalogSubmissionPostgresRepository } = require('../../dist/modules/catalog/catalog-submission.repository.js');
+const { snapshotSha256 } = require('../../dist/modules/catalog/catalog-submission.js');
 const { TaxonomyAdminPostgresRepository } = require('../../dist/modules/catalog/taxonomy-admin.repository.js');
 const { normalizeProductCreate, normalizeProductPatch } = require('../../dist/modules/catalog/product-draft.service.js');
 
@@ -61,6 +63,8 @@ test('REN2-61/62 product drafts and SKU variants enforce category pins, CAS, ide
   const category = (await pool.query(`INSERT INTO catalogue.categories(code,name) VALUES($1,$1) RETURNING id`, [`r61-${suffix}`])).rows[0].id;
   const attribute = (await pool.query(`INSERT INTO catalogue.attributes(code,label,value_type,scope_type,allowed_values)
     VALUES($1,'Material','enum','product','["cotton","linen"]'::jsonb) RETURNING id,code`, [`r61-material-${suffix}`])).rows[0];
+  const precisionAttribute = (await pool.query(`INSERT INTO catalogue.attributes(code,label,value_type,scope_type)
+    VALUES($1,'Precise measurement','decimal','product') RETURNING id,code`, [`r61-precision-${suffix}`])).rows[0];
   const sizeAttribute = (await pool.query(`INSERT INTO catalogue.attributes(code,label,value_type,scope_type,allowed_values)
     VALUES($1,'Size','enum','variant','["M","L"]'::jsonb) RETURNING id,code`, [`r62-size-${suffix}`])).rows[0];
   const colorAttribute = (await pool.query(`INSERT INTO catalogue.attributes(code,label,value_type,scope_type,allowed_values)
@@ -69,9 +73,13 @@ test('REN2-61/62 product drafts and SKU variants enforce category pins, CAS, ide
     { attributeId: sizeAttribute.id, code: sizeAttribute.code, scope: 'variant', valueType: 'enum', allowedValues: ['M','L'], requiredByDefault: false },
     { attributeId: colorAttribute.id, code: colorAttribute.code, scope: 'variant', valueType: 'enum', allowedValues: ['Blue','Red'], requiredByDefault: false },
   ];
+  const productRules = [
+    { attributeId: attribute.id, code: attribute.code, scope: 'product', valueType: 'enum', allowedValues: ['cotton','linen'], requiredByDefault: true },
+    { attributeId: precisionAttribute.id, code: precisionAttribute.code, scope: 'product', valueType: 'decimal', requiredByDefault: false },
+  ];
   const admin = new TaxonomyAdminPostgresRepository({ pool });
   await admin.propose({ categoryId: category, version: 1, validatorVersion: 'w2-attribute-validator-v1',
-    ruleset: { attributes: [{ attributeId: attribute.id, code: attribute.code, scope: 'product', valueType: 'enum', allowedValues: ['cotton','linen'], requiredByDefault: true }, ...variantRules] } },
+    ruleset: { attributes: [...productRules, ...variantRules] } },
   { actorId: proposer, requestId: `r61:${randomUUID()}`, idempotencyKey: `r61-propose-${suffix}` });
   await admin.publish({ categoryId: category, version: 1 }, { actorId: approver, requestId: `r61:${randomUUID()}`, idempotencyKey: `r61-publish-${suffix}` });
   const activate = await pool.connect();
@@ -82,7 +90,7 @@ test('REN2-61/62 product drafts and SKU variants enforce category pins, CAS, ide
     await activate.query('COMMIT');
   } catch (error) { await activate.query('ROLLBACK'); throw error; } finally { activate.release(); }
   await admin.propose({ categoryId: category, version: 2, validatorVersion: 'w2-attribute-validator-v1',
-    ruleset: { attributes: [{ attributeId: attribute.id, code: attribute.code, scope: 'product', valueType: 'enum', allowedValues: ['cotton','linen'], requiredByDefault: true }, ...variantRules] } },
+    ruleset: { attributes: [...productRules, ...variantRules] } },
   { actorId: proposer, requestId: `r61:${randomUUID()}`, idempotencyKey: `r61-propose-v2-${suffix}` });
   await admin.publish({ categoryId: category, version: 2 }, { actorId: approver, requestId: `r61:${randomUUID()}`, idempotencyKey: `r61-publish-v2-${suffix}` });
   const accessContext = { userId: owner, brandId: brand, permission: 'catalog.write', requestId: `r61:${randomUUID()}` };
@@ -209,7 +217,7 @@ test('REN2-61/62 product drafts and SKU variants enforce category pins, CAS, ide
   assert.equal(retainedSku.rows[0].variant_state, 'INACTIVE');
   await assert.rejects(repository.createVariant(withVariant.productId,
     { sku: `blue-l-${suffix.slice(0, 12)}`, options: { [colorAttribute.code]: 'Blue', [sizeAttribute.code]: 'L' } },
-    3, { ...accessContext, idempotencyKey: `recycle-inactive-sku-${suffix}` }), expectCode('PRODUCT_CONFLICT'));
+    6, { ...accessContext, idempotencyKey: `recycle-inactive-sku-${suffix}` }), expectCode('PRODUCT_CONFLICT'));
   await pool.query(`INSERT INTO catalogue.variant_prices(brand_id,variant_id,currency,amount_minor,mrp_minor,valid_from,price_state,rule_version)
     VALUES($1,$2,'INR',50,100,now(),'DRAFT',1)`, [brand, blueM.id]);
   await assert.rejects(repository.deactivateVariant(withVariant.productId, blueM.id, { reasonCode: 'HAS_PRICE' }, 2,
@@ -219,6 +227,81 @@ test('REN2-61/62 product drafts and SKU variants enforce category pins, CAS, ide
     /ordered variant SKU and its lock are immutable/);
   await assert.rejects(repository.deactivateVariant(withVariant.productId, blueM.id, { reasonCode: 'ORDERED' }, 2,
     { ...accessContext, idempotencyKey: `ordered-deactivate-${suffix}` }), expectCode('VARIANT_REFERENCED'));
+
+  const submitPermission = (await pool.query(`INSERT INTO access.permissions(permission_code,resource,action,description)
+    VALUES('catalog.submit','catalog','submit','REN2-71 disposable submission test') ON CONFLICT(permission_code) DO UPDATE SET permission_code=EXCLUDED.permission_code RETURNING id`)).rows[0].id;
+  await pool.query('INSERT INTO access.role_permissions(role_id,permission_id) VALUES($1,$2) ON CONFLICT DO NOTHING', [testRoleId, submitPermission]);
+  const submissionRepository = new CatalogSubmissionPostgresRepository({ pool });
+  const incompleteProduct = await repository.create(normalizeProductCreate({ styleCode: `incomplete-${suffix.slice(0, 15)}`,
+    categoryCode: `r61-${suffix}`, categorySchemaVersion: 2, title: 'Still an editable draft', attributes: {} }),
+  { ...accessContext, idempotencyKey: `incomplete-create-${suffix}` });
+  await assert.rejects(submissionRepository.submit(incompleteProduct.productId,
+    { userId: owner, brandId: brand, expectedRowVersion: 1, idempotencyKey: `incomplete-submit-${suffix}`, sourceKind: 'MANUAL', sourceReference: null }),
+  (error) => error.code === 'SUBMISSION_INCOMPLETE' && error.details.issues.some((issue) => issue.path.includes('material')));
+  const incompleteEffects = await pool.query(`SELECT p.row_version,
+      (SELECT count(*)::int FROM catalogue.product_revisions r WHERE r.product_id=p.id) AS revision_count
+    FROM catalogue.products p WHERE p.id=$1`, [incompleteProduct.productId]);
+  assert.equal(Number(incompleteEffects.rows[0].row_version), 1, 'incomplete submit leaves the draft row untouched');
+  assert.equal(incompleteEffects.rows[0].revision_count, 0, 'incomplete submit creates no partial revision');
+  const submissionProduct = await repository.create(normalizeProductCreate({ styleCode: `submit-${suffix.slice(0, 16)}`,
+    categoryCode: `r61-${suffix}`, categorySchemaVersion: 2, title: 'Original review snapshot', attributes: { [attribute.code]: 'cotton' },
+    variants: [{ sku: `submit-sku-${suffix.slice(0, 16)}`, options: { [sizeAttribute.code]: 'M', [colorAttribute.code]: 'Blue' } }] }),
+  { ...accessContext, idempotencyKey: `submit-create-${suffix}` });
+  const preciseValue = '99999999999999.123456';
+  const preciseInsert = await pool.query(`INSERT INTO catalogue.product_attribute_values
+    (brand_id,product_id,category_id,category_schema_version,attribute_id,schema_version_id,frozen_rule_id,val_decimal)
+    SELECT $1,$2,$3,2,r.attribute_id,r.schema_version_id,r.id,$4::numeric
+      FROM catalogue.category_schema_attribute_rules r JOIN catalogue.category_schema_versions sv ON sv.id=r.schema_version_id
+     WHERE sv.category_id=$3 AND sv.version=2 AND r.attribute_id=$5`,
+  [brand, submissionProduct.productId, category, preciseValue, precisionAttribute.id]);
+  assert.equal(preciseInsert.rowCount, 1);
+  const submissionVariantId = submissionProduct.variantIds[0];
+  await pool.query(`INSERT INTO catalogue.variant_prices(brand_id,variant_id,currency,amount_minor,mrp_minor,valid_from,valid_to,price_state,rule_version,created_by)
+    VALUES($1,$2,'INR',5000,7000,now()-interval '1 day',now()+interval '1 day','APPROVED',1,$3)`, [brand, submissionVariantId, owner]);
+  const assetId = (await pool.query(`INSERT INTO media.media_assets(brand_id,storage_key,mime_type,width,height,scan_state,rights_state,
+      file_name,byte_length,derivative_state,rights_attested_by,rights_attested_at)
+    VALUES($1,$2,'image/png',640,480,'PENDING','ATTESTED','submission.png',100,'PENDING',$3,now()) RETURNING id`,
+  [brand, `brands/${brand}/submission-${suffix}.png`, owner])).rows[0].id;
+  for (const kind of ['PREVIEW', 'THUMBNAIL']) await pool.query(`INSERT INTO media.media_derivatives(brand_id,media_asset_id,derivative_kind,storage_key,sha256,mime_type,byte_length,width,height)
+    VALUES($1,$2,$3,$4,$5,'image/webp',50,320,240)`, [brand, assetId, kind, `brands/${brand}/${kind.toLowerCase()}-${suffix}.webp`, 'b'.repeat(64)]);
+  await pool.query(`UPDATE media.media_assets SET sha256=$2,scan_state='CLEAN',derivative_state='READY',completed_at=now(),row_version=row_version+1
+    WHERE id=$1`, [assetId, 'a'.repeat(64)]);
+  await pool.query(`INSERT INTO media.product_media(brand_id,product_id,media_asset_id,display_role,display_order,alt_text)
+    VALUES($1,$2,$3,'PRIMARY',0,'Blue dress front')`, [brand, submissionProduct.productId, assetId]);
+
+  const submissionContext = { userId: owner, brandId: brand, expectedRowVersion: 1, idempotencyKey: `submit-${suffix}`,
+    sourceKind: 'MANUAL', sourceReference: null };
+  let submitted;
+  try { submitted = await submissionRepository.submit(submissionProduct.productId, submissionContext); }
+  catch (error) { throw new Error(JSON.stringify(error.details ?? { code: error.code, message: error.message })); }
+  const snapshotRow = await pool.query(`SELECT content_snapshot,content_sha256,review_state,category_schema_version
+    FROM catalogue.product_revisions WHERE id=$1`, [submitted.revisionId]);
+  assert.equal(snapshotRow.rows[0].review_state, 'SUBMITTED');
+  assert.equal(snapshotRow.rows[0].content_snapshot.product.title, 'Original review snapshot');
+  assert.equal(snapshotRow.rows[0].content_snapshot.attributes[precisionAttribute.code], preciseValue,
+    'submission snapshots preserve exact PostgreSQL NUMERIC(20,6) values without JavaScript floating-point rounding');
+  assert.equal(snapshotRow.rows[0].content_sha256.trim(), submitted.contentSha256);
+  assert.equal(snapshotRow.rows[0].content_sha256.trim(), snapshotSha256(snapshotRow.rows[0].content_snapshot),
+    'stored SHA-256 is reproducible from the persisted canonical snapshot');
+  assert.equal(snapshotRow.rows[0].category_schema_version, 2);
+  assert.equal((await submissionRepository.submit(submissionProduct.productId, submissionContext)).revisionId, submitted.revisionId,
+    'same idempotency key replays the immutable revision');
+
+  const editedDraft = await repository.update(submissionProduct.productId, normalizeProductPatch({ title: 'Draft B after submit' }), 2,
+    { ...accessContext, idempotencyKey: `edit-after-submit-${suffix}` });
+  assert.equal(editedDraft.publicationState, 'RE_REVIEW');
+  const snapshotAfterEdit = await pool.query('SELECT content_snapshot FROM catalogue.product_revisions WHERE id=$1', [submitted.revisionId]);
+  assert.equal(snapshotAfterEdit.rows[0].content_snapshot.product.title, 'Original review snapshot',
+    'later draft edits cannot rewrite submitted revision A');
+  const resubmissionContext = { ...submissionContext, expectedRowVersion: 3, idempotencyKey: `submit-b-${suffix}` };
+  const concurrentSubmissions = await Promise.allSettled([
+    submissionRepository.submit(submissionProduct.productId, resubmissionContext),
+    submissionRepository.submit(submissionProduct.productId, { ...resubmissionContext, idempotencyKey: `submit-b-race-${suffix}` }),
+  ]);
+  assert.equal(concurrentSubmissions.filter((result) => result.status === 'fulfilled').length, 1,
+    'concurrent submissions with the same row version use a single winning CAS');
+  const revisionCount = await pool.query('SELECT count(*)::int AS count FROM catalogue.product_revisions WHERE product_id=$1', [submissionProduct.productId]);
+  assert.equal(revisionCount.rows[0].count, 2, 'exactly one new immutable revision is created for draft B');
 
   for (const state of ['suspended', 'restricted', 'archived']) {
     await pool.query('UPDATE brands.brands SET onboarding_state=$2 WHERE id=$1', [brand, state]);

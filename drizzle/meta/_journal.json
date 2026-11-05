@@ -148,6 +148,34 @@
       "when": 1793800900000,
       "tag": "0020_ren2_69_claim_moderation",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1793880000000,
+      "tag": "0021_ren2_71_product_submission",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1793880100000,
+      "tag": "0022_ren2_72_product_qc_review",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1793880200000,
+      "tag": "0023_ren2_73_catalog_publication",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793880300000,
+      "tag": "0024_ren2_74_search_projection_state",
+      "breakpoints": true
     }
   ]
 }

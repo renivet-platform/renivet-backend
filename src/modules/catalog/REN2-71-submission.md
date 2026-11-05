@@ -1,0 +1,9 @@
+# REN2-71 product submission boundary
+
+The backend has an internal `ProductSubmissionService` and PostgreSQL implementation for `submitProductForReview`. It reads the brand-owned current draft inside one transaction, checks the W1 `catalog.submit` effective permission, validates the pinned leaf schema and typed values, active variants and effective approved prices, selected clean/derivative-ready media with attested rights, and included claim/evidence state. It writes the canonical JSON snapshot, SHA-256 revision, transition to `PENDING_REVIEW`, lineage record and immutable idempotency receipt atomically.
+
+The command is registered as an internal Nest provider. There is deliberately no HTTP controller, route, SDK operation or role grant in this change. The W1 permission reconciliation still lists `catalog.submit` as unmapped, and runtime activation remains subject to G03, G07, G08, G14 and G17 evidence. A candidate OpenAPI operation does not authorize route exposure or a permission seed. Once the owner-approved W1 permission and activation evidence exist, a separate contract change can expose the command through the W1 session/CSRF brand guard.
+
+`catalogue.product_revisions` already has a database trigger preventing changes to submitted revision content. A later draft changes the mutable working product fields/version and never updates that immutable submitted row. The current published pointer and the immutable revision snapshot are not overwritten by draft edits.
+
+Typed `decimal` attributes use exact decimal strings in stored snapshots and read responses (for example, `"99999999999999.123456"`). The database stores these as `NUMERIC(20,6)`; converting them to JavaScript `Number` before validation or hashing would lose precision at the upper end of that range.

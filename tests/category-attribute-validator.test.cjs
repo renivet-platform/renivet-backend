@@ -55,6 +55,18 @@ test('typed category attributes accept supported scalar, collection, date, enum 
   assert.deepEqual(result.normalizedValues.product.care, ['handwash', 'machine']);
 });
 
+test('decimal category values preserve exact NUMERIC(20,6) precision and normalize without Number conversion', () => {
+  const compiled = compileCategorySchema(schema([rule('precision', 'decimal')]));
+  const exact = '99999999999999.123456';
+  const result = compiled.validate({ product: { precision: exact } });
+  assert.equal(result.valid, true);
+  assert.equal(result.normalizedValues.product.precision, exact);
+  assert.equal(compiled.validate({ product: { precision: '12.340000' } }).normalizedValues.product.precision, '12.34');
+  for (const value of ['100000000000000', '1.1234567', '1e3', 'not-a-decimal']) {
+    assert.equal(compiled.validate({ product: { precision: value } }).valid, false);
+  }
+});
+
 test('invalid typed values, units, enum entries, cardinality and dates return stable field paths', () => {
   const compiled = compileCategorySchema(schema([
     rule('count', 'integer'),

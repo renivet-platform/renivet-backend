@@ -7,7 +7,7 @@ import { NormalizedProductCreate, ProductMutationContext, validateProductAttribu
 import { CreateProductVariantDto, DeactivateProductVariantDto, UpdateProductDraftDto, UpdateProductVariantDto } from './product-draft.dto';
 
 interface ProductRow { id: string; brand_id: string; category_id: string; style_code: string; title: string; description: string; category_schema_version: number; content_version: number; row_version: string; publication_state: string; qc_state: string; }
-interface VariantRow { id: string; brand_id: string; product_id: string; sku: string; options: Record<string, string>; option_signature: string; weight_g: number | null; gtin: string | null; variant_state: string; row_version: string; sku_locked_at: string | null; category_id: string; category_schema_version: number; }
+interface VariantRow { id: string; brand_id: string; product_id: string; sku: string; options: Record<string, string>; option_signature: string; weight_g: number | null; gtin: string | null; variant_state: string; row_version: string; sku_locked_at: string | null; category_id: string; category_schema_version: number; product_row_version: string; publication_state: string; }
 
 @Injectable()
 export class ProductDraftPostgresRepository {
@@ -74,7 +74,7 @@ export class ProductDraftPostgresRepository {
            FROM catalogue.products p WHERE p.id=$1 AND p.brand_id=$2 FOR UPDATE`, [productId, context.brandId]);
       const before = beforeResult.rows[0];
       if (!before) throw failure('PRODUCT_NOT_FOUND');
-      if (before.publication_state !== 'DRAFT' && before.publication_state !== 'INCOMPLETE') throw failure('PRODUCT_STATE_RESTRICTED');
+      if (!['DRAFT', 'INCOMPLETE', 'PENDING_REVIEW', 'APPROVED', 'RE_REVIEW', 'REJECTED'].includes(before.publication_state)) throw failure('PRODUCT_STATE_RESTRICTED');
       if (Number(before.row_version) !== expectedRowVersion) throw failure('PRODUCT_ROW_VERSION_CONFLICT');
       const existingAttributes = await this.loadAttributes(client, before);
       const mergedAttributes = { ...existingAttributes, ...(patch.attributes ?? {}) };
@@ -88,6 +88,8 @@ export class ProductDraftPostgresRepository {
       const next = await client.query<ProductRow>(
         `UPDATE catalogue.products p
             SET title=$4, description=$5, category_schema_version=$6,
+                publication_state=CASE WHEN p.publication_state IN ('PENDING_REVIEW','APPROVED','RE_REVIEW','REJECTED') THEN 'RE_REVIEW' ELSE p.publication_state END,
+                qc_state=CASE WHEN p.publication_state IN ('PENDING_REVIEW','APPROVED','RE_REVIEW','REJECTED') THEN 'NOT_SUBMITTED' ELSE p.qc_state END,
                 content_version=p.content_version+1, row_version=p.row_version+1, updated_at=now()
           WHERE p.id=$1 AND p.brand_id=$2 AND p.row_version=$3
             AND EXISTS (SELECT 1 FROM access.effective_permissions ep WHERE ep.user_id=$7 AND ep.permission_code='catalog.write'
@@ -125,7 +127,7 @@ export class ProductDraftPostgresRepository {
            FROM catalogue.products p WHERE p.id=$1 AND p.brand_id=$2 FOR UPDATE`, [productId, context.brandId]);
       const product = productResult.rows[0];
       if (!product) throw failure('PRODUCT_NOT_FOUND');
-      if (product.publication_state !== 'DRAFT' && product.publication_state !== 'INCOMPLETE') throw failure('PRODUCT_STATE_RESTRICTED');
+      if (!['DRAFT', 'INCOMPLETE', 'PENDING_REVIEW', 'APPROVED', 'RE_REVIEW', 'REJECTED'].includes(product.publication_state)) throw failure('PRODUCT_STATE_RESTRICTED');
       if (Number(product.row_version) !== expectedProductVersion) throw failure('PRODUCT_ROW_VERSION_CONFLICT');
       const category = await this.categoryById(client, context, product.category_id, product.category_schema_version);
       const attributes = validateVariantAttributes(category.id, category.schema_version_id, category.version, category.validator_version, category.rules, input.options);
@@ -142,7 +144,9 @@ export class ProductDraftPostgresRepository {
       if (!variant) throw failure('VARIANT_ACCESS_DENIED');
       await this.saveVariantAttributes(client, context.brandId, product, variant.id, category, attributes);
       const bumped = await client.query(
-        `UPDATE catalogue.products p SET row_version=p.row_version+1,content_version=p.content_version+1,updated_at=now()
+        `UPDATE catalogue.products p SET row_version=p.row_version+1,content_version=p.content_version+1,
+             publication_state=CASE WHEN p.publication_state IN ('PENDING_REVIEW','APPROVED','RE_REVIEW','REJECTED') THEN 'RE_REVIEW' ELSE p.publication_state END,
+             qc_state=CASE WHEN p.publication_state IN ('PENDING_REVIEW','APPROVED','RE_REVIEW','REJECTED') THEN 'NOT_SUBMITTED' ELSE p.qc_state END,updated_at=now()
           WHERE p.id=$1 AND p.brand_id=$2 AND p.row_version=$3
             AND EXISTS (SELECT 1 FROM access.effective_permissions ep WHERE ep.user_id=$4 AND ep.permission_code='catalog.write'
               AND ((ep.scope_type='global' AND ep.brand_id IS NULL) OR (ep.scope_type='brand' AND ep.brand_id=$2)))
@@ -193,12 +197,14 @@ export class ProductDraftPostgresRepository {
       await this.saveVariantAttributes(client, context.brandId,
         { id: found.product_id, category_id: found.category_id, category_schema_version: found.category_schema_version },
         variantId, category, attributes);
+      await this.bumpProductContentVersion(client, productId, context, found);
       const paths = [
         ...(patch.options === undefined ? [] : ['options']), ...(patch.weightG === undefined ? [] : ['weightG']),
         ...(patch.gtin === undefined ? [] : ['gtin']), ...(patch.reasonCode === undefined ? [] : ['reasonCode']),
       ].map((path) => `variants.${variantId}.${path}`);
       await this.lineage(client, context, productId, paths);
-      const response = variantDetail(updated.rows[0], attributes, 'updated', context.requestId);
+      const response = { ...variantDetail(updated.rows[0], attributes, 'updated', context.requestId),
+        parentRowVersion: Number(found.product_row_version) + 1 };
       await this.receipt(client, context, 'updateProductVariant', requestHash, productId, response);
       return response;
     });
@@ -235,8 +241,10 @@ export class ProductDraftPostgresRepository {
           RETURNING v.id,v.brand_id,v.product_id,v.sku,v.options,v.option_signature,v.weight_g,v.gtin,v.variant_state,v.row_version,v.sku_locked_at`,
         [variantId, productId, context.brandId, expectedRowVersion, context.userId]);
       if (!updated.rows[0]) throw failure('VARIANT_ROW_VERSION_CONFLICT');
+      await this.bumpProductContentVersion(client, productId, context, found);
       await this.lineage(client, context, productId, [`variants.${variantId}.variantState`, `variants.${variantId}.deactivationReason`]);
-      const response = { ...variantDetail(updated.rows[0], {}, 'deactivated', context.requestId), reasonCode: input.reasonCode };
+      const response = { ...variantDetail(updated.rows[0], {}, 'deactivated', context.requestId), reasonCode: input.reasonCode,
+        parentRowVersion: Number(found.product_row_version) + 1 };
       await this.receipt(client, context, 'deactivateProductVariant', requestHash, productId, response);
       return response;
     });
@@ -245,11 +253,25 @@ export class ProductDraftPostgresRepository {
   private async variantForUpdate(client: PoolClient, productId: string, variantId: string, context: ProductMutationContext): Promise<VariantRow | undefined> {
     const result = await client.query<VariantRow>(
       `SELECT v.id,v.brand_id,v.product_id,v.sku,v.options,v.option_signature,v.weight_g,v.gtin,v.variant_state,v.row_version,v.sku_locked_at,
-              p.category_id,p.category_schema_version
+              p.category_id,p.category_schema_version,p.row_version AS product_row_version,p.publication_state
          FROM catalogue.product_variants v JOIN catalogue.products p ON p.id=v.product_id AND p.brand_id=v.brand_id
-        WHERE v.id=$1 AND v.product_id=$2 AND v.brand_id=$3 AND p.publication_state IN ('DRAFT','INCOMPLETE') FOR UPDATE OF v,p`,
+        WHERE v.id=$1 AND v.product_id=$2 AND v.brand_id=$3
+          AND p.publication_state IN ('DRAFT','INCOMPLETE','PENDING_REVIEW','APPROVED','RE_REVIEW','REJECTED') FOR UPDATE OF v,p`,
       [variantId, productId, context.brandId]);
     return result.rows[0];
+  }
+
+  private async bumpProductContentVersion(client: PoolClient, productId: string, context: ProductMutationContext, found: VariantRow): Promise<void> {
+    const bumped = await client.query(
+      `UPDATE catalogue.products p SET content_version=p.content_version+1,row_version=p.row_version+1,
+           publication_state=CASE WHEN p.publication_state IN ('PENDING_REVIEW','APPROVED','RE_REVIEW','REJECTED') THEN 'RE_REVIEW' ELSE p.publication_state END,
+           qc_state=CASE WHEN p.publication_state IN ('PENDING_REVIEW','APPROVED','RE_REVIEW','REJECTED') THEN 'NOT_SUBMITTED' ELSE p.qc_state END,
+           updated_at=now()
+        WHERE p.id=$1 AND p.brand_id=$2 AND p.row_version=$3
+          AND EXISTS(SELECT 1 FROM access.effective_permissions ep WHERE ep.user_id=$4 AND ep.permission_code='catalog.write'
+            AND ((ep.scope_type='global' AND ep.brand_id IS NULL) OR (ep.scope_type='brand' AND ep.brand_id=$2)))`,
+      [productId, context.brandId, found.product_row_version, context.userId]);
+    if (bumped.rowCount !== 1) throw failure('PRODUCT_ROW_VERSION_CONFLICT');
   }
 
   private async saveVariantAttributes(client: PoolClient, brandId: string, product: Pick<ProductRow, 'id'|'category_id'|'category_schema_version'>,
@@ -286,7 +308,7 @@ export class ProductDraftPostgresRepository {
       let value: unknown;
       switch (row.value_type) {
         case 'text': value = row.val_text; break; case 'integer': value = Number(row.val_integer); break;
-        case 'decimal': value = Number(row.val_decimal); break; case 'boolean': value = row.val_bool; break;
+        case 'decimal': value = String(row.val_decimal); break; case 'boolean': value = row.val_bool; break;
         case 'enum': value = row.val_enum; break; case 'date': value = row.val_date; break;
         case 'multi_enum': value = row.val_json; break;
         case 'measurement': value = { ...(row.val_json as object), unitCode: row.unit_code }; break;
@@ -377,7 +399,7 @@ export class ProductDraftPostgresRepository {
       let value: unknown;
       switch (row.value_type) {
         case 'text': value = row.val_text; break; case 'integer': value = Number(row.val_integer); break;
-        case 'decimal': value = Number(row.val_decimal); break; case 'boolean': value = row.val_bool; break;
+        case 'decimal': value = String(row.val_decimal); break; case 'boolean': value = row.val_bool; break;
         case 'enum': value = row.val_enum; break; case 'date': value = row.val_date; break;
         case 'multi_enum': value = row.val_json; break;
         case 'measurement': value = { ...(row.val_json as object), unitCode: row.unit_code }; break;

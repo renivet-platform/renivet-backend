@@ -164,8 +164,13 @@ test('REN2-26 brand membership, role scopes and permanent audit enforce their da
       },
     }, 'Only the reviewed first-slice permission matrix is seeded');
 
-    const assignedCount = await client.query('SELECT count(*)::integer AS count FROM access.role_assignments');
-    assert.equal(assignedCount.rows[0].count, 0, 'Seeded role definitions must not grant any user access');
+    const assignedSeededRoleCount = await client.query(`
+      SELECT count(*)::integer AS count
+      FROM access.role_assignments AS assignment
+      INNER JOIN access.roles AS role ON role.id = assignment.role_id
+      WHERE role.role_code IN ('renivet_admin', 'renivet_support', 'brand_owner', 'brand_staff')
+    `);
+    assert.equal(assignedSeededRoleCount.rows[0].count, 0, 'Seeded role definitions must not grant any user access');
 
     await client.query('BEGIN');
     const unique = randomUUID().replaceAll('-', '');

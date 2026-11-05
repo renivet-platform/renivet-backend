@@ -27,6 +27,12 @@ import { PRODUCT_READ_REPOSITORY, ProductReadService } from './product-read.serv
 import { ClaimReviewController } from './claim-review.controller';
 import { ClaimsPostgresRepository } from './claims.repository';
 import { CLAIMS_REPOSITORY, ClaimsService } from './claims.service';
+import { PRODUCT_SUBMISSION_REPOSITORY, ProductSubmissionService } from './catalog-submission';
+import { CatalogSubmissionPostgresRepository } from './catalog-submission.repository';
+import { CATALOG_REVIEW_REPOSITORY, CatalogReviewService } from './catalog-review';
+import { CatalogReviewPostgresRepository } from './catalog-review.repository';
+import { CATALOG_PUBLICATION_REPOSITORY, CatalogPublicationService } from './catalog-publication';
+import { CatalogPublicationPostgresRepository } from './catalog-publication.repository';
 
 // W2 taxonomy administration, brand reads, and progressive parent draft writes.
 @Module({
@@ -51,6 +57,15 @@ import { CLAIMS_REPOSITORY, ClaimsService } from './claims.service';
     ClaimsPostgresRepository,
     { provide: CLAIMS_REPOSITORY, useExisting: ClaimsPostgresRepository },
     ClaimsService,
+    CatalogSubmissionPostgresRepository,
+    { provide: PRODUCT_SUBMISSION_REPOSITORY, useExisting: CatalogSubmissionPostgresRepository },
+    ProductSubmissionService,
+    CatalogReviewPostgresRepository,
+    { provide: CATALOG_REVIEW_REPOSITORY, useExisting: CatalogReviewPostgresRepository },
+    CatalogReviewService,
+    CatalogPublicationPostgresRepository,
+    { provide: CATALOG_PUBLICATION_REPOSITORY, useExisting: CatalogPublicationPostgresRepository },
+    CatalogPublicationService,
     {
       provide: PlatformPermissionGuard,
       useFactory: (reflector: Reflector, sessions: SessionService, access: BrandAccessRepository) =>

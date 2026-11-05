@@ -121,12 +121,30 @@ jobs:
         run: |
           npm run build
           node --test tests/w2/proposeCategorySchemaVersion.test.cjs tests/w2/publishCategorySchemaVersion.test.cjs tests/w2/taxonomy-admin-controller.test.cjs tests/w2/taxonomy-admin.integration.test.cjs
-      - name: Verify REN2-61/62 product and SKU variant lifecycle
+      - name: Verify REN2-61/62/71 product draft and immutable submission lifecycle
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
         run: |
           npm run build
-          node --test tests/w2/product-draft-validation.test.cjs tests/w2/product-draft-controller.test.cjs tests/w2/product-draft.integration.test.cjs
+          node --test tests/w2/product-draft-validation.test.cjs tests/w2/product-draft-controller.test.cjs tests/w2/catalog-submission.test.cjs tests/w2/catalog-review.test.cjs tests/w2/product-draft.integration.test.cjs tests/w2/catalog-review.integration.test.cjs
+      - name: Verify REN2-73 publication command and atomic lifecycle history
+        env:
+          RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
+        run: |
+          npm run build
+          node --test tests/w2/catalog-publication.test.cjs tests/w2/catalog-publication.integration.test.cjs
+      - name: Verify REN2-74 Typesense projection, worker authorization, retry and tombstones
+        env:
+          RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
+        run: |
+          npm run build
+          node --test tests/w2/catalog-search-projection.test.cjs tests/w2/catalog-search-projection.integration.test.cjs tests/w2/worker-authorization.integration.test.cjs
+      - name: Verify REN2-75 authoritative catalog buyability source port
+        env:
+          RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
+        run: |
+          npm run build
+          node --test tests/w2/catalog-buyability.test.cjs tests/w2/catalog-buyability.integration.test.cjs
       - name: Verify REN2-64 INR price versions, idempotency, CAS, and approved-window exclusion
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
@@ -233,6 +251,18 @@ jobs:
         run: |
           npm run build
           node --test tests/w2/claims-service.test.cjs tests/w2/claims.integration.test.cjs
+      - name: Re-verify REN2-73 publication lifecycle after recovery
+        env:
+          RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
+        run: node --test tests/w2/catalog-publication.integration.test.cjs
+      - name: Re-verify REN2-74 Typesense projection after recovery
+        env:
+          RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
+        run: node --test tests/w2/catalog-search-projection.integration.test.cjs
+      - name: Re-verify REN2-75 authoritative buyability after recovery
+        env:
+          RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
+        run: node --test tests/w2/catalog-buyability.integration.test.cjs
       - name: Re-verify REN2-56 taxonomy lifecycle after recovery
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
