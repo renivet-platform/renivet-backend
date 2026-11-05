@@ -12,8 +12,8 @@
 
 | Issue | Scope | Depends on | Status |
 |---|---|---|---|
-| REN2-71 | Immutable submitted product revision and submission validation | REN2-63, 64, 67, 68 merged | Implemented; ready to commit |
-| REN2-72 | Maker-checker QC decision and immutable decision history | REN2-71, 51 merged | Pending |
+| REN2-71 | Immutable submitted product revision and submission validation | REN2-63, 64, 67, 68 merged | Implemented, committed and pushed (`78beb9f`) |
+| REN2-72 | Maker-checker QC decision and immutable decision history | REN2-71 on epic branch; REN2-51 merged | Implemented; verified, pending commit |
 | REN2-73 | Atomic publication/restriction, audit event and W1 outbox | REN2-72, 65, 69 merged | Pending |
 | REN2-74 | Versioned Typesense projection, tombstone and stale-event suppression | REN2-73, 51 merged | Pending |
 | REN2-75 | Internal authoritative catalog buyability validation port | REN2-73, 64 merged | Pending |
@@ -29,7 +29,20 @@
 - Root `npm test`: PASS (129 passed, 3 skipped, 0 failed) on the repeat run; initial combined run had one transient failure, which did not reproduce.
 - CI-equivalent W2 draft/submission suite: PASS (18 passed, 0 failed), including PG16 integration.
 - `npm run api:check`: PASS (generated OpenAPI/SDK and Postman drift checks; W2 traceability still reports only route-implemented operations).
+- REN2-72 unit/migration tests: PASS (3 tests; validation, error-safe service boundary, exact decision constraints).
+- REN2-72 fresh PostgreSQL 16 migration: PASS on a newly created disposable `renivet_ci` database, including decision uniqueness, revision transition guard, global permission guard, audit/receipt immutability and deferred atomicity constraint.
+- REN2-72 PostgreSQL 16 review integration: PASS; covers cross-product FK and service denial, global-vs-brand review, submitter self-review, expired pinned price, detached media, revoked evidence, exact replay/mismatch, immutable audit and receipt, failed direct revision transition, and competing decisions.
+- REN2-61/62 product draft integration on REN2-72 migration: PASS (1 test); REN2-68/69 claim moderation integration: PASS (1 test).
+- REN2-72 `npm run build`, `npm run lint`, `npm run typecheck`, root `npm test`: PASS (133 total, 129 passed, 4 skipped, 0 failed); W2 focused draft/submission/review suite: PASS (22 tests, 22 passed, 0 failed).
+- `npm run api:check`: PASS after REN2-72; no new HTTP route is claimed or exposed.
 
 ## Per-child changes and evidence
 
-To be updated after each independently tested child commit. Tests must include relevant unit/security cases and disposable PostgreSQL 16 integration coverage. The final PR must list exact PASS/FAIL/NOT RUN evidence and any still-open activation gates.
+### REN2-72 — QC review
+
+- Scope: internal exact-revision review provider; global `catalog.review` checker; maker-checker; current price/media/evidence revalidation; row locking/CAS; one decision per revision; immutable audit and replay receipt; atomic revision/product state transitions.
+- Boundary: no HTTP route, role grant, publication, Typesense projection, or provider/W3 behavior. Review API path lacks a pre-existing review-queue identifier and G01/G17 plus W1 grant mapping remain unresolved. Ruling: keep this child internal until those owner-controlled release gates and contract reconciliation are complete; cost if wrong is delayed route availability, while exposing it now could create an unauthorized/incompatible live API.
+- Verification: see REN2-72 entries above. Migration and relevant integrations were rerun from a fresh disposable PG16 database after final SQL changes.
+- Commit: pending.
+
+REN2-73 onward remain pending. The final PR must list exact PASS/FAIL/NOT RUN evidence and any still-open activation gates.

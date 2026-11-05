@@ -155,6 +155,13 @@
       "when": 1793880000000,
       "tag": "0021_ren2_71_product_submission",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1793880100000,
+      "tag": "0022_ren2_72_product_qc_review",
+      "breakpoints": true
     }
   ]
 }

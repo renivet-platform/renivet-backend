@@ -29,6 +29,8 @@ import { ClaimsPostgresRepository } from './claims.repository';
 import { CLAIMS_REPOSITORY, ClaimsService } from './claims.service';
 import { PRODUCT_SUBMISSION_REPOSITORY, ProductSubmissionService } from './catalog-submission';
 import { CatalogSubmissionPostgresRepository } from './catalog-submission.repository';
+import { CATALOG_REVIEW_REPOSITORY, CatalogReviewService } from './catalog-review';
+import { CatalogReviewPostgresRepository } from './catalog-review.repository';
 
 // W2 taxonomy administration, brand reads, and progressive parent draft writes.
 @Module({
@@ -56,6 +58,9 @@ import { CatalogSubmissionPostgresRepository } from './catalog-submission.reposi
     CatalogSubmissionPostgresRepository,
     { provide: PRODUCT_SUBMISSION_REPOSITORY, useExisting: CatalogSubmissionPostgresRepository },
     ProductSubmissionService,
+    CatalogReviewPostgresRepository,
+    { provide: CATALOG_REVIEW_REPOSITORY, useExisting: CatalogReviewPostgresRepository },
+    CatalogReviewService,
     {
       provide: PlatformPermissionGuard,
       useFactory: (reflector: Reflector, sessions: SessionService, access: BrandAccessRepository) =>
