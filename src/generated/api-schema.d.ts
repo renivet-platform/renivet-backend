@@ -476,6 +476,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/brands/{brandId}/claims/{claimId}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve, reject, or revoke a sustainability claim
+         * @description Requires the platform-global catalog.review permission, a recent MFA step-up and session-bound CSRF. A distinct reviewer compares claim/evidence expiry and current asset eligibility, then commits the claim decision, immutable audit, listing recheck outbox event and idempotency receipt atomically. Linear: REN2-69.
+         */
+        post: operations["decideProductClaim"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/brands/{brandId}/media/uploads": {
         parameters: {
             query?: never;
@@ -3585,6 +3605,159 @@ export interface operations {
                 };
             };
             /** @description Claim storage is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    decideProductClaim: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+                "If-Match": string;
+            };
+            path: {
+                brandId: string;
+                claimId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    decision: "VERIFY" | "REJECT" | "REVOKE";
+                    reasonCode: string;
+                    comment?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Claim decision receipt. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        id: string;
+                        status: string;
+                        requestId: string;
+                        rowVersion?: number;
+                    };
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Global reviewer permission, maker-checker, MFA, or CSRF denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description The claim is not accessible. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description The claim is not in a reviewable state or the idempotency key conflicts. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description The claim row version is stale. */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description The decision request is invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Claim or authentication storage is unavailable. */
             503: {
                 headers: {
                     [name: string]: unknown;

@@ -1273,10 +1273,10 @@
       ],
       "ownerIssue": "REN2-69",
       "implementation": {
-        "status": "design_only",
+        "status": "implemented",
         "test": {
-          "status": "pending",
-          "path": "tests/w2/decideProductClaim.test.cjs"
+          "status": "verified",
+          "path": "tests/w2/claims-decision.test.cjs"
         },
         "pullRequest": {
           "status": "pending",

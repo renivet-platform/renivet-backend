@@ -5087,6 +5087,338 @@
         "x-renivet-permission": "catalog.read"
       }
     },
+    "/api/v1/admin/brands/{brandId}/claims/{claimId}/decision": {
+      "post": {
+        "description": "Requires the platform-global catalog.review permission, a recent MFA step-up and session-bound CSRF. A distinct reviewer compares claim/evidence expiry and current asset eligibility, then commits the claim decision, immutable audit, listing recheck outbox event and idempotency receipt atomically. Linear: REN2-69.",
+        "operationId": "decideProductClaim",
+        "parameters": [
+          {
+            "name": "brandId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "claimId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "\"1\""
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "decision",
+                  "reasonCode"
+                ],
+                "properties": {
+                  "decision": {
+                    "type": "string",
+                    "enum": [
+                      "VERIFY",
+                      "REJECT",
+                      "REVOKE"
+                    ]
+                  },
+                  "reasonCode": {
+                    "type": "string"
+                  },
+                  "comment": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Claim decision receipt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "status",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "rowVersion": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Global reviewer permission, maker-checker, MFA, or CSRF denied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The claim is not accessible.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The claim is not in a reviewable state or the idempotency key conflicts.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "The claim row version is stale.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The decision request is invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Claim or authentication storage is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Approve, reject, or revoke a sustainability claim",
+        "tags": [
+          "Review"
+        ],
+        "x-renivet-csrf-policy": "Require allowlisted Origin, Sec-Fetch-Site and X-CSRF-Token bound to W1 session; global permission rechecked in the database transaction.",
+        "x-renivet-guard": "brand",
+        "x-renivet-implementation-wave": "W2",
+        "x-renivet-mfa-required": true,
+        "x-renivet-permission": "catalog.review"
+      }
+    },
     "/api/v1/brands/{brandId}/media/uploads": {
       "post": {
         "description": "Creates a brand-owned pending media asset and returns a five-minute DigitalOcean Spaces PUT capability. Linear: REN2-66.",
