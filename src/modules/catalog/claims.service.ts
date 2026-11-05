@@ -10,10 +10,16 @@ export interface ClaimMutationContext {
   readonly userId: string; readonly brandId: string; readonly permission: string;
   readonly requestId: string; readonly idempotencyKey: string;
 }
+export interface ClaimDecisionInput {
+  readonly decision: 'VERIFY' | 'REJECT' | 'REVOKE';
+  readonly reasonCode: string; readonly comment?: string;
+}
+export interface ClaimDecisionContext extends ClaimMutationContext { readonly permission: 'catalog.review'; }
 export interface ClaimReadContext { readonly userId: string; readonly brandId: string; readonly permission: string; }
 export interface ClaimsRepository {
   propose(productId: string, proposal: ClaimProposal, expectedVersion: number, context: ClaimMutationContext): Promise<Record<string, unknown>>;
   list(productId: string, context: ClaimReadContext): Promise<Record<string, unknown>>;
+  decide(claimId: string, decision: ClaimDecisionInput, expectedVersion: number, context: ClaimDecisionContext): Promise<Record<string, unknown>>;
 }
 export const CLAIMS_REPOSITORY = Symbol('CLAIMS_REPOSITORY');
 
@@ -25,6 +31,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const DATE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-](?:0\d|1\d|2[0-3]):[0-5]\d)$/;
 const KEY = /^[A-Za-z0-9._:-]{1,120}$/;
 const FIELDS = new Set(['claimCode', 'claimText', 'evidenceAssetIds', 'expiresAt']);
+const DECISION_FIELDS = new Set(['decision', 'reasonCode', 'comment']);
 function validText(value: unknown, max: number): value is string {
   return typeof value === 'string' && value.normalize('NFC').trim().length > 0
     && value.normalize('NFC').trim().length <= max
@@ -40,6 +47,25 @@ function validDate(value: unknown): string | null {
     || hour! > 23 || minute! > 59 || second! > 59) return null;
   const milliseconds = Date.parse(value);
   return Number.isFinite(milliseconds) ? new Date(milliseconds).toISOString() : null;
+}
+
+export function normalizeClaimDecision(value: unknown): ClaimDecisionInput {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new ClaimsError('CLAIM_DECISION_INVALID');
+  const input = value as Record<string, unknown>;
+  const decisions = ['VERIFY', 'REJECT', 'REVOKE'];
+  if (Object.keys(input).some((key) => !DECISION_FIELDS.has(key)) || !decisions.includes(String(input.decision))
+    || !validText(input.reasonCode, 100) || !/^[A-Za-z0-9_.-]+$/.test(String(input.reasonCode).trim())
+    || (input.comment !== undefined && !validText(input.comment, 500))) throw new ClaimsError('CLAIM_DECISION_INVALID');
+  const decision = input.decision as ClaimDecisionInput['decision'];
+  return { decision, reasonCode: String(input.reasonCode).trim(), comment: input.comment === undefined ? undefined : String(input.comment).normalize('NFC').trim() };
+}
+
+export function parseClaimDecisionIfMatch(value: string | string[] | undefined): number {
+  const candidate = typeof value === 'string' ? value : undefined;
+  if (!candidate || !/^"[1-9]\d{0,15}"$/.test(candidate)) throw new ClaimsError('CLAIM_IF_MATCH_INVALID');
+  const parsed = Number(candidate.slice(1, -1));
+  if (!Number.isSafeInteger(parsed)) throw new ClaimsError('CLAIM_IF_MATCH_INVALID');
+  return parsed;
 }
 
 export function normalizeClaimProposal(value: unknown): ClaimProposal {
@@ -77,6 +103,11 @@ export class ClaimsService {
   async list(productId: string, context: ClaimReadContext) {
     this.assertUuid(productId);
     return this.repository.list(productId, context);
+  }
+  async decide(claimId: string, body: unknown, ifMatch: string | string[] | undefined, context: ClaimDecisionContext) {
+    this.assertUuid(claimId);
+    if (!KEY.test(context.idempotencyKey)) throw new ClaimsError('CLAIM_REQUEST_INVALID');
+    return this.repository.decide(claimId, normalizeClaimDecision(body), parseClaimDecisionIfMatch(ifMatch), context);
   }
   private assertUuid(value: string) { if (!UUID.test(value)) throw new ClaimsError('CLAIM_REQUEST_INVALID'); }
 }
