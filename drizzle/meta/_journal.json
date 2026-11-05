@@ -148,6 +148,13 @@
       "when": 1793800900000,
       "tag": "0020_ren2_69_claim_moderation",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1793880000000,
+      "tag": "0021_ren2_71_product_submission",
+      "breakpoints": true
     }
   ]
 }
