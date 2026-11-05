@@ -169,6 +169,13 @@
       "when": 1793880200000,
       "tag": "0023_ren2_73_catalog_publication",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793880300000,
+      "tag": "0024_ren2_74_search_projection_state",
+      "breakpoints": true
     }
   ]
 }

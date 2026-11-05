@@ -108,7 +108,7 @@ export class DatabaseWorkerAuthorizationService implements WorkerAuthorizationPo
     reason ??= this.validatePrincipal(principal, request.consumerId);
     reason ??= this.validatePolicy(request.policy);
     if (!brandId) reason ??= 'SOURCE_NOT_FOUND';
-    if (request.event.aggregateType !== 'media_asset' && request.event.aggregateType !== 'stock_event') reason ??= 'UNSUPPORTED_SOURCE';
+    if (!['media_asset', 'stock_event', 'catalogue.product'].includes(request.event.aggregateType)) reason ??= 'UNSUPPORTED_SOURCE';
 
     if (reason || !brandId || !principal) {
       await this.recordDenial(
@@ -235,6 +235,14 @@ export class DatabaseWorkerAuthorizationService implements WorkerAuthorizationPo
     if (event.aggregateType === 'stock_event') {
       const row = await transaction.query<{ brandId: string }>(
         'SELECT brand_id AS "brandId" FROM inventory.stock_events WHERE id = $1 FOR SHARE', [event.aggregateId],
+      );
+      return row.rows[0]?.brandId ?? null;
+    }
+    if (event.aggregateType === 'catalogue.product') {
+      const row = await transaction.query<{ brandId: string }>(
+        `SELECT p.brand_id AS "brandId" FROM catalogue.products p
+          JOIN brands.brands b ON b.id=p.brand_id AND b.onboarding_state='approved'
+         WHERE p.id=$1 FOR SHARE OF p,b`, [event.aggregateId],
       );
       return row.rows[0]?.brandId ?? null;
     }

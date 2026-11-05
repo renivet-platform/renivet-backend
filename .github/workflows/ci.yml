@@ -133,6 +133,12 @@ jobs:
         run: |
           npm run build
           node --test tests/w2/catalog-publication.test.cjs tests/w2/catalog-publication.integration.test.cjs
+      - name: Verify REN2-74 Typesense projection, worker authorization, retry and tombstones
+        env:
+          RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
+        run: |
+          npm run build
+          node --test tests/w2/catalog-search-projection.test.cjs tests/w2/catalog-search-projection.integration.test.cjs tests/w2/worker-authorization.integration.test.cjs
       - name: Verify REN2-64 INR price versions, idempotency, CAS, and approved-window exclusion
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
@@ -243,6 +249,10 @@ jobs:
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
         run: node --test tests/w2/catalog-publication.integration.test.cjs
+      - name: Re-verify REN2-74 Typesense projection after recovery
+        env:
+          RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
+        run: node --test tests/w2/catalog-search-projection.integration.test.cjs
       - name: Re-verify REN2-56 taxonomy lifecycle after recovery
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
