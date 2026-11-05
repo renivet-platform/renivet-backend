@@ -331,7 +331,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List complete product summaries within the authorized brand
+         * @description Filters the authorized brand product list, returns a brand-scoped total count and deterministic cursor pagination. Revalidates the private representation with ETag. Linear: REN2-70.
+         */
+        get: operations["listBrandProducts"];
         put?: never;
         /**
          * Create a progressive parent product draft
@@ -351,7 +355,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Read a complete brand product and draft status
+         * @description Returns versioned product, typed attributes, variants, price states and active media links without moderation evidence. Linear: REN2-70.
+         */
+        get: operations["getBrandProduct"];
         put?: never;
         post?: never;
         delete?: never;
@@ -850,6 +858,50 @@ export interface components {
             validatorVersion: string;
             rulesetSha256: string;
             attributes: components["schemas"]["AttributeDefinitionDto"][];
+        };
+        ProductSummaryModel: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            brandId: string;
+            styleCode: string;
+            title: string;
+            /** @enum {string} */
+            publicationState: "DRAFT" | "INCOMPLETE" | "PENDING_REVIEW" | "APPROVED" | "PUBLISHED" | "RE_REVIEW" | "REJECTED" | "RESTRICTED" | "ARCHIVED";
+            contentVersion: number;
+        };
+        PriceVersionModel: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            variantId: string;
+            /** @enum {string} */
+            currency: "INR";
+            amountMinor: number;
+            mrpMinor: number;
+            /** @enum {string} */
+            priceState: "DRAFT" | "PENDING" | "APPROVED" | "REJECTED" | "EXPIRED";
+            /** Format: date-time */
+            validFrom: string;
+            /** Format: date-time */
+            validTo?: string | null;
+            rowVersion?: number;
+        };
+        MediaLinkModel: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            mediaAssetId: string;
+            /** Format: uuid */
+            productId: string;
+            /** Format: uuid */
+            variantId?: string | null;
+            displayRole: string;
+            displayOrder: number;
+            /** @enum {string} */
+            scanState: "PENDING" | "CLEAN" | "REJECTED";
+            /** @enum {string} */
+            rightsState: "UNVERIFIED" | "ATTESTED" | "REVIEWED" | "REVOKED";
         };
         PriceActionReceiptDto: {
             /** Format: uuid */
@@ -2171,6 +2223,111 @@ export interface operations {
             };
         };
     };
+    listBrandProducts: {
+        parameters: {
+            query?: {
+                visibility?: "PUBLIC" | "PRIVATE" | "RESTRICTED";
+                reviewState?: "NOT_SUBMITTED" | "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | "SUPERSEDED";
+                categoryId?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: {
+                "If-None-Match"?: string;
+            };
+            path: {
+                brandId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ProductSummaryModel"][];
+                        totalCount: number;
+                        nextCursor?: string | null;
+                    };
+                };
+            };
+            /** @description The scoped product page is unchanged. */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid filter, cursor or page size. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+            /** @description Brand permission denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+            /** @description Brand resource was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+            /** @description Product state prevents the requested read. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+            /** @description The product query is invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+            /** @description Product storage is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+        };
+    };
     createBrandProduct: {
         parameters: {
             query?: never;
@@ -2320,6 +2477,133 @@ export interface operations {
                             [key: string]: unknown;
                         };
                     };
+                };
+            };
+        };
+    };
+    getBrandProduct: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-None-Match"?: string;
+            };
+            path: {
+                brandId: string;
+                productId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductSummaryModel"] & {
+                        /** Format: uuid */
+                        categoryId: string;
+                        categorySchemaVersion: number;
+                        rowVersion: number;
+                        qcState: string;
+                        /** Format: uuid */
+                        draftRevisionId?: string | null;
+                        /** Format: uuid */
+                        publishedRevisionId?: string | null;
+                        /** Format: uuid */
+                        approvedReviewId?: string | null;
+                        variants: {
+                            /** Format: uuid */
+                            id: string;
+                            /** Format: uuid */
+                            productId: string;
+                            /** Format: uuid */
+                            brandId: string;
+                            sku: string;
+                            options: {
+                                [key: string]: string;
+                            };
+                            variantState: string;
+                            priceVersions?: components["schemas"]["PriceVersionModel"][];
+                            mediaLinks?: components["schemas"]["MediaLinkModel"][];
+                        }[];
+                        mediaLinks: components["schemas"]["MediaLinkModel"][];
+                        attributes: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description The scoped product representation is unchanged. */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid product identifier. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+            /** @description Brand permission denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+            /** @description Product was not found in the authorized brand. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+            /** @description Product state prevents the requested read. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+            /** @description The product identifier is invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
+                };
+            };
+            /** @description Product storage is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryReadErrorDto"];
                 };
             };
         };

@@ -45,11 +45,15 @@ function normalizeContract(value) {
       ? [...nested].sort()
       : normalizeContract(nested)]));
   if (normalized.required === false) delete normalized.required;
+  if (Array.isArray(normalized.enum) && normalized.enum.length === 1 && !Object.hasOwn(normalized, 'const')) {
+    normalized.const = normalized.enum[0];
+    delete normalized.enum;
+  }
   if (normalized.nullable === true && ['string', 'object', 'number', 'integer', 'boolean'].includes(normalized.type)) {
     normalized.type = [normalized.type, 'null'];
     delete normalized.nullable;
   }
-  return normalized;
+  return Object.fromEntries(Object.entries(normalized).sort(([a], [b]) => a.localeCompare(b)));
 }
 
 function effectiveParameters(spec, pathItem = {}, operation = {}) {
@@ -85,9 +89,11 @@ function compareOperationContracts(expected, actual, expectedSpec, actualSpec, e
   const expectedResponses = resolveReference(expected.responses ?? {}, expectedSpec ?? {});
   const actualResponses = resolveReference(actual.responses ?? {}, actualSpec ?? {});
   const isTaxonomyRead = ['listCategories', 'getCategoryAttributes', 'getCategorySchemaVersion'].includes(expected.operationId);
+  const isProductRead = ['listBrandProducts', 'getBrandProduct'].includes(expected.operationId);
   const expectedCodes = Object.keys(expectedResponses).sort();
   const actualCodes = Object.keys(actualResponses).sort();
-  const allowedAdditions = isTaxonomyRead ? new Set(['304', ...(expectedCodes.includes('400') ? [] : ['400'])]) : new Set();
+  const allowedAdditions = isTaxonomyRead || isProductRead ? new Set(['304', ...(expectedCodes.includes('400') ? [] : ['400'])]) : new Set();
+  if (isProductRead && !Object.hasOwn(actualResponses, '304')) errors.push('product read must support 304 ETag revalidation');
   if (expectedCodes.some((code) => !actualCodes.includes(code))
       || actualCodes.some((code) => !expectedCodes.includes(code) && !allowedAdditions.has(code))) {
     errors.push(`response status codes differ: expected ${expectedCodes.join(', ')}, received ${actualCodes.join(', ')}`);
@@ -95,13 +101,30 @@ function compareOperationContracts(expected, actual, expectedSpec, actualSpec, e
   for (const code of expectedCodes.filter((item) => actualCodes.includes(item))) {
     const expectedResponse = structuredClone(expectedResponses[code]);
     const actualResponse = structuredClone(actualResponses[code]);
-    if (isTaxonomyRead && code === '200') {
+    if ((isTaxonomyRead || isProductRead) && code === '200') {
       for (const name of ['ETag', 'Cache-Control']) {
         const schema = actualResponse.headers?.[name]?.schema;
         if (schema && schema.type !== 'string') errors.push(`response 200 ${name} cache header must be a string`);
       }
-      for (const name of ['ETag', 'Cache-Control']) delete expectedResponse.headers?.[name];
-      for (const name of ['ETag', 'Cache-Control']) delete actualResponse.headers?.[name];
+      if (isProductRead) {
+        expectedResponse.headers ??= {};
+        expectedResponse.headers.ETag = { schema: { type: 'string' } };
+        expectedResponse.headers['Cache-Control'] = { schema: { type: 'string' } };
+        if (expected.operationId === 'listBrandProducts') {
+          const schema = expectedResponse.content?.['application/json']?.schema;
+          if (schema?.properties?.items?.type === 'array') {
+            const paged = schema;
+            paged.properties ??= {};
+            paged.properties.totalCount = { type: 'integer', minimum: 0 };
+            paged.required = [...new Set([...(paged.required ?? []), 'totalCount'])];
+            expectedResponse.content['application/json'].schema = paged;
+          }
+        }
+      }
+      if (isTaxonomyRead) {
+        for (const name of ['ETag', 'Cache-Control']) delete expectedResponse.headers?.[name];
+        for (const name of ['ETag', 'Cache-Control']) delete actualResponse.headers?.[name];
+      }
       if (actualResponse.headers && Object.keys(actualResponse.headers).length === 0) delete actualResponse.headers;
       if (expectedResponse.headers && Object.keys(expectedResponse.headers).length === 0) delete expectedResponse.headers;
     }
@@ -114,8 +137,26 @@ function compareOperationContracts(expected, actual, expectedSpec, actualSpec, e
   if (JSON.stringify(expectedBody) !== JSON.stringify(actualBody)) errors.push('request DTO contract differs');
   let expectedParametersRaw = effectiveParameters(expectedSpec ?? {}, expectedPathItem, expected);
   let actualParametersRaw = effectiveParameters(actualSpec ?? {}, actualPathItem, actual);
-  if (isTaxonomyRead) {
+  if (isTaxonomyRead || isProductRead) {
+    const etagParameter = actualParametersRaw.find((parameter) => parameter.in === 'header' && parameter.name?.toLowerCase() === 'if-none-match');
+    if (isProductRead && JSON.stringify(normalizeContract(etagParameter)) !== JSON.stringify(normalizeContract({ name: 'If-None-Match', in: 'header', required: false, schema: { type: 'string' } }))) {
+      errors.push('product read If-None-Match extension must be an optional string header');
+    }
     actualParametersRaw = actualParametersRaw.filter((parameter) => parameter.name?.toLowerCase() !== 'if-none-match');
+    if (isProductRead && expected.operationId === 'listBrandProducts') {
+      const expectedNames = new Set(expectedParametersRaw.map((parameter) => `${parameter.in}:${parameter.name}`));
+      const allowedFilters = [
+        { name: 'categoryId', in: 'query', required: false, schema: { type: 'string', format: 'uuid' } },
+        { name: 'reviewState', in: 'query', required: false, schema: { type: 'string', enum: ['NOT_SUBMITTED','DRAFT','SUBMITTED','APPROVED','REJECTED','SUPERSEDED'] } },
+        { name: 'visibility', in: 'query', required: false, schema: { type: 'string', enum: ['PUBLIC','PRIVATE','RESTRICTED'] } },
+      ];
+      for (const parameter of allowedFilters) {
+        if (expectedNames.has(`query:${parameter.name}`)) continue;
+        const found = actualParametersRaw.find((actualParameter) => actualParameter.in === 'query' && actualParameter.name === parameter.name);
+        if (JSON.stringify(normalizeContract(found)) !== JSON.stringify(normalizeContract(parameter))) errors.push(`unapproved product-list extension parameter ${parameter.name}`);
+        else expectedParametersRaw.push(parameter);
+      }
+    }
     if (expected.operationId === 'getCategoryAttributes') {
       expectedParametersRaw = [...expectedParametersRaw,
         resolveReference({ $ref: '#/components/parameters/cursor' }, expectedSpec ?? {}),
@@ -223,6 +264,13 @@ function checkTraceability({ candidateSpec, traceability, activeSpec, fileExists
         errors.push(`${id}: design-only pull request must be explicitly pending`);
       }
     } else if (implementation.status === 'implemented') {
+      const approvedProductExtensions = {
+        listBrandProducts: ['list filters: categoryId, reviewState, visibility', 'totalCount', 'If-None-Match/304, ETag, Cache-Control'],
+        getBrandProduct: ['If-None-Match/304, ETag, Cache-Control'],
+      }[id];
+      if (approvedProductExtensions && JSON.stringify(implementation.approvedContractExtensions) !== JSON.stringify(approvedProductExtensions)) {
+        errors.push(`${id}: approved contract extensions must be explicitly listed and match the checked allowlist`);
+      }
       if (!activeOperation) errors.push(`${id}: implemented operation is missing from executable OpenAPI`);
       else for (const mismatch of compareOperationContracts(
         operation, activeOperation, candidateSpec, activeSpec, candidateSpec.paths[path], activeSpec.paths[actualPath],

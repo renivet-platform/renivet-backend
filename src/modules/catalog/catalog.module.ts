@@ -21,6 +21,9 @@ import { PriceReviewController } from './price-review.controller';
 import { PricePostgresRepository } from './price.repository';
 import { PRICE_REPOSITORY, PriceService } from './price.service';
 import { ClaimsController } from './claims.controller';
+import { ProductReadController } from './product-read.controller';
+import { ProductReadPostgresRepository } from './product-read.repository';
+import { PRODUCT_READ_REPOSITORY, ProductReadService } from './product-read.service';
 import { ClaimReviewController } from './claim-review.controller';
 import { ClaimsPostgresRepository } from './claims.repository';
 import { CLAIMS_REPOSITORY, ClaimsService } from './claims.service';
@@ -28,7 +31,7 @@ import { CLAIMS_REPOSITORY, ClaimsService } from './claims.service';
 // W2 taxonomy administration, brand reads, and progressive parent draft writes.
 @Module({
   imports: [ConfigModule, IdentityModule, AccessModule],
-  controllers: [TaxonomyAdminController, CatalogReadController, ProductDraftController, PriceController, PriceReviewController, ClaimsController, ClaimReviewController],
+  controllers: [TaxonomyAdminController, CatalogReadController, ProductReadController, ProductDraftController, PriceController, PriceReviewController, ClaimsController, ClaimReviewController],
   providers: [
     TaxonomyAdminPostgresRepository,
     { provide: TAXONOMY_ADMIN_REPOSITORY, useExisting: TaxonomyAdminPostgresRepository },
@@ -36,6 +39,9 @@ import { CLAIMS_REPOSITORY, ClaimsService } from './claims.service';
     CatalogReadPostgresRepository,
     { provide: CATALOG_READ_REPOSITORY, useExisting: CatalogReadPostgresRepository },
     CatalogReadService,
+    ProductReadPostgresRepository,
+    { provide: PRODUCT_READ_REPOSITORY, useExisting: ProductReadPostgresRepository },
+    ProductReadService,
     ProductDraftPostgresRepository,
     { provide: PRODUCT_DRAFT_REPOSITORY, useExisting: ProductDraftPostgresRepository },
     ProductDraftService,
