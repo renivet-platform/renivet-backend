@@ -1224,14 +1224,14 @@
       ],
       "ownerIssue": "REN2-68",
       "implementation": {
-        "status": "design_only",
+        "status": "implemented",
         "test": {
-          "status": "pending",
-          "path": "tests/w2/proposeProductClaim.test.cjs"
+          "status": "verified",
+          "path": "tests/w2/claims-service.test.cjs"
         },
         "pullRequest": {
-          "status": "pending",
-          "url": null
+          "status": "open",
+          "url": "https://github.com/renivet-platform/renivet-backend/pull/55"
         }
       },
       "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-68"
@@ -1248,14 +1248,14 @@
       ],
       "ownerIssue": "REN2-68",
       "implementation": {
-        "status": "design_only",
+        "status": "implemented",
         "test": {
-          "status": "pending",
-          "path": "tests/w2/listProductClaims.test.cjs"
+          "status": "verified",
+          "path": "tests/w2/claims-service.test.cjs"
         },
         "pullRequest": {
-          "status": "pending",
-          "url": null
+          "status": "open",
+          "url": "https://github.com/renivet-platform/renivet-backend/pull/55"
         }
       },
       "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-68"

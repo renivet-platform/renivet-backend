@@ -99,6 +99,12 @@ jobs:
         run: |
           npm run build
           node --test tests/w2/attachProductMedia.test.cjs tests/w2/updateProductMediaLink.test.cjs tests/w2/detachProductMedia.test.cjs tests/w2/product-media-validation.test.cjs tests/w2/product-media.integration.test.cjs
+      - name: Verify REN2-68 claim and evidence scope, idempotency, and expiry/revocation behavior
+        env:
+          RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
+        run: |
+          npm run build
+          node --test tests/w2/claims-service.test.cjs tests/w2/claims.integration.test.cjs
       - name: Verify REN2-56 taxonomy lifecycle, audit, and immutable version pins
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
@@ -221,6 +227,12 @@ jobs:
         run: |
           npm run build
           node --test tests/w2/attachProductMedia.test.cjs tests/w2/updateProductMediaLink.test.cjs tests/w2/detachProductMedia.test.cjs tests/w2/product-media-validation.test.cjs tests/w2/product-media.integration.test.cjs
+      - name: Re-verify REN2-68 claim and evidence lifecycle after recovery
+        env:
+          RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
+        run: |
+          npm run build
+          node --test tests/w2/claims-service.test.cjs tests/w2/claims.integration.test.cjs
       - name: Re-verify REN2-56 taxonomy lifecycle after recovery
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
