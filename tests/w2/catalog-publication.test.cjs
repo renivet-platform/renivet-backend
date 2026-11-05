@@ -25,7 +25,6 @@ test('REN2-73 validates exact approved revision ids, positive CAS, and reasoned 
     userId: PRODUCT, brandId: BRAND, expectedProductVersion: 3, idempotencyKey: 'restrict-1',
   }).input, { reasonCode: 'SAFETY_RECALL', appealReference: 'CASE-733', comment: 'Remove while investigated.' });
 });
-
 test('REN2-73 publication service validates caller context before any repository write', async () => {
   assert.equal(typeof CatalogPublicationService, 'function', 'publication service must be implemented');
   const calls = [];

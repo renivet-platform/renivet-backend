@@ -63,6 +63,8 @@ test('REN2-61/62 product drafts and SKU variants enforce category pins, CAS, ide
   const category = (await pool.query(`INSERT INTO catalogue.categories(code,name) VALUES($1,$1) RETURNING id`, [`r61-${suffix}`])).rows[0].id;
   const attribute = (await pool.query(`INSERT INTO catalogue.attributes(code,label,value_type,scope_type,allowed_values)
     VALUES($1,'Material','enum','product','["cotton","linen"]'::jsonb) RETURNING id,code`, [`r61-material-${suffix}`])).rows[0];
+  const precisionAttribute = (await pool.query(`INSERT INTO catalogue.attributes(code,label,value_type,scope_type)
+    VALUES($1,'Precise measurement','decimal','product') RETURNING id,code`, [`r61-precision-${suffix}`])).rows[0];
   const sizeAttribute = (await pool.query(`INSERT INTO catalogue.attributes(code,label,value_type,scope_type,allowed_values)
     VALUES($1,'Size','enum','variant','["M","L"]'::jsonb) RETURNING id,code`, [`r62-size-${suffix}`])).rows[0];
   const colorAttribute = (await pool.query(`INSERT INTO catalogue.attributes(code,label,value_type,scope_type,allowed_values)
@@ -71,9 +73,13 @@ test('REN2-61/62 product drafts and SKU variants enforce category pins, CAS, ide
     { attributeId: sizeAttribute.id, code: sizeAttribute.code, scope: 'variant', valueType: 'enum', allowedValues: ['M','L'], requiredByDefault: false },
     { attributeId: colorAttribute.id, code: colorAttribute.code, scope: 'variant', valueType: 'enum', allowedValues: ['Blue','Red'], requiredByDefault: false },
   ];
+  const productRules = [
+    { attributeId: attribute.id, code: attribute.code, scope: 'product', valueType: 'enum', allowedValues: ['cotton','linen'], requiredByDefault: true },
+    { attributeId: precisionAttribute.id, code: precisionAttribute.code, scope: 'product', valueType: 'decimal', requiredByDefault: false },
+  ];
   const admin = new TaxonomyAdminPostgresRepository({ pool });
   await admin.propose({ categoryId: category, version: 1, validatorVersion: 'w2-attribute-validator-v1',
-    ruleset: { attributes: [{ attributeId: attribute.id, code: attribute.code, scope: 'product', valueType: 'enum', allowedValues: ['cotton','linen'], requiredByDefault: true }, ...variantRules] } },
+    ruleset: { attributes: [...productRules, ...variantRules] } },
   { actorId: proposer, requestId: `r61:${randomUUID()}`, idempotencyKey: `r61-propose-${suffix}` });
   await admin.publish({ categoryId: category, version: 1 }, { actorId: approver, requestId: `r61:${randomUUID()}`, idempotencyKey: `r61-publish-${suffix}` });
   const activate = await pool.connect();
@@ -84,7 +90,7 @@ test('REN2-61/62 product drafts and SKU variants enforce category pins, CAS, ide
     await activate.query('COMMIT');
   } catch (error) { await activate.query('ROLLBACK'); throw error; } finally { activate.release(); }
   await admin.propose({ categoryId: category, version: 2, validatorVersion: 'w2-attribute-validator-v1',
-    ruleset: { attributes: [{ attributeId: attribute.id, code: attribute.code, scope: 'product', valueType: 'enum', allowedValues: ['cotton','linen'], requiredByDefault: true }, ...variantRules] } },
+    ruleset: { attributes: [...productRules, ...variantRules] } },
   { actorId: proposer, requestId: `r61:${randomUUID()}`, idempotencyKey: `r61-propose-v2-${suffix}` });
   await admin.publish({ categoryId: category, version: 2 }, { actorId: approver, requestId: `r61:${randomUUID()}`, idempotencyKey: `r61-publish-v2-${suffix}` });
   const accessContext = { userId: owner, brandId: brand, permission: 'catalog.write', requestId: `r61:${randomUUID()}` };
@@ -241,6 +247,14 @@ test('REN2-61/62 product drafts and SKU variants enforce category pins, CAS, ide
     categoryCode: `r61-${suffix}`, categorySchemaVersion: 2, title: 'Original review snapshot', attributes: { [attribute.code]: 'cotton' },
     variants: [{ sku: `submit-sku-${suffix.slice(0, 16)}`, options: { [sizeAttribute.code]: 'M', [colorAttribute.code]: 'Blue' } }] }),
   { ...accessContext, idempotencyKey: `submit-create-${suffix}` });
+  const preciseValue = '99999999999999.123456';
+  const preciseInsert = await pool.query(`INSERT INTO catalogue.product_attribute_values
+    (brand_id,product_id,category_id,category_schema_version,attribute_id,schema_version_id,frozen_rule_id,val_decimal)
+    SELECT $1,$2,$3,2,r.attribute_id,r.schema_version_id,r.id,$4::numeric
+      FROM catalogue.category_schema_attribute_rules r JOIN catalogue.category_schema_versions sv ON sv.id=r.schema_version_id
+     WHERE sv.category_id=$3 AND sv.version=2 AND r.attribute_id=$5`,
+  [brand, submissionProduct.productId, category, preciseValue, precisionAttribute.id]);
+  assert.equal(preciseInsert.rowCount, 1);
   const submissionVariantId = submissionProduct.variantIds[0];
   await pool.query(`INSERT INTO catalogue.variant_prices(brand_id,variant_id,currency,amount_minor,mrp_minor,valid_from,valid_to,price_state,rule_version,created_by)
     VALUES($1,$2,'INR',5000,7000,now()-interval '1 day',now()+interval '1 day','APPROVED',1,$3)`, [brand, submissionVariantId, owner]);
@@ -264,6 +278,8 @@ test('REN2-61/62 product drafts and SKU variants enforce category pins, CAS, ide
     FROM catalogue.product_revisions WHERE id=$1`, [submitted.revisionId]);
   assert.equal(snapshotRow.rows[0].review_state, 'SUBMITTED');
   assert.equal(snapshotRow.rows[0].content_snapshot.product.title, 'Original review snapshot');
+  assert.equal(snapshotRow.rows[0].content_snapshot.attributes[precisionAttribute.code], preciseValue,
+    'submission snapshots preserve exact PostgreSQL NUMERIC(20,6) values without JavaScript floating-point rounding');
   assert.equal(snapshotRow.rows[0].content_sha256.trim(), submitted.contentSha256);
   assert.equal(snapshotRow.rows[0].content_sha256.trim(), snapshotSha256(snapshotRow.rows[0].content_snapshot),
     'stored SHA-256 is reproducible from the persisted canonical snapshot');

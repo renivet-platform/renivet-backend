@@ -68,6 +68,10 @@
 - Scope: internal, synthetic-consumer-only PostgreSQL validation of published maker-checker revision, exact brand/product/SKU, current effective price, publication and price versions. Returns versioned denial codes and explicitly labels stock as unchecked.
 - Boundary: no checkout endpoint, order/payment/COD/refund path, inventory reservation, or production W3 caller exists in this repository. Ruling: expose a typed port that accepts W3's existing checkout transaction client; keep it unregistered until the real W3 caller is reviewed and G09/G11 evidence is met. This delivers the authoritative recheck without implying W3 integration exists.
 - Verification: focused unit and PG16 integration pass. Integration proves positive buyability, stale version denial, expired price denial, non-disclosing wrong-brand/SKU denial, restriction denial, and synthetic-only consumer enforcement. `npm run lint`, `npm run typecheck`, `npm run build`, `npm run api:check`, and root `npm test` pass (130 passed, 3 skipped, 0 failed); REN2-73 publication, REN2-64/65 price, REN2-74 projection, and REN2-51 worker authorization PostgreSQL regressions also pass sequentially.
-- Commit: `4bd9d30`; push pending.
+- Commit: `6ec2592`; pushed to the epic branch.
 
-REN2-74 is pushed (`29e1515`). REN2-75 is committed (`4bd9d30`); push and epic-wide review remain pending. The final PR must list exact PASS/FAIL/NOT RUN evidence and any still-open activation gates.
+### Epic review corrections
+
+- QC `RESTRICTED` decisions now move an un-published product to `RE_REVIEW` while keeping `qc_state=RESTRICTED`; an integration test proves the correction/resubmission state is reachable.
+- Exact decimal attributes now remain normalized decimal strings across PostgreSQL reads, schema validation, product-read output, and immutable submission snapshots. Unit and PG16 regression tests cover `NUMERIC(20,6)` maximum-range precision.
+- Verification after review fixes: lint, typecheck, build, `api:check`, root tests (130 passed, 4 skipped, 0 failed), decimal validator unit tests (12/12), product-read PG16, product draft/submission PG16 (including exact maximum-range numeric snapshot), QC review PG16 (including restricted-decision recovery), publication PG16, and buyability PG16 all pass. Final focused re-review remains pending before the single epic PR.

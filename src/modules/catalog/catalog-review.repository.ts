@@ -66,7 +66,8 @@ export class CatalogReviewPostgresRepository implements CatalogReviewRepository 
            VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
           [context.brandId, productId, input.expectedRevisionId, context.userId, nextState, input.reasonCode, input.comment ?? null]);
         const publicationState = nextState === 'APPROVED' ? 'APPROVED'
-          : nextState === 'REJECTED' ? 'REJECTED' : nextState === 'CORRECTION_REQUIRED' ? 'RE_REVIEW' : target.publication_state;
+          : nextState === 'REJECTED' ? 'REJECTED'
+            : nextState === 'CORRECTION_REQUIRED' || nextState === 'RESTRICTED' ? 'RE_REVIEW' : target.publication_state;
         const updated = await client.query<{ row_version: string | number }>(
           `UPDATE catalogue.products p SET qc_state=$5,publication_state=$6,row_version=p.row_version+1,updated_at=now()
             WHERE p.id=$1 AND p.brand_id=$2 AND p.row_version=$3 AND p.publication_state='PENDING_REVIEW'

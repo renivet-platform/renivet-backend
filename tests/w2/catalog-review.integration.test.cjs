@@ -93,6 +93,13 @@ test('REN2-72 exact revision review enforces maker-checker, live eligibility, im
     ({ decision, reasonCode, expectedRevisionId: revisionId, expectedRowVersion, comment: 'Evidence and listing reviewed.' });
 
   const target = await fixture('main');
+  const restrictedTarget = await fixture('restricted');
+  const restrictedDecision = await repository.decide(restrictedTarget.productId,
+    input(restrictedTarget.revisionId, restrictedTarget.rowVersion, 'RESTRICTED', 'SAFETY_CONCERN'),
+    context(reviewer, `restricted-${suffix}`));
+  assert.equal(restrictedDecision.publicationState, 'RE_REVIEW', 'a restricted un-published revision must return to an editable/resubmittable state');
+  const restrictedState = await pool.query('SELECT publication_state,qc_state FROM catalogue.products WHERE id=$1', [restrictedTarget.productId]);
+  assert.deepEqual(restrictedState.rows[0], { publication_state: 'RE_REVIEW', qc_state: 'RESTRICTED' });
   await assert.rejects(pool.query(`UPDATE catalogue.product_revisions SET review_state='APPROVED' WHERE id=$1`, [target.revisionId]),
     /CATALOG_REVIEW_ATOMIC_RECORDS_REQUIRED/, 'revision cannot enter a terminal review state without decision, audit and receipt');
   assert.equal((await pool.query('SELECT review_state FROM catalogue.product_revisions WHERE id=$1', [target.revisionId])).rows[0].review_state, 'SUBMITTED');

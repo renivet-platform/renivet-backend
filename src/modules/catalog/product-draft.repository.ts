@@ -308,7 +308,7 @@ export class ProductDraftPostgresRepository {
       let value: unknown;
       switch (row.value_type) {
         case 'text': value = row.val_text; break; case 'integer': value = Number(row.val_integer); break;
-        case 'decimal': value = Number(row.val_decimal); break; case 'boolean': value = row.val_bool; break;
+        case 'decimal': value = String(row.val_decimal); break; case 'boolean': value = row.val_bool; break;
         case 'enum': value = row.val_enum; break; case 'date': value = row.val_date; break;
         case 'multi_enum': value = row.val_json; break;
         case 'measurement': value = { ...(row.val_json as object), unitCode: row.unit_code }; break;
@@ -399,7 +399,7 @@ export class ProductDraftPostgresRepository {
       let value: unknown;
       switch (row.value_type) {
         case 'text': value = row.val_text; break; case 'integer': value = Number(row.val_integer); break;
-        case 'decimal': value = Number(row.val_decimal); break; case 'boolean': value = row.val_bool; break;
+        case 'decimal': value = String(row.val_decimal); break; case 'boolean': value = row.val_bool; break;
         case 'enum': value = row.val_enum; break; case 'date': value = row.val_date; break;
         case 'multi_enum': value = row.val_json; break;
         case 'measurement': value = { ...(row.val_json as object), unitCode: row.unit_code }; break;

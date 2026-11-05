@@ -20,3 +20,5 @@ Internal error codes map to the following transport categories when a future ada
 | `CATALOG_REVIEW_DATABASE_UNAVAILABLE` | 503 | Review storage cannot accept the command |
 
 Approval moves QC to `APPROVED`; it does not publish a listing. Actual publication, restriction propagation, public reads and W1 outbox delivery remain REN2-73/release-gated work. No W3 behavior is claimed.
+
+A `RESTRICTED` decision on an un-published revision leaves `qc_state=RESTRICTED` and moves the mutable product to `RE_REVIEW`. That keeps the listing unavailable while allowing an authorized content correction and a new submission; publication restriction remains a separate REN2-73 lifecycle action.

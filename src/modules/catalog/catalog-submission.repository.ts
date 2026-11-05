@@ -12,7 +12,7 @@ function typedValue(row: Record<string, unknown>): unknown {
   switch (row.value_type) {
     case 'text': return row.val_text;
     case 'integer': return Number(row.val_integer);
-    case 'decimal': return Number(row.val_decimal);
+    case 'decimal': return String(row.val_decimal);
     case 'boolean': return row.val_bool;
     case 'enum': return row.val_enum;
     case 'date': return row.val_date instanceof Date ? row.val_date.toISOString().slice(0, 10) : row.val_date;
@@ -82,7 +82,7 @@ export class CatalogSubmissionPostgresRepository implements ProductSubmissionRep
       const variants = await client.query<Record<string, unknown>>(
           `SELECT v.id,v.sku,v.options,v.gtin,v.weight_g,v.variant_state,v.row_version,
                   COALESCE((SELECT jsonb_agg(jsonb_build_object('code',r.attribute_code,'type',r.value_type,'text',av.val_text,
-                    'integer',av.val_integer,'decimal',av.val_decimal,'bool',av.val_bool,'date',av.val_date,'enum',av.val_enum,
+                    'integer',av.val_integer,'decimal',av.val_decimal::text,'bool',av.val_bool,'date',av.val_date,'enum',av.val_enum,
                     'json',av.val_json,'unitCode',av.unit_code) ORDER BY r.attribute_code)
                     FROM catalogue.variant_attribute_values av JOIN catalogue.category_schema_attribute_rules r ON r.id=av.frozen_rule_id
                    WHERE av.brand_id=v.brand_id AND av.variant_id=v.id),'[]'::jsonb) AS attributes,
