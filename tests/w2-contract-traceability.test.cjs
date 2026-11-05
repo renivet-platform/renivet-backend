@@ -161,6 +161,28 @@ test('REN2-59 permits documented read revalidation extensions while preserving r
   ).some((error) => /200.*cache header/i.test(error)));
 });
 
+test('REN2-70 permits only the explicit product list filters, count and ETag extensions', () => {
+  const candidate = { operationId: 'listBrandProducts', 'x-renivet-permission': 'catalog.read', responses: { 200: { content: { 'application/json': { schema: { type: 'object', required: ['items'], properties: { items: { type: 'array' } } } } } } }, parameters: [] };
+  const active = structuredClone(candidate);
+  active.responses['200'].headers = { ETag: { schema: { type: 'string' } }, 'Cache-Control': { schema: { type: 'string' } } };
+  active.responses['200'].content['application/json'].schema.properties.totalCount = { type: 'integer', minimum: 0 };
+  active.responses['200'].content['application/json'].schema.required = ['items', 'totalCount'];
+  active.responses['304'] = { description: 'Not modified' };
+  active.parameters = [
+    { name: 'If-None-Match', in: 'header', required: false, schema: { type: 'string' } },
+    { name: 'categoryId', in: 'query', required: false, schema: { type: 'string', format: 'uuid' } },
+    { name: 'reviewState', in: 'query', required: false, schema: { type: 'string', enum: ['NOT_SUBMITTED','DRAFT','SUBMITTED','APPROVED','REJECTED','SUPERSEDED'] } },
+    { name: 'visibility', in: 'query', required: false, schema: { type: 'string', enum: ['PUBLIC','PRIVATE','RESTRICTED'] } },
+  ];
+  assert.deepEqual(compareOperationContracts(candidate, active), []);
+  const badFilter = structuredClone(active); badFilter.parameters.push({ name: 'unbounded', in: 'query', required: false, schema: { type: 'string' } });
+  assert.ok(compareOperationContracts(candidate, badFilter).some((error) => /parameter contract differs/i.test(error)));
+  const no304 = structuredClone(active); delete no304.responses['304'];
+  assert.ok(compareOperationContracts(candidate, no304).some((error) => /must support 304/i.test(error)));
+  const badEtag = structuredClone(active); badEtag.parameters[0].schema.type = 'integer';
+  assert.ok(compareOperationContracts(candidate, badEtag).some((error) => /If-None-Match extension/i.test(error)));
+});
+
 test('REN2-52 rejects mutations without the W1 session cookie CSRF and idempotency policy', () => {
   const candidate = structuredClone(candidateSpec);
   const productCreate = candidate.paths['/brands/{brandId}/products'].post;
@@ -177,7 +199,7 @@ test('REN2-52 permits a live slice only with a matching operation, verified test
   const candidate = structuredClone(candidateSpec);
   const manifest = structuredClone(traceability);
   const active = structuredClone(activeSpec);
-  for (const entry of manifest.operations.filter(({ ownerIssue }) => ['REN2-58', 'REN2-59', 'REN2-61', 'REN2-62', 'REN2-64', 'REN2-65', 'REN2-67', 'REN2-68'].includes(ownerIssue))) {
+  for (const entry of manifest.operations.filter(({ ownerIssue }) => ['REN2-58', 'REN2-59', 'REN2-61', 'REN2-62', 'REN2-64', 'REN2-65', 'REN2-67', 'REN2-68', 'REN2-70'].includes(ownerIssue))) {
     entry.implementation = {
       status: 'design_only',
       test: { status: 'pending', path: `tests/w2/${entry.operationId}.test.cjs` },

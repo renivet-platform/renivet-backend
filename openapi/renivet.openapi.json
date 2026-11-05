@@ -1931,6 +1931,215 @@
       }
     },
     "/api/v1/brands/{brandId}/products": {
+      "get": {
+        "description": "Filters the authorized brand product list, returns a brand-scoped total count and deterministic cursor pagination. Revalidates the private representation with ETag. Linear: REN2-70.",
+        "operationId": "listBrandProducts",
+        "parameters": [
+          {
+            "name": "brandId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "visibility",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "PUBLIC",
+                "PRIVATE",
+                "RESTRICTED"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "reviewState",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "NOT_SUBMITTED",
+                "DRAFT",
+                "SUBMITTED",
+                "APPROVED",
+                "REJECTED",
+                "SUPERSEDED"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "categoryId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "items",
+                    "totalCount"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ProductSummaryModel"
+                      }
+                    },
+                    "totalCount": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "nextCursor": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "The scoped product page is unchanged."
+          },
+          "400": {
+            "description": "Invalid filter, cursor or page size.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Brand permission denied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Brand resource was not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Product state prevents the requested read.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The product query is invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Product storage is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "List complete product summaries within the authorized brand",
+        "tags": [
+          "Catalog"
+        ],
+        "x-renivet-implementation-wave": "W2",
+        "x-renivet-permission": "catalog.read"
+      },
       "post": {
         "description": "Creates an incomplete brand-owned draft with its immutable category schema pin; variants, price and media are not required until later workflow steps. Linear: REN2-61.",
         "operationId": "createBrandProduct",
@@ -2273,6 +2482,257 @@
       }
     },
     "/api/v1/brands/{brandId}/products/{productId}": {
+      "get": {
+        "description": "Returns versioned product, typed attributes, variants, price states and active media links without moderation evidence. Linear: REN2-70.",
+        "operationId": "getBrandProduct",
+        "parameters": [
+          {
+            "name": "brandId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "productId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProductSummaryModel"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "categoryId",
+                        "categorySchemaVersion",
+                        "rowVersion",
+                        "variants",
+                        "mediaLinks",
+                        "attributes",
+                        "qcState"
+                      ],
+                      "properties": {
+                        "categoryId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "categorySchemaVersion": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "rowVersion": {
+                          "type": "integer",
+                          "minimum": 1
+                        },
+                        "qcState": {
+                          "type": "string"
+                        },
+                        "draftRevisionId": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "uuid"
+                        },
+                        "publishedRevisionId": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "uuid"
+                        },
+                        "approvedReviewId": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "uuid"
+                        },
+                        "variants": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "id",
+                              "productId",
+                              "brandId",
+                              "sku",
+                              "options",
+                              "variantState"
+                            ],
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "productId": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "brandId": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "sku": {
+                                "type": "string"
+                              },
+                              "options": {
+                                "type": "object",
+                                "additionalProperties": {
+                                  "type": "string"
+                                }
+                              },
+                              "variantState": {
+                                "type": "string"
+                              },
+                              "priceVersions": {
+                                "type": "array",
+                                "items": {
+                                  "$ref": "#/components/schemas/PriceVersionModel"
+                                }
+                              },
+                              "mediaLinks": {
+                                "type": "array",
+                                "items": {
+                                  "$ref": "#/components/schemas/MediaLinkModel"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "mediaLinks": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/MediaLinkModel"
+                          }
+                        },
+                        "attributes": {
+                          "type": "object",
+                          "additionalProperties": true
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "The scoped product representation is unchanged."
+          },
+          "400": {
+            "description": "Invalid product identifier.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Brand permission denied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Product was not found in the authorized brand.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Product state prevents the requested read.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The product identifier is invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Product storage is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryReadErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Read a complete brand product and draft status",
+        "tags": [
+          "Catalog"
+        ],
+        "x-renivet-implementation-wave": "W2",
+        "x-renivet-permission": "catalog.read"
+      },
       "patch": {
         "description": "Saves normalized draft fields with a row-version If-Match compare-and-swap. Historical published category schema versions remain valid pins. Linear: REN2-61.",
         "operationId": "updateBrandProduct",
@@ -8142,6 +8602,165 @@
           "validatorVersion",
           "rulesetSha256",
           "attributes"
+        ]
+      },
+      "ProductSummaryModel": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "brandId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "styleCode": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "publicationState": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "INCOMPLETE",
+              "PENDING_REVIEW",
+              "APPROVED",
+              "PUBLISHED",
+              "RE_REVIEW",
+              "REJECTED",
+              "RESTRICTED",
+              "ARCHIVED"
+            ]
+          },
+          "contentVersion": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "id",
+          "brandId",
+          "styleCode",
+          "title",
+          "publicationState",
+          "contentVersion"
+        ]
+      },
+      "PriceVersionModel": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "variantId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "INR"
+            ]
+          },
+          "amountMinor": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "mrpMinor": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "priceState": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "PENDING",
+              "APPROVED",
+              "REJECTED",
+              "EXPIRED"
+            ]
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "validTo": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "rowVersion": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "id",
+          "variantId",
+          "currency",
+          "amountMinor",
+          "mrpMinor",
+          "priceState",
+          "validFrom"
+        ]
+      },
+      "MediaLinkModel": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "mediaAssetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "productId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "variantId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "displayRole": {
+            "type": "string"
+          },
+          "displayOrder": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "scanState": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "CLEAN",
+              "REJECTED"
+            ]
+          },
+          "rightsState": {
+            "type": "string",
+            "enum": [
+              "UNVERIFIED",
+              "ATTESTED",
+              "REVIEWED",
+              "REVOKED"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "mediaAssetId",
+          "productId",
+          "displayRole",
+          "displayOrder",
+          "scanState",
+          "rightsState"
         ]
       },
       "PriceActionReceiptDto": {
