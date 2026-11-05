@@ -54,4 +54,3 @@ test('REN2-73 migration binds versioned lifecycle events, immutable receipts, an
   assert.match(migration, /DEFERRABLE INITIALLY DEFERRED/i);
   assert.doesNotMatch(migration, /INSERT INTO access\.role_permissions/i, 'migration must not grant publish or restrict permission to a role');
 });
-
