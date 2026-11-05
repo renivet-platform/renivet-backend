@@ -15,8 +15,8 @@
 | REN2-71 | Immutable submitted product revision and submission validation | REN2-63, 64, 67, 68 merged | Implemented, committed and pushed (`78beb9f`) |
 | REN2-72 | Maker-checker QC decision and immutable decision history | REN2-71 on epic branch; REN2-51 merged | Implemented, verified, committed and pushed (`2e4293d`) |
 | REN2-73 | Atomic publication/restriction, audit event and W1 outbox | REN2-72, 65, 69 merged | Implemented, verified, committed and pushed (`b3b3c29`) |
-| REN2-74 | Versioned Typesense projection, tombstone and stale-event suppression | REN2-73, 51 merged | Implemented, verified, committed (`fc56512`); push pending |
-| REN2-75 | Internal authoritative catalog buyability validation port | REN2-73, 64 merged | Pending |
+| REN2-74 | Versioned Typesense projection, tombstone and stale-event suppression | REN2-73, 51 merged | Implemented, verified and pushed (`29e1515`) |
+| REN2-75 | Internal authoritative catalog buyability validation port | REN2-73, 64 merged | Implemented, verified and committed (`4bd9d30`); push pending |
 
 ## Verification record
 
@@ -39,6 +39,7 @@
 - REN2-73 adjacent W2 PostgreSQL regressions: product draft, QC review, claim moderation, and product media integrations pass when run sequentially. An initial parallel run caused two existing integration tests to collide while cloning the same disposable source database (`55006`); both passed on sequential rerun. The media fixture now grants its reviewer the global QC permission required by REN2-72.
 - REN2-73 `npm run lint`, `npm run typecheck`, `npm run build`, `npm test` (129 passed, 4 skipped, 0 failed), and `npm run api:check`: PASS. API traceability reports 44 design-candidate operations and 24 existing implemented W2 routes; REN2-73 adds no route.
 - REN2-74: projection unit tests pass (4/4); PG16 integration passes, proving restriction beats delayed publish, duplicate/replay safety, monotonic projection state, worker authorization/audit, bounded retry, dead-letter evidence/alert callback, and recovery. Worker authorization regression and adjacent publication, draft, QC review, claims, and media PG16 integrations pass sequentially. `npm run lint`, `npm run typecheck`, `npm run build`, `npm run api:check`, and root `npm test` pass (129 passed, 4 skipped, 0 failed). No HTTP endpoint or default production worker activation is added; G09 remains closed pending operational registration, service-principal and real alert-sink evidence.
+- REN2-75: unit tests pass (4/4); PostgreSQL 16 integration passes with a real immutable approved revision and same-transaction checks for positive buyability, stale publication version, elapsed price expiry, wrong-brand/SKU non-disclosure, restriction after publication, and synthetic-only caller authorization. Code never allocates inventory. The live W3 checkout integration is not in this repository, so G09/G11 remain runtime evidence gates and the port is not registered as a production consumer.
 
 ## Per-child changes and evidence
 
@@ -47,13 +48,26 @@
 - Scope: internal exact-revision review provider; global `catalog.review` checker; maker-checker; current price/media/evidence revalidation; row locking/CAS; one decision per revision; immutable audit and replay receipt; atomic revision/product state transitions.
 - Boundary: no HTTP route, role grant, publication, Typesense projection, or provider/W3 behavior. Review API path lacks a pre-existing review-queue identifier and G01/G17 plus W1 grant mapping remain unresolved. Ruling: keep this child internal until those owner-controlled release gates and contract reconciliation are complete; cost if wrong is delayed route availability, while exposing it now could create an unauthorized/incompatible live API.
 - Verification: see REN2-72 entries above. Migration and relevant integrations were rerun from a fresh disposable PG16 database after final SQL changes.
-- Commit: pending.
+- Commit: `2e4293d`; pushed to the epic branch.
 
 ### REN2-73 — publication lifecycle
 
 - Scope: internal publish/restrict/unpublish commands; immutable publication event and idempotency receipt; same-transaction W1 outbox emission; current category, price, media, rights, and revision-bound claim eligibility checks; compare-and-swap and product-row locking.
 - Boundary: no route, role grants, Typesense projection, W3 call, or runtime activation. G09/G14/G17 and W1 permission assignment remain owner-controlled release gates. Ruling: keep commands internal until permission/contract mapping and runtime evidence are approved; this delays API activation while avoiding an unapproved or unauthorized publication route.
 - Verification: see REN2-73 entries above. `git diff --check`: PASS.
-- Commit: pending.
+- Commit: `b3b3c29`; pushed to the epic branch.
 
-REN2-74 is committed (`fc56512`); push and REN2-75 remain pending. The final PR must list exact PASS/FAIL/NOT RUN evidence and any still-open activation gates.
+### REN2-74 — versioned search projection
+
+- Scope: validate exact v1 lifecycle envelopes; authorize the product/brand source; project only the latest authoritative PostgreSQL state; versioned Typesense upsert/delete; durable retry/dead-letter and an alert callback; monotonic per-product watermark.
+- Boundary: no public route or production worker activation. Ruling: keep the new worker unregistered until the approved service principal, Typesense collection/key, alert sink, scheduler, and G09 evidence exist; this avoids making a derived index authoritative or running an unauthenticated worker.
+- Verification: see REN2-74 entries above. Commit `29e1515`, pushed to the epic branch.
+
+### REN2-75 — authoritative buyability port
+
+- Scope: internal, synthetic-consumer-only PostgreSQL validation of published maker-checker revision, exact brand/product/SKU, current effective price, publication and price versions. Returns versioned denial codes and explicitly labels stock as unchecked.
+- Boundary: no checkout endpoint, order/payment/COD/refund path, inventory reservation, or production W3 caller exists in this repository. Ruling: expose a typed port that accepts W3's existing checkout transaction client; keep it unregistered until the real W3 caller is reviewed and G09/G11 evidence is met. This delivers the authoritative recheck without implying W3 integration exists.
+- Verification: focused unit and PG16 integration pass. Integration proves positive buyability, stale version denial, expired price denial, non-disclosing wrong-brand/SKU denial, restriction denial, and synthetic-only consumer enforcement. `npm run lint`, `npm run typecheck`, `npm run build`, `npm run api:check`, and root `npm test` pass (130 passed, 3 skipped, 0 failed); REN2-73 publication, REN2-64/65 price, REN2-74 projection, and REN2-51 worker authorization PostgreSQL regressions also pass sequentially.
+- Commit: `4bd9d30`; push pending.
+
+REN2-74 is pushed (`29e1515`). REN2-75 is committed (`4bd9d30`); push and epic-wide review remain pending. The final PR must list exact PASS/FAIL/NOT RUN evidence and any still-open activation gates.

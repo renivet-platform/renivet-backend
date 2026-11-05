@@ -139,6 +139,12 @@ jobs:
         run: |
           npm run build
           node --test tests/w2/catalog-search-projection.test.cjs tests/w2/catalog-search-projection.integration.test.cjs tests/w2/worker-authorization.integration.test.cjs
+      - name: Verify REN2-75 authoritative catalog buyability source port
+        env:
+          RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
+        run: |
+          npm run build
+          node --test tests/w2/catalog-buyability.test.cjs tests/w2/catalog-buyability.integration.test.cjs
       - name: Verify REN2-64 INR price versions, idempotency, CAS, and approved-window exclusion
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
@@ -253,6 +259,10 @@ jobs:
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
         run: node --test tests/w2/catalog-search-projection.integration.test.cjs
+      - name: Re-verify REN2-75 authoritative buyability after recovery
+        env:
+          RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
+        run: node --test tests/w2/catalog-buyability.integration.test.cjs
       - name: Re-verify REN2-56 taxonomy lifecycle after recovery
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci

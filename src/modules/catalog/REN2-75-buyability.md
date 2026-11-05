@@ -1,0 +1,9 @@
+# REN2-75 — authoritative buyability source port
+
+`CatalogBuyabilityPostgresPort` is an internal TypeScript read/validation port for a future W3 checkout orchestrator. It accepts only explicitly configured synthetic consumer IDs. No Nest route, order, payment, stock reservation, or provider adapter is introduced.
+
+The W3 caller supplies its existing checkout `PoolClient` and invokes the port after beginning the checkout transaction, before any stock reservation. The query reads and share-locks the exact brand-owned product and SKU, verifies approved brand/category and active variant state, confirms the current publication points at an immutable maker-checker-approved revision, and loads the current PostgreSQL-approved price whose validity window includes the query time. The caller must use the same transaction for its subsequent checkout decisions. This port itself never allocates stock; its version 1 response always sets `stockAllocation` to `NOT_CHECKED`.
+
+Request version pins include the publication version and the price ID plus price row version seen by the caller. A changed publication returns `STALE_PUBLICATION`; an expired pinned price returns `PRICE_EXPIRED`; missing or ineligible catalog state returns `NOT_BUYABLE`; and a changed current price returns `STALE_PRICE`. A wrong brand or SKU is intentionally indistinguishable from an unknown item and returns the same minimal `NOT_BUYABLE` result. Responses use `contractVersion: 1` and include the current revision/price only for a successful decision.
+
+`tests/w2/catalog-buyability.integration.test.cjs` exercises a real published revision against disposable PostgreSQL 16, then checks restriction, expired pricing, wrong brand/SKU concealment, and the synthetic-only caller boundary. The W3 checkout transaction integration and stock allocation remain outside W2 and must be evidenced by W3 before any end-to-end purchase claim.
