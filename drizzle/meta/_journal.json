@@ -162,6 +162,13 @@
       "when": 1793880100000,
       "tag": "0022_ren2_72_product_qc_review",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1793880200000,
+      "tag": "0023_ren2_73_catalog_publication",
+      "breakpoints": true
     }
   ]
 }

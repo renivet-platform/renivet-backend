@@ -13,8 +13,8 @@
 | Issue | Scope | Depends on | Status |
 |---|---|---|---|
 | REN2-71 | Immutable submitted product revision and submission validation | REN2-63, 64, 67, 68 merged | Implemented, committed and pushed (`78beb9f`) |
-| REN2-72 | Maker-checker QC decision and immutable decision history | REN2-71 on epic branch; REN2-51 merged | Implemented; verified, pending commit |
-| REN2-73 | Atomic publication/restriction, audit event and W1 outbox | REN2-72, 65, 69 merged | Pending |
+| REN2-72 | Maker-checker QC decision and immutable decision history | REN2-71 on epic branch; REN2-51 merged | Implemented, verified, committed and pushed (`2e4293d`) |
+| REN2-73 | Atomic publication/restriction, audit event and W1 outbox | REN2-72, 65, 69 merged | Implemented and under verification |
 | REN2-74 | Versioned Typesense projection, tombstone and stale-event suppression | REN2-73, 51 merged | Pending |
 | REN2-75 | Internal authoritative catalog buyability validation port | REN2-73, 64 merged | Pending |
 
@@ -35,6 +35,9 @@
 - REN2-61/62 product draft integration on REN2-72 migration: PASS (1 test); REN2-68/69 claim moderation integration: PASS (1 test).
 - REN2-72 `npm run build`, `npm run lint`, `npm run typecheck`, root `npm test`: PASS (133 total, 129 passed, 4 skipped, 0 failed); W2 focused draft/submission/review suite: PASS (22 tests, 22 passed, 0 failed).
 - `npm run api:check`: PASS after REN2-72; no new HTTP route is claimed or exposed.
+- REN2-73: fresh PostgreSQL 16 migration chain applies successfully. Focused tests pass (4/4) for exact approved revision publication, invalid revision no-event behavior, idempotent replay, immutable event history, W1 outbox linkage, restriction, unpublishing after restriction, and permission denial. Integration also proves database rollback for a versioned publish missing event/outbox/receipt and rejects a delayed stale publish after restriction.
+- REN2-73 adjacent W2 PostgreSQL regressions: product draft, QC review, claim moderation, and product media integrations pass when run sequentially. An initial parallel run caused two existing integration tests to collide while cloning the same disposable source database (`55006`); both passed on sequential rerun. The media fixture now grants its reviewer the global QC permission required by REN2-72.
+- REN2-73 `npm run lint`, `npm run typecheck`, `npm run build`, `npm test` (129 passed, 4 skipped, 0 failed), and `npm run api:check`: PASS. API traceability reports 44 design-candidate operations and 24 existing implemented W2 routes; REN2-73 adds no route.
 
 ## Per-child changes and evidence
 
@@ -45,4 +48,11 @@
 - Verification: see REN2-72 entries above. Migration and relevant integrations were rerun from a fresh disposable PG16 database after final SQL changes.
 - Commit: pending.
 
-REN2-73 onward remain pending. The final PR must list exact PASS/FAIL/NOT RUN evidence and any still-open activation gates.
+### REN2-73 — publication lifecycle
+
+- Scope: internal publish/restrict/unpublish commands; immutable publication event and idempotency receipt; same-transaction W1 outbox emission; current category, price, media, rights, and revision-bound claim eligibility checks; compare-and-swap and product-row locking.
+- Boundary: no route, role grants, Typesense projection, W3 call, or runtime activation. G09/G14/G17 and W1 permission assignment remain owner-controlled release gates. Ruling: keep commands internal until permission/contract mapping and runtime evidence are approved; this delays API activation while avoiding an unapproved or unauthorized publication route.
+- Verification: see REN2-73 entries above. `git diff --check`: PASS.
+- Commit: pending.
+
+REN2-74 and REN2-75 remain pending. The final PR must list exact PASS/FAIL/NOT RUN evidence and any still-open activation gates.

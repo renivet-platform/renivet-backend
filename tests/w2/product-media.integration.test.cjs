@@ -68,6 +68,16 @@ test('REN2-67 enforces brand/product/variant media ownership, clean-rights eligi
   await pool.query(`UPDATE brands.brand_memberships SET membership_state='revoked',row_version=row_version+1,updated_at=now()
     WHERE brand_id=$1 AND user_id=$2`, [brand, revokedActor]);
 
+  // QC rows in the publication fixture must satisfy the global checker policy added by REN2-72.
+  const reviewPermission = (await pool.query(`INSERT INTO access.permissions(permission_code,resource,action,description)
+    VALUES('catalog.review','catalog','review','REN2-67 QC fixture') ON CONFLICT(permission_code) DO UPDATE
+    SET permission_code=EXCLUDED.permission_code RETURNING id`)).rows[0].id;
+  const reviewRole = (await pool.query(`INSERT INTO access.roles(role_code,scope_kind,description,is_system)
+    VALUES($1,'global','REN2-67 QC fixture',false) RETURNING id`, [`ren2_67_qc_${suffix}`])).rows[0].id;
+  await pool.query('INSERT INTO access.role_permissions(role_id,permission_id) VALUES($1,$2)', [reviewRole, reviewPermission]);
+  await pool.query(`INSERT INTO access.role_assignments(user_id,role_id,scope_type,active_from,granted_by_id)
+    VALUES($1,$2,'global',now(),$3)`, [reviewer, reviewRole, grantor]);
+
   const categoryId = (await pool.query(`INSERT INTO catalogue.categories(code,name) VALUES($1,'REN2-67 test') RETURNING id`, [`ren2-67-${suffix}`])).rows[0].id;
   await pool.query(`INSERT INTO catalogue.category_schema_versions(category_id,version,ruleset_sha256,validator_version)
     VALUES($1,1,repeat('a',64),'ren2-67-test')`, [categoryId]);
