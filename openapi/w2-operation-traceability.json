@@ -597,8 +597,8 @@
           "path": "tests/w2/import-preview.service.test.cjs"
         },
         "pullRequest": {
-          "status": "pending",
-          "url": null
+          "status": "open",
+          "url": "https://github.com/renivet-platform/renivet-backend/pull/62"
         }
       },
       "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-77"
@@ -622,8 +622,8 @@
           "path": "tests/w2/import-preview.service.test.cjs"
         },
         "pullRequest": {
-          "status": "pending",
-          "url": null
+          "status": "open",
+          "url": "https://github.com/renivet-platform/renivet-backend/pull/62"
         }
       },
       "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-77"
@@ -648,8 +648,8 @@
           "path": "tests/w2/confirmCatalogImport.test.cjs"
         },
         "pullRequest": {
-          "status": "pending",
-          "url": null
+          "status": "open",
+          "url": "https://github.com/renivet-platform/renivet-backend/pull/62"
         }
       },
       "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-78"
@@ -674,8 +674,8 @@
           "path": "tests/w2/import-recovery.test.cjs"
         },
         "pullRequest": {
-          "status": "pending",
-          "url": null
+          "status": "open",
+          "url": "https://github.com/renivet-platform/renivet-backend/pull/62"
         }
       },
       "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-79"
@@ -700,8 +700,8 @@
           "path": "tests/w2/import-recovery.test.cjs"
         },
         "pullRequest": {
-          "status": "pending",
-          "url": null
+          "status": "open",
+          "url": "https://github.com/renivet-platform/renivet-backend/pull/62"
         }
       },
       "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-79"
