@@ -66,6 +66,12 @@ export class ProductMediaPostgresRepository implements ProductMediaRepositoryPor
       return response;
   }
 
+  async attachImportedInTransaction(productId: string, input: Omit<AttachProductMediaDto, 'displayOrder'>,
+    context: ProductMediaMutationContext, client: PoolClient): Promise<Record<string, unknown>> {
+    const rows = await this.lockGallery(client, productId, input.variantId ?? null, context.brandId);
+    return this.attachInTransaction(productId, { ...input, displayOrder: rows.length }, context, client);
+  }
+
   update(productId: string, linkId: string, input: UpdateProductMediaDto, productVersion: number,
     context: ProductMediaMutationContext): Promise<Record<string, unknown>> {
     return this.transaction(async (client) => {

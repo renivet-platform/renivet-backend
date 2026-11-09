@@ -14,7 +14,7 @@ test('REN2-76 defines a protected W2 source-file upload intent operation', () =>
   const operations = Object.entries(candidate.paths ?? {}).flatMap(([path, item]) =>
     Object.entries(item).filter(([method]) => ['get', 'post', 'put', 'patch', 'delete'].includes(method))
       .map(([method, operation]) => ({ path, method, operation })));
-  assert.equal(operations.length, 45);
+  assert.equal(operations.length, 47);
   const upload = operations.find(({ operation }) => operation.operationId === 'beginCatalogImportUpload');
   assert.ok(upload, 'upload operation is in the candidate contract');
   assert.equal(upload.path, '/brands/{brandId}/product-imports/uploads');
@@ -53,6 +53,18 @@ test('REN2-76 issues a short-lived brand-bound private upload URL and records it
   assert.equal(intent.headers['x-amz-meta-renivet-brand-id'], request.brandAccess.brandId);
   assert.equal(calls.length, 2);
   assert.match(calls[1].sql, /access\.security_audit_events/);
+});
+
+test('REN2-82 refuses MEDIA_ZIP upload URLs until the runtime activation gates authorize imports', async () => {
+  const config = { get: (key) => key === 'AUTH_ALLOWED_ORIGINS' ? ['https://app.renivet.example'] : undefined };
+  const controller = new ImportUploadController({ pool: { async query() { throw new Error('ZIP upload must be stopped before persistence'); } } },
+    { authenticate: async () => ({ userId: '33333333-3333-4333-8333-333333333333' }), expectedCsrf: () => 'csrf-token' }, config);
+  const request = { id: 'request-82-upload', headers: { cookie: '__Host-renivet_session=' + 'a'.repeat(43),
+    origin: 'https://app.renivet.example', 'sec-fetch-site': 'same-origin', 'x-csrf-token': 'csrf-token' },
+  brandAccess: { brandId: '11111111-1111-4111-8111-111111111111', userId: '33333333-3333-4333-8333-333333333333', permission: 'imports.write' } };
+  await assert.rejects(controller.begin({ sourceKind: 'MEDIA_ZIP', fileName: 'media.zip', mimeType: 'application/zip',
+    byteLength: 1024, sha256: 'a'.repeat(64) }, request, 'zip-upload-82'),
+  (error) => error.getStatus?.() === 503 && error.getResponse?.().code === 'MEDIA_ZIP_IMPORT_INACTIVE');
 });
 
 test('REN2-80 returns the original batch when the same Shopify file import is retried', async () => {

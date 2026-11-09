@@ -2,8 +2,8 @@
   "contract": "W2 v1.5 local design candidate",
   "candidateFile": "openapi/W2_v1_5_CANDIDATE.yaml",
   "sourceUrl": "https://github.com/renivet-platform/renivet-engineering-os/blob/main/docs/02-system-design/w2-catalog-inventory/v1.5/W2_OpenAPI_v1_5_CANDIDATE.yaml",
-  "expectedOperationCount": 45,
-  "candidateBlob": "877a1da99462bf5a3319437f29229b3739edae54",
+  "expectedOperationCount": 47,
+  "candidateBlob": "f9faf3d5e0be8c40c4f8beff02b6cbe8594c6ddc",
   "qualityGates": [
     "G07",
     "G08",
@@ -259,7 +259,11 @@
       "ownerIssue": "REN2-70",
       "implementation": {
         "status": "implemented",
-        "approvedContractExtensions": ["list filters: categoryId, reviewState, visibility", "totalCount", "If-None-Match/304, ETag, Cache-Control"],
+        "approvedContractExtensions": [
+          "list filters: categoryId, reviewState, visibility",
+          "totalCount",
+          "If-None-Match/304, ETag, Cache-Control"
+        ],
         "test": {
           "status": "verified",
           "path": "tests/w2/listBrandProducts.test.cjs"
@@ -286,7 +290,9 @@
       "ownerIssue": "REN2-70",
       "implementation": {
         "status": "implemented",
-        "approvedContractExtensions": ["If-None-Match/304, ETag, Cache-Control"],
+        "approvedContractExtensions": [
+          "If-None-Match/304, ETag, Cache-Control"
+        ],
         "test": {
           "status": "verified",
           "path": "tests/w2/getBrandProduct.test.cjs"
@@ -511,10 +517,10 @@
       ],
       "ownerIssue": "REN2-82",
       "implementation": {
-        "status": "design_only",
+        "status": "implemented_dormant",
         "test": {
-          "status": "pending",
-          "path": "tests/w2/createMediaZipImport.test.cjs"
+          "status": "verified",
+          "path": "tests/w2/media-zip-import.integration.test.cjs"
         },
         "pullRequest": {
           "status": "pending",
@@ -527,12 +533,23 @@
       "operationId": "beginCatalogImportUpload",
       "method": "POST",
       "path": "/brands/{brandId}/product-imports/uploads",
-      "sourceIds": ["A3", "QA-11", "A5", "QA-14"],
+      "sourceIds": [
+        "A3",
+        "QA-11",
+        "A5",
+        "QA-14"
+      ],
       "ownerIssue": "REN2-76",
       "implementation": {
         "status": "implemented",
-        "test": {"status": "verified", "path": "tests/w2/import-upload-contract.test.cjs"},
-        "pullRequest": {"status": "open", "url": "https://github.com/renivet-platform/renivet-backend/pull/61"}
+        "test": {
+          "status": "verified",
+          "path": "tests/w2/import-upload-contract.test.cjs"
+        },
+        "pullRequest": {
+          "status": "open",
+          "url": "https://github.com/renivet-platform/renivet-backend/pull/61"
+        }
       },
       "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-76"
     },
@@ -550,7 +567,10 @@
       "ownerIssue": "REN2-76",
       "implementation": {
         "status": "implemented",
-        "test": {"status": "verified", "path": "tests/w2/createCatalogImport.test.cjs"},
+        "test": {
+          "status": "verified",
+          "path": "tests/w2/createCatalogImport.test.cjs"
+        },
         "pullRequest": {
           "status": "open",
           "url": "https://github.com/renivet-platform/renivet-backend/pull/61"
@@ -1296,6 +1316,58 @@
         }
       },
       "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-69"
+    },
+    {
+      "operationId": "createMediaZipMappingManifest",
+      "method": "POST",
+      "path": "/brands/{brandId}/media/zip-mapping-manifests",
+      "sourceIds": [
+        "A2",
+        "A3",
+        "QA-09",
+        "QA-15",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-82",
+      "implementation": {
+        "status": "implemented_dormant",
+        "test": {
+          "status": "verified",
+          "path": "tests/w2/media-zip-import.integration.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-82"
+    },
+    {
+      "operationId": "getMediaZipImportStatus",
+      "method": "GET",
+      "path": "/brands/{brandId}/media/zip-imports/{batchId}",
+      "sourceIds": [
+        "A2",
+        "A3",
+        "QA-09",
+        "QA-15",
+        "A5",
+        "QA-14"
+      ],
+      "ownerIssue": "REN2-82",
+      "implementation": {
+        "status": "implemented_dormant",
+        "test": {
+          "status": "verified",
+          "path": "tests/w2/media-zip-import.integration.test.cjs"
+        },
+        "pullRequest": {
+          "status": "pending",
+          "url": null
+        }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-82"
     }
   ],
   "backlogSnapshotVerifiedAt": "2026-11-03"

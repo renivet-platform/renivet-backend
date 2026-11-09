@@ -6,9 +6,10 @@ import { SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { shouldExposeSwagger } from './config/swagger';
 import { createOpenApiConfig } from './config/openapi';
+import { FASTIFY_BODY_LIMIT_BYTES } from './config/http-limits';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), { bufferLogs: true });
+  const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter({ bodyLimit: FASTIFY_BODY_LIMIT_BYTES }), { bufferLogs: true });
   const configuration = app.get(ConfigService);
   app.setGlobalPrefix('api/v1');
   if (shouldExposeSwagger(configuration.get<string>('NODE_ENV'))) {

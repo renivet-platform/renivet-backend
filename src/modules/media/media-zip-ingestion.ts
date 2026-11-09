@@ -11,18 +11,22 @@ export const MAX_MEDIA_ZIP_RATIO = 100;
 export const MAX_MEDIA_ZIP_CONCURRENCY = 4;
 
 export class MediaZipIngestionError extends Error {
-  constructor(readonly code: string) { super('The media archive or source URL could not be safely processed.'); this.name = 'MediaZipIngestionError'; }
+  constructor(readonly code: string, readonly retryable = false) { super('The media archive or source URL could not be safely processed.'); this.name = 'MediaZipIngestionError'; }
 }
 
 export interface MediaZipImage {
   brandId: string;
   batchId: string;
   productId: string;
+  variantId: string;
   sku: string;
   slot: number;
   archivePath: string;
   mimeType: 'image/jpeg' | 'image/png' | 'image/webp';
   bytes: Buffer;
+  sha256: string;
+  /** Stable source identity; for remote media this is the normalized source URL digest. */
+  sourceSha256?: string;
   effectKey: string;
 }
 
@@ -31,15 +35,16 @@ export interface MediaZipIngestionInput {
   brandId: string;
   batchId: string;
   /** Immutable SKU -> product ID manifest pinned when the batch is accepted. */
-  manifest: Readonly<Record<string, string>>;
-  /** Must resolve product and SKU under brandId from authoritative database rows. */
-  resolveProduct(brandId: string, productId: string): Promise<{ brandId: string; sku: string } | null>;
+  manifest: Readonly<Record<string, { productId: string; variantId: string }>>;
+  /** Must resolve all requested variant/product/SKU triples from authoritative rows under brandId. */
+  resolveProducts(brandId: string, mappings: Readonly<Record<string, { productId: string; variantId: string }>>):
+    Promise<Readonly<Record<string, { brandId: string; productId: string; variantId: string; sku: string }>>>;
   /** Persist image effects and per-image receipt/audit atomically; retries must honor effectKey. */
   processImage(image: MediaZipImage): Promise<void>;
   concurrency?: number;
 }
 
-type PlannedEntry = { entry: unzipper.File; path: string; sku: string; slot: number; productId: string };
+type PlannedEntry = { entry: unzipper.File; path: string; sku: string; slot: number; productId: string; variantId: string };
 
 /**
  * Validate the entire archive and all brand-owned targets before applying any effects.
@@ -61,6 +66,7 @@ export async function ingestImageZip(input: MediaZipIngestionInput): Promise<{ p
   }
   const paths = new Set<string>();
   const planned: PlannedEntry[] = [];
+  const requestedMappings: Record<string, { productId: string; variantId: string }> = {};
   let expanded = 0;
   for (const entry of directory.files) {
     const path = entry.path;
@@ -86,15 +92,20 @@ export async function ingestImageZip(input: MediaZipIngestionInput): Promise<{ p
     const sku = match[1];
     const slot = Number(match[2]);
     if (slot < 1 || slot > 99) throw new MediaZipIngestionError('MEDIA_ZIP_NAME_INVALID');
-    const productId = input.manifest[sku];
-    if (!productId || !isUuid(productId)) throw new MediaZipIngestionError('MEDIA_ZIP_MAPPING_REQUIRED');
-    const resolved = await input.resolveProduct(input.brandId, productId);
-    if (!resolved || resolved.brandId !== input.brandId || resolved.sku.trim().toLocaleUpperCase('en-US') !== sku.toLocaleUpperCase('en-US')) {
-      throw new MediaZipIngestionError('MEDIA_ZIP_TARGET_INVALID');
-    }
-    planned.push({ entry, path: normalized, sku, slot, productId });
+    const mapping = input.manifest[sku] ?? input.manifest[sku.toLocaleUpperCase('en-US')];
+    if (!mapping || !isUuid(mapping.productId) || !isUuid(mapping.variantId)) throw new MediaZipIngestionError('MEDIA_ZIP_MAPPING_REQUIRED');
+    requestedMappings[sku.toLocaleUpperCase('en-US')] = mapping;
+    planned.push({ entry, path: normalized, sku, slot, productId: mapping.productId, variantId: mapping.variantId });
   }
   if (planned.length === 0) throw new MediaZipIngestionError('MEDIA_ZIP_EMPTY');
+  const resolvedMappings = await input.resolveProducts(input.brandId, requestedMappings);
+  for (const [sku, mapping] of Object.entries(requestedMappings)) {
+    const resolved = resolvedMappings[sku];
+    if (!resolved || resolved.brandId !== input.brandId || resolved.productId !== mapping.productId
+      || resolved.variantId !== mapping.variantId || resolved.sku.trim().toLocaleUpperCase('en-US') !== sku) {
+      throw new MediaZipIngestionError('MEDIA_ZIP_TARGET_INVALID');
+    }
+  }
   planned.sort((a, b) => a.sku.localeCompare(b.sku, 'en-US') || a.slot - b.slot || a.path.localeCompare(b.path, 'en-US'));
   const slots = new Set<string>();
   for (const item of planned) {
@@ -103,15 +114,22 @@ export async function ingestImageZip(input: MediaZipIngestionInput): Promise<{ p
     slots.add(slotKey);
   }
 
+  const groups: PlannedEntry[][] = [];
+  for (const item of planned) {
+    const lastGroup = groups.at(-1);
+    if (lastGroup && lastGroup[0].sku.toLocaleUpperCase('en-US') === item.sku.toLocaleUpperCase('en-US')) lastGroup.push(item);
+    else groups.push([item]);
+  }
   let cursor = 0;
   let processed = 0;
   let firstFailure: unknown;
-  const workers = Array.from({ length: Math.min(concurrency, planned.length) }, async () => {
+  const workers = Array.from({ length: Math.min(concurrency, groups.length) }, async () => {
     while (firstFailure === undefined) {
       const current = cursor++;
-      if (current >= planned.length) return;
-      const item = planned[current];
-      try {
+      if (current >= groups.length) return;
+      for (const item of groups[current]) {
+        if (firstFailure !== undefined) return;
+        try {
         const chunks: Buffer[] = [];
         let actualLength = 0;
         for await (const chunk of item.entry.stream()) {
@@ -126,16 +144,18 @@ export async function ingestImageZip(input: MediaZipIngestionInput): Promise<{ p
           throw new MediaZipIngestionError('MEDIA_ZIP_IMAGE_INVALID');
         }
         const effectKey = createHash('sha256').update(`${input.brandId}\n${input.batchId}\n${item.productId}\n${item.sku.toLocaleUpperCase('en-US')}\n${item.slot}\n${item.path}`).digest('hex');
+        const imageSha256 = createHash('sha256').update(bytes).digest('hex');
         await input.processImage({ brandId: input.brandId, batchId: input.batchId, productId: item.productId,
-          sku: item.sku, slot: item.slot, archivePath: item.path, mimeType, bytes, effectKey });
+          variantId: item.variantId, sku: item.sku, slot: item.slot, archivePath: item.path, mimeType, bytes, sha256: imageSha256, effectKey });
         processed++;
-      } catch (error) { firstFailure ??= error; return; }
+        } catch (error) { firstFailure ??= error; return; }
+      }
     }
   });
   await Promise.all(workers);
   if (firstFailure !== undefined) {
     if (firstFailure instanceof MediaZipIngestionError) throw firstFailure;
-    throw new MediaZipIngestionError('MEDIA_ZIP_IMAGE_PROCESSING_FAILED');
+    throw new MediaZipIngestionError('MEDIA_ZIP_IMAGE_PROCESSING_FAILED', true);
   }
   return { processed };
 }
@@ -166,8 +186,18 @@ export async function fetchPublicHttpsImage(value: string, options: {
   const maxBytes = options.maxBytes ?? MAX_MEDIA_UPLOAD_BYTES;
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > MAX_MEDIA_UPLOAD_BYTES) throw new MediaZipIngestionError('MEDIA_URL_LIMIT_EXCEEDED');
   const target = await resolvePublicHttpsUrl(value, options.lookup);
-  const response = await (options.request ?? requestPinnedHttps)(target.url, target.address, maxBytes);
+  let response: { statusCode: number; headers: Record<string, string | undefined>; body: Buffer };
+  try {
+    response = await (options.request ?? requestPinnedHttps)(target.url, target.address, maxBytes);
+  } catch (error) {
+    if (error instanceof MediaZipIngestionError) {
+      if (error.code === 'MEDIA_URL_TIMEOUT') throw new MediaZipIngestionError(error.code, true);
+      throw error;
+    }
+    throw new MediaZipIngestionError('MEDIA_URL_RETRYABLE', true);
+  }
   if (response.statusCode >= 300 && response.statusCode < 400) throw new MediaZipIngestionError('MEDIA_URL_REDIRECT_REJECTED');
+  if (response.statusCode === 429 || response.statusCode >= 500) throw new MediaZipIngestionError('MEDIA_URL_RETRYABLE', true);
   if (response.statusCode !== 200) throw new MediaZipIngestionError('MEDIA_URL_FETCH_FAILED');
   if (response.body.length > maxBytes) throw new MediaZipIngestionError('MEDIA_URL_LIMIT_EXCEEDED');
   const mimeType = detectMediaMime(response.body);
@@ -196,7 +226,7 @@ function requestPinnedHttps(url: URL, address: string, maxBytes: number): Promis
       });
       response.on('end', () => resolve({ statusCode: 200, headers: { 'content-type': headerString(response.headers['content-type']) }, body: Buffer.concat(chunks, total) }));
     });
-    request.on('timeout', () => request.destroy(new MediaZipIngestionError('MEDIA_URL_TIMEOUT')));
+    request.on('timeout', () => request.destroy(new MediaZipIngestionError('MEDIA_URL_TIMEOUT', true)));
     request.on('error', reject);
     request.end();
   });

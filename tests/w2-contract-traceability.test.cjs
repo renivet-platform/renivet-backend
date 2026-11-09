@@ -15,16 +15,16 @@ function validate(candidate = candidateSpec, manifest = traceability, active = a
   return checkTraceability({ ...options, candidateSpec: candidate, traceability: manifest, activeSpec: active });
 }
 
-test('REN2-52 loads exactly 45 unique v1.5 candidate operations and verifies the implemented subset', () => {
+test('REN2-52 loads exactly 47 unique v1.5 candidate operations and verifies the implemented subset', () => {
   const operations = extractOperations(candidateSpec);
-  assert.equal(operations.length, 45);
-  assert.equal(new Set(operations.map(({ operation }) => operation.operationId)).size, 45);
+  assert.equal(operations.length, 47);
+  assert.equal(new Set(operations.map(({ operation }) => operation.operationId)).size, 47);
   assert.ok(operations.every(({ operation }) => operation['x-renivet-implementation-wave'] === 'W2'));
   assert.deepEqual(validate(), []);
   for (const { path, method, operation } of operations) {
     const manifestEntry = traceability.operations.find(({ operationId }) => operationId === operation.operationId);
     const live = activeSpec.paths[`/api/v1${path}`]?.[method];
-    if (manifestEntry.implementation.status === 'design_only') {
+    if (manifestEntry.implementation.status === 'design_only' || manifestEntry.implementation.status === 'implemented_dormant') {
       assert.equal(live, undefined, `${operation.operationId} remains design-only`);
       assert.equal(generatedSdk.includes(operation.operationId), false, `${operation.operationId} is absent from the SDK`);
     } else {
@@ -32,6 +32,16 @@ test('REN2-52 loads exactly 45 unique v1.5 candidate operations and verifies the
       assert.equal(generatedSdk.includes(operation.operationId), true, `${operation.operationId} is included in the SDK`);
     }
   }
+});
+
+test('REN2-82 implemented media import routes stay out of live OpenAPI until runtime gates authorize activation', () => {
+  const manifest = structuredClone(traceability);
+  for (const id of ['createMediaZipImport', 'createMediaZipMappingManifest', 'getMediaZipImportStatus']) {
+    const entry = manifest.operations.find(({ operationId }) => operationId === id);
+    entry.implementation = { status: 'implemented_dormant', test: { status: 'verified', path: 'tests/w2/media-zip-import.integration.test.cjs' },
+      pullRequest: { status: 'pending', url: null } };
+  }
+  assert.deepEqual(validate(candidateSpec, manifest, activeSpec), []);
 });
 
 test('REN2-52 requires owner, source, test and PR traceability for every operation', () => {

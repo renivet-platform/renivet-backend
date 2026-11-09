@@ -2,9 +2,9 @@ openapi: 3.1.0
 info:
   title: Renivet 2.0 W2 Catalog Import and Inventory — PROPOSED
   version: 1.5.0-LOCAL-DESIGN-CANDIDATE
-  description: W2 v1.5 contract closure. Brand-owned catalogue and inventory. Technical remediation approved for
-    local documentation; routes, Drizzle migrations, W1 permission seeds and PostgreSQL tests not yet executed.
-    W3 admission and COD are external dependencies.
+  description: W2 v1.5 proposed contract. Brand-owned catalogue and inventory. Routes REN2-82 are implemented behind an
+    activation gate and remain dormant pending runtime evidence. PostgreSQL migration and integration checks run against
+    a disposable PostgreSQL 16 database; W3 admission and COD remain external dependencies.
 servers:
 - url: /api/v1
 security:
@@ -509,6 +509,45 @@ paths:
               $ref: '#/components/schemas/UploadInit'
       x-renivet-csrf-policy: 'W1 validateCsrfRequest: allowlisted Origin, sec-fetch-site same-origin, x-csrf-token
         session-bound; permission and MFA still required'
+  /brands/{brandId}/media/zip-mapping-manifests:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    post:
+      tags:
+      - Media
+      operationId: createMediaZipMappingManifest
+      summary: PROPOSED — createMediaZipMappingManifest
+      description: Saves an immutable brand-owned SKU-to-product/variant mapping and rights attestation for later media ZIP imports.
+      x-renivet-permission: media.write
+      x-renivet-implementation-wave: W2
+      x-renivet-security-review:
+      - W1 effective permissions
+      - scoped product and variant ownership
+      - cookie CSRF and MFA policy
+      - immutable audit
+      responses:
+        '201':
+          description: Immutable mapping manifest receipt.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionReceipt'
+        '401': *id001
+        '403': *id001
+        '409': *id001
+        '422': *id001
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMediaZipMappingManifest'
+      x-renivet-csrf-policy: 'W1 validateCsrfRequest: allowlisted Origin, sec-fetch-site same-origin, x-csrf-token
+        session-bound; permission and MFA still required'
   /brands/{brandId}/media/zip-imports:
     parameters:
     - $ref: '#/components/parameters/brandId'
@@ -549,6 +588,36 @@ paths:
               $ref: '#/components/schemas/ZipImport'
       x-renivet-csrf-policy: 'W1 validateCsrfRequest: allowlisted Origin, sec-fetch-site same-origin, x-csrf-token
         session-bound; permission and MFA still required'
+  /brands/{brandId}/media/zip-imports/{batchId}:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    - name: batchId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    get:
+      tags:
+      - Media
+      operationId: getMediaZipImportStatus
+      summary: PROPOSED — getMediaZipImportStatus
+      description: Reads only a brand-owned media ZIP batch state and effect counts.
+      x-renivet-permission: media.write
+      x-renivet-implementation-wave: W2
+      responses:
+        '200':
+          description: Batch state and per-image outcome counts.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaZipImportStatus'
+        '401': *id001
+        '403': *id001
+        '404': *id001
+        '422': *id001
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
   /brands/{brandId}/product-imports:
     parameters:
     - $ref: '#/components/parameters/brandId'
@@ -599,6 +668,8 @@ paths:
       summary: PROPOSED — beginCatalogImportUpload
       description: >-
         Issues a short-lived private upload intent for one CSV/XLSX source file.
+        MEDIA_ZIP upload intents are gated and return MEDIA_ZIP_IMPORT_INACTIVE
+        until runtime evidence gates and owner activation are complete.
         The returned fileUploadId is single-use, brand-bound, and consumed by
         createCatalogImport after object checksum and metadata verification.
         Linear: REN2-76.
@@ -622,6 +693,7 @@ paths:
         '409': *id001
         '422': *id001
         '503':
+          description: Storage/database unavailable or MEDIA_ZIP upload is not activated.
           $ref: '#/components/responses/ErrorResponse'
       parameters:
       - $ref: '#/components/parameters/idempotencyKey'
@@ -2074,6 +2146,7 @@ components:
           - SHOPIFY_CSV
           - UNIWARE_CSV
           - GENERIC_CSV
+          - MEDIA_ZIP
         fileName:
           type: string
           minLength: 1
@@ -2084,11 +2157,12 @@ components:
           enum:
           - text/csv
           - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+          - application/zip
         byteLength:
           type: integer
           minimum: 1
-          maximum: 10485760
-          description: One source upload is limited to 10 MiB.
+          maximum: 104857600
+          description: CSV/XLSX uploads are limited to 10 MiB; MEDIA_ZIP uploads are limited to 100 MiB but remain disabled until activation gates pass.
         sha256:
           type: string
           pattern: '^[a-f0-9]{64}$'
@@ -2448,11 +2522,80 @@ components:
         sha256:
           type: string
           pattern: ^[0-9a-f]{64}$
+    MediaZipImportStatus:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - status
+      - rowVersion
+      - effectCount
+      - succeededCount
+      - failedCount
+      - errorCode
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - QUEUED
+          - PROCESSING
+          - PARTIAL
+          - SUCCEEDED
+          - FAILED
+        rowVersion:
+          type: integer
+          minimum: 1
+        effectCount:
+          type: integer
+          minimum: 0
+        succeededCount:
+          type: integer
+          minimum: 0
+        failedCount:
+          type: integer
+          minimum: 0
+        errorCode:
+          type: string
+          nullable: true
+    CreateMediaZipMappingManifest:
+      type: object
+      additionalProperties: false
+      required:
+      - mappings
+      - rightsAttested
+      properties:
+        mappings:
+          type: array
+          minItems: 1
+          maxItems: 12000
+          items:
+            type: object
+            additionalProperties: false
+            required:
+            - sku
+            - productId
+            - variantId
+            properties:
+              sku:
+                type: string
+                pattern: '^[A-Za-z0-9_.-]{1,40}$'
+              productId:
+                type: string
+                format: uuid
+              variantId:
+                type: string
+                format: uuid
+        rightsAttested:
+          type: boolean
+          enum:
+          - true
     ZipImport:
       type: object
       additionalProperties: false
       required:
-      - fileUploadId
       - mappingManifestId
       properties:
         fileUploadId:
@@ -2461,11 +2604,34 @@ components:
         mappingManifestId:
           type: string
           format: uuid
-        retryMode:
-          type: string
-          enum:
-          - ALL
-          - FAILED_ONLY
+        remoteImages:
+          type: array
+          minItems: 1
+          maxItems: 400
+          items:
+            type: object
+            additionalProperties: false
+            required:
+            - sku
+            - slot
+            - url
+            properties:
+              sku:
+                type: string
+                pattern: '^[A-Za-z0-9_.-]{1,40}$'
+              slot:
+                type: integer
+                minimum: 1
+                maximum: 99
+              url:
+                type: string
+                maxLength: 2048
+                pattern: '^https://'
+      oneOf:
+      - required:
+        - fileUploadId
+      - required:
+        - remoteImages
     ImportMappingReceipt:
       type: object
       additionalProperties: false

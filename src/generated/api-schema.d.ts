@@ -619,7 +619,7 @@ export interface paths {
         put?: never;
         /**
          * Create a private source-file upload intent
-         * @description Creates a brand-bound, short-lived upload capability for one CSV/XLSX file. The file remains private and is not applied to catalog or inventory.
+         * @description Creates a brand-bound, short-lived capability for CSV/XLSX source files. MEDIA_ZIP upload is gated and returns MEDIA_ZIP_IMPORT_INACTIVE until runtime evidence gates and owner activation are complete.
          */
         post: operations["beginCatalogImportUpload"];
         delete?: never;
@@ -5178,10 +5178,10 @@ export interface operations {
             content: {
                 "application/json": {
                     /** @enum {string} */
-                    sourceKind: "RENIVET_CSV" | "RENIVET_XLSX" | "SHOPIFY_CSV" | "UNIWARE_CSV" | "GENERIC_CSV";
+                    sourceKind: "RENIVET_CSV" | "RENIVET_XLSX" | "SHOPIFY_CSV" | "UNIWARE_CSV" | "GENERIC_CSV" | "MEDIA_ZIP";
                     fileName: string;
                     /** @enum {string} */
-                    mimeType: "text/csv" | "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+                    mimeType: "text/csv" | "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" | "application/zip";
                     byteLength: number;
                     sha256: string;
                 };
@@ -5289,7 +5289,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description Storage or database is unavailable. */
+            /** @description Storage/database unavailable or MEDIA_ZIP upload is not activated. */
             503: {
                 headers: {
                     [name: string]: unknown;
