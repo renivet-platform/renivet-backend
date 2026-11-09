@@ -288,7 +288,7 @@ paths:
       - immutable audit
       responses:
         '202':
-          description: Versioned outcome / accepted command
+          description: The confirmation result and per-target effect receipt counts.
           content:
             application/json:
               schema:
@@ -356,7 +356,7 @@ paths:
       - immutable audit
       responses:
         '202':
-          description: Versioned outcome / accepted command
+          description: The confirmation result and per-target effect receipt counts.
           content:
             application/json:
               schema:
@@ -714,8 +714,8 @@ paths:
       tags:
       - Imports
       operationId: confirmCatalogImport
-      summary: PROPOSED — confirmCatalogImport
-      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend.
+      summary: Confirm a frozen import preview and apply draft-only effects
+      description: Atomically revalidates the preview, mapping, taxonomy and target versions. Exact replays return the saved receipt; changed idempotency payloads and stale snapshots conflict.
       x-renivet-permission: imports.confirm
       x-renivet-implementation-wave: W2
       x-renivet-security-review:
@@ -729,7 +729,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ActionReceipt'
+                $ref: '#/components/schemas/ImportConfirmationReceipt'
         '401': *id001
         '403': *id001
         '404': *id001
@@ -2494,6 +2494,59 @@ components:
           minimum: 1
         allowPartial:
           type: boolean
+    ImportConfirmationReceipt:
+      type: object
+      additionalProperties: false
+      required:
+      - confirmationId
+      - batchId
+      - previewRevision
+      - previewHash
+      - state
+      - appliedRows
+      - failedRows
+      - effectsApplied
+      - noopRows
+      properties:
+        confirmationId:
+          type: string
+          format: uuid
+        batchId:
+          type: string
+          format: uuid
+        previewRevision:
+          type: integer
+          minimum: 1
+        previewHash:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+        state:
+          type: string
+          enum:
+          - COMPLETED
+          - PARTIAL
+        appliedRows:
+          type: integer
+          minimum: 0
+        failedRows:
+          type: integer
+          minimum: 0
+        effectsApplied:
+          type: integer
+          minimum: 0
+        noopRows:
+          type: integer
+          minimum: 0
+        applied:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        failed:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
     RetryRequest:
       type: object
       additionalProperties: false

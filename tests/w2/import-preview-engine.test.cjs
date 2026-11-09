@@ -51,6 +51,22 @@ test('REN2-77 maps source fields, classifies rows, and sends unknown categories 
   assert.equal(preview.rows[1].conflicts[0].code, 'CATEGORY_UNMAPPED');
 });
 
+test('REN2-78 freezes canonical variant and already-approved media targets into the preview payload', () => {
+  const variants = ['S','M','L','XL'].map((size) => ({ sku: `TEE-${size}`, options: { color: 'Blue', size } }));
+  const mediaAssets = ['a','b','c'].map((key) => ({ mediaAssetId: `11111111-1111-4111-8111-11111111111${key}`, displayOrder: 0 }));
+  const preview = buildImportPreview({
+    batch: { id: 'batch-multi', brandId: 'brand-multi', sourceSha256: 'a'.repeat(64), sourceAsOf: '2026-11-09T00:00:00.000Z' },
+    mapping, taxonomy: taxonomy(),
+    sourceRows: [{ rowNumber: 2, rawRecord: { 'product name': 'Tee', 'style code': 'TEE', sku: 'TEE-S', category: 'Tops', color: 'Blue', fabric: 'Cotton' },
+      canonicalRecord: { variants, mediaAssets } }], targets: [],
+  });
+  assert.deepEqual(preview.rows[0].proposed.variants, variants);
+  assert.deepEqual(preview.rows[0].proposed.mediaAssets, mediaAssets);
+  assert.equal(preview.rows[0].proposed.categorySchemaVersion, 4);
+  assert.ok(!preview.fieldMasks.some((field) => field.startsWith('variants.') || field.startsWith('mediaAssets.')),
+    'per-target effects are frozen inputs, not user-selected product field masks');
+});
+
 test('REN2-77 freezes stable preview fingerprints and includes versions and field masks', () => {
   const input = {
     batch: { id: 'batch-1', brandId: 'brand-1', sourceSha256: 'a'.repeat(64), sourceAsOf: '2026-11-09T00:00:00.000Z' },
@@ -92,6 +108,33 @@ test('REN2-77 classifies a matching existing target as a no-op', () => {
 
   assert.equal(preview.rows[0].action, 'NOOP');
   assert.equal(preview.counts.noop, 1);
+});
+
+test('REN2-78 limits update field masks to fields present on that source row', () => {
+  const preview = buildImportPreview({
+    batch: { id: 'batch-optional', brandId: 'brand-optional', sourceSha256: 'a'.repeat(64), sourceAsOf: '2026-11-09T00:00:00.000Z', mode: 'UPDATE_MATCHED' },
+    mapping, taxonomy: taxonomy(),
+    sourceRows: [{ rowNumber: 7, rawRecord: { 'product name': 'Linen Shirt', 'style code': 'LINEN-01', sku: 'LINEN-01-M',
+      category: 'Tops', fabric: 'Linen' } }],
+    targets: [{ productId: 'product-7', variantId: 'variant-7', rowVersion: 3, productRowVersion: 2, variantRowVersion: 3,
+      contentVersion: 2, sku: 'LINEN-01-M', styleCode: 'LINEN-01', title: 'Linen Shirt', categoryCode: 'apparel-tops',
+      attributes: { fabric: 'Linen' }, options: { color: 'Blue' } }],
+  });
+  assert.equal(preview.rows[0].action, 'NOOP');
+  assert.ok(!preview.rows[0].fieldMask.includes('options.color'));
+});
+
+test('REN2-78 keeps source price and image URL out of confirmation until their reviewed domain workflows are available', () => {
+  const fields = { ...mapping.fields, MRP: 'sourceMrp', Image: 'imageUrl' };
+  const preview = buildImportPreview({
+    batch: { id: 'batch-safety', brandId: 'brand-safety', sourceSha256: 'a'.repeat(64), sourceAsOf: '2026-11-09T00:00:00.000Z' },
+    mapping: { ...mapping, fields }, taxonomy: taxonomy(),
+    sourceRows: [{ rowNumber: 8, rawRecord: { 'product name': 'Safe shirt', 'style code': 'SAFE-01', sku: 'SAFE-01-M',
+      category: 'Tops', color: 'Blue', fabric: 'Linen', MRP: '2500', Image: 'https://merchant.example/image.jpg' } }],
+    targets: [],
+  });
+  assert.equal(preview.rows[0].action, 'NEEDS_REVIEW');
+  assert.deepEqual(preview.rows[0].conflicts.map((conflict) => conflict.code).sort(), ['MEDIA_REVIEW_REQUIRED', 'PRICE_REVIEW_REQUIRED']);
 });
 
 test('REN2-77 detects duplicate SKU/attribute identities and stale source dates', () => {

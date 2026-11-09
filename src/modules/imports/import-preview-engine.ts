@@ -120,7 +120,7 @@ function allowedTarget(target: string): boolean {
 
 function flattenTargets(value: Record<string, unknown>, prefix = ''): string[] {
   return Object.entries(value).flatMap(([key, item]) => {
-    if (key === 'categoryUnmapped') return [];
+    if (key === 'categoryUnmapped' || key === 'variants' || key === 'mediaAssets') return [];
     const path = prefix ? `${prefix}.${key}` : key;
     return isRecord(item) ? flattenTargets(item, path) : [path];
   });
@@ -147,6 +147,17 @@ function mappedRecord(row: ImportPreviewSourceRow, mapping: ImportPreviewMapping
     const mapped = categoryMap.get(result.categoryCode.trim().toLocaleLowerCase('en-US'));
     result.categoryCode = mapped ?? result.categoryCode;
     if (!mapped) result.categoryUnmapped = true;
+  }
+  const canonicalRecord = isRecord(row.canonicalRecord) ? row.canonicalRecord : {};
+  if (Array.isArray(canonicalRecord.variants)) {
+    if (canonicalRecord.variants.length < 1 || canonicalRecord.variants.length > 100 || !canonicalRecord.variants.every((item) => isRecord(item)
+      && typeof item.sku === 'string' && isRecord(item.options))) fail('IMPORT_VARIANTS_INVALID');
+    result.variants = canonicalRecord.variants;
+  }
+  if (Array.isArray(canonicalRecord.mediaAssets)) {
+    if (canonicalRecord.mediaAssets.length > 50 || !canonicalRecord.mediaAssets.every((item) => isRecord(item)
+      && typeof item.mediaAssetId === 'string' && /^[0-9a-f-]{36}$/i.test(item.mediaAssetId))) fail('IMPORT_MEDIA_ASSETS_INVALID');
+    result.mediaAssets = canonicalRecord.mediaAssets;
   }
   return result;
 }
@@ -201,13 +212,21 @@ export function buildImportPreview(input: {
   const schemaValidators = new Map<string, ReturnType<typeof compileCategorySchema>>();
   const rows: ImportPreviewRow[] = mappedRows.map(({ source, proposed }) => {
     const conflicts: ImportPreviewConflict[] = [];
+    const rowFieldMasks = fieldMasks.filter((mask) => {
+      let current: unknown = proposed;
+      for (const part of mask.split('.')) {
+        if (!isRecord(current) || !Object.hasOwn(current, part)) return false;
+        current = current[part];
+      }
+      return current !== undefined;
+    });
     let invalidAttributeValue = false;
     if (source.validationErrors?.length) {
-      return { sourceRowNumber: source.rowNumber, action: 'INVALID', proposed, fieldMask: fieldMasks, targetVersion: null,
+      return { sourceRowNumber: source.rowNumber, action: 'INVALID', proposed, fieldMask: rowFieldMasks, targetVersion: null,
         conflicts: source.validationErrors.map(({ code }) => ({ code, message: 'The source row contains invalid fields.' })) };
     }
     if (!normalizeText(proposed.title) || !normalizeText(proposed.styleCode) || !normalizeText(proposed.sku)) {
-      return { sourceRowNumber: source.rowNumber, action: 'INVALID', proposed, fieldMask: fieldMasks, targetVersion: null,
+      return { sourceRowNumber: source.rowNumber, action: 'INVALID', proposed, fieldMask: rowFieldMasks, targetVersion: null,
         conflicts: [{ code: 'IMPORT_REQUIRED_FIELD', message: 'Map a title, style code, and SKU before previewing this row.' }] };
     }
     if (proposed.categoryUnmapped) conflicts.push({ code: 'CATEGORY_UNMAPPED', message: 'Map this source category to an active Renivet category.' });
@@ -219,9 +238,18 @@ export function buildImportPreview(input: {
     const target = targets[0];
     const categoryCode = (normalizeText(proposed.categoryCode) || normalizeText(target?.categoryCode)).toLocaleLowerCase('en-US');
     const category = categoryCode ? categories.get(categoryCode) : undefined;
+    if (category?.schemaVersion) proposed.categorySchemaVersion = category.schemaVersion;
     if (!categoryCode && !target) conflicts.push({ code: 'CATEGORY_REQUIRED', message: 'Choose an active category before creating this product.' });
     if (categoryCode && !category && !proposed.categoryUnmapped) conflicts.push({ code: 'CATEGORY_UNMAPPED', message: 'The selected category does not exist in the pinned taxonomy.' });
     else if (category && !category.active) conflicts.push({ code: 'CATEGORY_INACTIVE', message: 'The selected category is not active in the pinned taxonomy.' });
+    if (target && proposed.categoryCode && target.categoryCode
+      && normalizeText(proposed.categoryCode).toLocaleLowerCase('en-US') !== normalizeText(target.categoryCode).toLocaleLowerCase('en-US')) {
+      conflicts.push({ code: 'CATEGORY_CHANGE_REQUIRES_REVIEW', message: 'Changing an existing product category requires a separate reviewed correction.' });
+    }
+    if (proposed.sourceMrp !== undefined) conflicts.push({ code: 'PRICE_REVIEW_REQUIRED', message: 'Source price data is retained for review and is not applied by catalog confirmation.' });
+    if (typeof proposed.imageUrl === 'string' && proposed.imageUrl.trim()) {
+      conflicts.push({ code: 'MEDIA_REVIEW_REQUIRED', message: 'Image URLs must pass the approved media intake and rights checks before confirmation.' });
+    }
     const mappedAttributes = isRecord(proposed.attributes) ? proposed.attributes : {};
     const mappedOptions = isRecord(proposed.options) ? proposed.options : {};
     if (target && Object.entries(mappedOptions).some(([code, value]) => canonical(target.options?.[code]) !== canonical(value))) {
@@ -255,36 +283,36 @@ export function buildImportPreview(input: {
       conflicts.push({ code: 'SKU_TARGET_CONFLICT', message: 'The source SKU is already attached to a different product style.' });
     }
     if (conflicts.length) {
-      if (invalidAttributeValue) return { sourceRowNumber: source.rowNumber, action: 'INVALID', proposed, fieldMask: fieldMasks,
+      if (invalidAttributeValue) return { sourceRowNumber: source.rowNumber, action: 'INVALID', proposed, fieldMask: rowFieldMasks,
         targetVersion: target ? { productId: target.productId, variantId: target.variantId ?? null,
           productRowVersion: target.productRowVersion ?? target.rowVersion, variantRowVersion: target.variantRowVersion ?? target.rowVersion,
           contentVersion: target.contentVersion ?? 1 } : null, conflicts };
       const needsReview = conflicts.every(({ code }) => ['CATEGORY_UNMAPPED','CATEGORY_INACTIVE','CATEGORY_REQUIRED','CATEGORY_SCHEMA_UNAVAILABLE',
-        'ATTRIBUTE_NOT_IN_SCHEMA','ATTRIBUTE_SCOPE_MISMATCH'].includes(code));
+        'ATTRIBUTE_NOT_IN_SCHEMA','ATTRIBUTE_SCOPE_MISMATCH','CATEGORY_CHANGE_REQUIRES_REVIEW','PRICE_REVIEW_REQUIRED','MEDIA_REVIEW_REQUIRED'].includes(code));
       return { sourceRowNumber: source.rowNumber, action: needsReview ? 'NEEDS_REVIEW' : 'CONFLICT', proposed,
-        fieldMask: fieldMasks, targetVersion: target ? { productId: target.productId, variantId: target.variantId ?? null,
+        fieldMask: rowFieldMasks, targetVersion: target ? { productId: target.productId, variantId: target.variantId ?? null,
           productRowVersion: target.productRowVersion ?? target.rowVersion, variantRowVersion: target.variantRowVersion ?? target.rowVersion,
           contentVersion: target.contentVersion ?? 1 } : null, conflicts };
     }
     if (!target) return { sourceRowNumber: source.rowNumber, action: input.batch.mode === 'UPDATE_MATCHED' ? 'CONFLICT' : 'CREATE', proposed,
-      fieldMask: fieldMasks, targetVersion: null, conflicts: input.batch.mode === 'UPDATE_MATCHED'
+      fieldMask: rowFieldMasks, targetVersion: null, conflicts: input.batch.mode === 'UPDATE_MATCHED'
         ? [{ code: 'TARGET_NOT_FOUND', message: 'No brand-owned target matches this row.' }] : [] };
-    if (input.batch.mode === 'CREATE_ONLY') return { sourceRowNumber: source.rowNumber, action: 'CONFLICT', proposed, fieldMask: fieldMasks,
+    if (input.batch.mode === 'CREATE_ONLY') return { sourceRowNumber: source.rowNumber, action: 'CONFLICT', proposed, fieldMask: rowFieldMasks,
       targetVersion: { productId: target.productId, variantId: target.variantId ?? null,
         productRowVersion: target.productRowVersion ?? target.rowVersion, variantRowVersion: target.variantRowVersion ?? target.rowVersion,
         contentVersion: target.contentVersion ?? 1 }, conflicts: [{ code: 'TARGET_EXISTS', message: 'Create-only imports cannot overwrite a matching target.' }] };
-    if (input.batch.mode === 'REVIEW_CONFLICT') return { sourceRowNumber: source.rowNumber, action: 'CONFLICT', proposed, fieldMask: fieldMasks,
+    if (input.batch.mode === 'REVIEW_CONFLICT') return { sourceRowNumber: source.rowNumber, action: 'CONFLICT', proposed, fieldMask: rowFieldMasks,
       targetVersion: { productId: target.productId, variantId: target.variantId ?? null,
         productRowVersion: target.productRowVersion ?? target.rowVersion, variantRowVersion: target.variantRowVersion ?? target.rowVersion,
         contentVersion: target.contentVersion ?? 1 }, conflicts: [{ code: 'TARGET_REQUIRES_REVIEW', message: 'Review the existing target before selecting update fields.' }] };
-    const projected = Object.fromEntries(fieldMasks.map((mask) => [mask, mask.split('.').reduce<unknown>((current, part) => isRecord(current) ? current[part] : undefined, proposed)]));
-    const current = Object.fromEntries(fieldMasks.map((mask) => {
+    const projected = Object.fromEntries(rowFieldMasks.map((mask) => [mask, mask.split('.').reduce<unknown>((current, part) => isRecord(current) ? current[part] : undefined, proposed)]));
+    const current = Object.fromEntries(rowFieldMasks.map((mask) => {
       if (mask.startsWith('attributes.')) return [mask, target.attributes?.[mask.slice('attributes.'.length)]];
       if (mask.startsWith('options.')) return [mask, target.options?.[mask.slice('options.'.length)]];
       return [mask, target[mask as keyof ImportPreviewTarget]];
     }));
     const action = input.batch.mode === 'SKIP_EXISTING' || canonical(projected) === canonical(current) ? 'NOOP' : 'UPDATE';
-    return { sourceRowNumber: source.rowNumber, action, proposed, fieldMask: fieldMasks,
+    return { sourceRowNumber: source.rowNumber, action, proposed, fieldMask: rowFieldMasks,
       targetVersion: { productId: target.productId, variantId: target.variantId ?? null,
         productRowVersion: target.productRowVersion ?? target.rowVersion, variantRowVersion: target.variantRowVersion ?? target.rowVersion,
         contentVersion: target.contentVersion ?? 1 }, conflicts: [] };

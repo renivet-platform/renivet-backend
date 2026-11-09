@@ -14,7 +14,10 @@ export class ProductDraftPostgresRepository {
   constructor(private readonly infrastructure: IdentityInfrastructure) {}
 
   async create(input: NormalizedProductCreate, context: ProductMutationContext): Promise<Record<string, unknown>> {
-    return this.transaction(async (client) => {
+    return this.transaction((client) => this.createInTransaction(input, context, client));
+  }
+
+  async createInTransaction(input: NormalizedProductCreate, context: ProductMutationContext, client: PoolClient): Promise<Record<string, unknown>> {
       await this.authorize(client, context);
       const requestHash = hash({ input, sourceKind: context.sourceKind ?? 'MANUAL', sourceReference: context.sourceReference ?? null });
       const replay = await this.replay(client, context, 'createBrandProduct', requestHash);
@@ -60,11 +63,14 @@ export class ProductDraftPostgresRepository {
         variantIds, qcState: 'NOT_SUBMITTED', categorySchemaVersion: input.categorySchemaVersion };
       await this.receipt(client, context, 'createBrandProduct', requestHash, product.id, response);
       return response;
-    });
   }
 
   async update(productId: string, patch: UpdateProductDraftDto, expectedRowVersion: number, context: ProductMutationContext): Promise<Record<string, unknown>> {
-    return this.transaction(async (client) => {
+    return this.transaction((client) => this.updateInTransaction(productId, patch, expectedRowVersion, context, client));
+  }
+
+  async updateInTransaction(productId: string, patch: UpdateProductDraftDto, expectedRowVersion: number,
+    context: ProductMutationContext, client: PoolClient): Promise<Record<string, unknown>> {
       await this.authorize(client, context);
       const requestHash = hash({ productId, expectedRowVersion, patch, sourceKind: context.sourceKind ?? 'MANUAL', sourceReference: context.sourceReference ?? null });
       const replay = await this.replay(client, context, 'updateBrandProduct', requestHash);
@@ -112,7 +118,6 @@ export class ProductDraftPostgresRepository {
       const response = productDetail(updated, attributes, variants.rows);
       await this.receipt(client, context, 'updateBrandProduct', requestHash, productId, response);
       return response;
-    });
   }
 
   async createVariant(productId: string, input: CreateProductVariantDto, expectedProductVersion: number,

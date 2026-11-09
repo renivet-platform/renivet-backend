@@ -190,6 +190,13 @@
       "when": 1793880500000,
       "tag": "0026_ren2_77_import_mapping_previews",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1793880600000,
+      "tag": "0027_ren2_78_import_confirmation",
+      "breakpoints": true
     }
   ]
 }

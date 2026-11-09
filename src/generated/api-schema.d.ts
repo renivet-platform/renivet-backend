@@ -682,6 +682,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/brands/{brandId}/product-imports/{batchId}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm a frozen import preview and apply draft-only effects atomically */
+        post: operations["confirmCatalogImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -5660,6 +5677,158 @@ export interface operations {
             };
             /** @description The preview target changed and must be refreshed. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Import storage is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    confirmCatalogImport: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "if-match": string;
+                /** @description The immutable preview revision being confirmed. */
+                "If-Match": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                batchId: string;
+                brandId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    previewHash: string;
+                    previewRevision: number;
+                    allowPartial: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description The confirmation result and per-target effect receipt counts. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        confirmationId: string;
+                        /** Format: uuid */
+                        batchId: string;
+                        previewRevision: number;
+                        previewHash: string;
+                        /** @enum {string} */
+                        state: "COMPLETED" | "PARTIAL";
+                        appliedRows: number;
+                        failedRows: number;
+                        effectsApplied: number;
+                        noopRows: number;
+                        applied?: {
+                            [key: string]: unknown;
+                        }[];
+                        failed?: {
+                            [key: string]: unknown;
+                        }[];
+                    };
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Brand permission, MFA, or CSRF denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description The import batch is not available. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Preview stale or idempotency conflict. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Confirmation data or row effects are invalid. */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

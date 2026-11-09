@@ -18,5 +18,3 @@ export class SaveImportMappingDto {
   @MaxLength(128, { each: true })
   fieldMask?: string[];
 }
-
-\n
