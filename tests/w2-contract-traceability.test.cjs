@@ -41,7 +41,7 @@ test('REN2-82 implemented media import routes stay out of live OpenAPI until run
     entry.implementation = { status: 'implemented_dormant', test: { status: 'verified', path: 'tests/w2/media-zip-import.integration.test.cjs' },
       pullRequest: { status: 'pending', url: null } };
   }
-  assert.deepEqual(validate(candidateSpec, manifest, activeSpec), []);
+  assert.deepEqual(validate(candidateSpec, manifest, activeSpec, { requireLinkedPullRequest: false }), []);
 });
 
 test('REN2-52 requires owner, source, test and PR traceability for every operation', () => {
