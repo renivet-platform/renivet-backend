@@ -208,8 +208,8 @@ function checkTraceability({ candidateSpec, traceability, activeSpec, fileExists
 
   if (!String(candidateSpec.info?.title ?? '').includes('PROPOSED')) errors.push('candidate title must remain marked PROPOSED');
   if (!String(candidateSpec.info?.version ?? '').includes('CANDIDATE')) errors.push('candidate version must remain marked DESIGN CANDIDATE');
-  if (traceability.expectedOperationCount !== 44 || candidateOps.length !== 44) {
-    errors.push(`candidate must contain exactly 44 operations; found ${candidateOps.length}`);
+  if (traceability.expectedOperationCount !== 45 || candidateOps.length !== 45) {
+    errors.push(`candidate must contain exactly 45 operations; found ${candidateOps.length}`);
   }
   for (const gate of ['G08', 'G17']) if (!traceability.qualityGates?.includes(gate)) errors.push(`traceability must record quality gate ${gate}`);
   if (new Set(candidateIds).size !== candidateIds.length) errors.push('candidate contains duplicate operationIds');
@@ -316,7 +316,7 @@ function main() {
     return;
   }
   const implemented = traceability.operations.filter(({ implementation }) => implementation.status === 'implemented').length;
-  process.stdout.write(`W2 contract traceability check passed (44 design-candidate operations, ${implemented} implemented W2 routes; active OpenAPI/SDK remain route-generated).\n`);
+  process.stdout.write(`W2 contract traceability check passed (45 design-candidate operations, ${implemented} implemented W2 routes; active OpenAPI/SDK remain route-generated).\n`);
 }
 
 if (require.main === module) main();

@@ -22,7 +22,7 @@ const W2_TABLES = [
   'catalogue.variant_attribute_values', 'catalogue.sustainability_claims',
   'catalogue.claim_evidence', 'catalogue.claim_review_events', 'catalogue.claim_mutation_receipts', 'catalogue.publication_events',
   'media.media_assets', 'media.media_derivatives', 'media.upload_audit_events', 'media.product_media', 'media.product_media_audit_events',
-  'imports.import_batches', 'imports.import_rows',
+  'imports.import_batches', 'imports.import_rows', 'imports.import_uploads',
   'imports.external_product_maps', 'imports.external_variant_maps', 'imports.import_previews',
   'imports.import_confirmations', 'imports.import_effect_receipts', 'inventory.stock_locations',
   'inventory.stock_balances', 'inventory.stock_events', 'inventory.stock_movements',

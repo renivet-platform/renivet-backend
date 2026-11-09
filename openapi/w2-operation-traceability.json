@@ -3,7 +3,8 @@
   "candidateFile": "openapi/W2_v1_5_CANDIDATE.yaml",
   "sourceUrl": "https://github.com/renivet-platform/renivet-engineering-os/blob/main/docs/02-system-design/w2-catalog-inventory/v1.5/W2_OpenAPI_v1_5_CANDIDATE.yaml",
   "candidateBlob": "b3b5ddd1a77d570c604692cb543215d9e2a30234",
-  "expectedOperationCount": 44,
+  "expectedOperationCount": 45,
+  "candidateBlob": "0efc1995546898f237b37b7fe48ce25e095dbb78",
   "qualityGates": [
     "G07",
     "G08",
@@ -524,6 +525,19 @@
       "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-82"
     },
     {
+      "operationId": "beginCatalogImportUpload",
+      "method": "POST",
+      "path": "/brands/{brandId}/product-imports/uploads",
+      "sourceIds": ["A3", "QA-11", "A5", "QA-14"],
+      "ownerIssue": "REN2-76",
+      "implementation": {
+        "status": "implemented",
+        "test": {"status": "verified", "path": "tests/w2/import-upload-contract.test.cjs"},
+        "pullRequest": {"status": "open", "url": "https://github.com/renivet-platform/renivet-backend/pull/61"}
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-76"
+    },
+    {
       "operationId": "createCatalogImport",
       "method": "POST",
       "path": "/brands/{brandId}/product-imports",
@@ -536,14 +550,11 @@
       ],
       "ownerIssue": "REN2-76",
       "implementation": {
-        "status": "design_only",
-        "test": {
-          "status": "pending",
-          "path": "tests/w2/createCatalogImport.test.cjs"
-        },
+        "status": "implemented",
+        "test": {"status": "verified", "path": "tests/w2/createCatalogImport.test.cjs"},
         "pullRequest": {
-          "status": "pending",
-          "url": null
+          "status": "open",
+          "url": "https://github.com/renivet-platform/renivet-backend/pull/61"
         }
       },
       "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-76"
