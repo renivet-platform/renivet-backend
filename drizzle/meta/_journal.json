@@ -183,6 +183,13 @@
       "when": 1793880400000,
       "tag": "0025_ren2_76_import_uploads",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1793880500000,
+      "tag": "0026_ren2_77_import_mapping_previews",
+      "breakpoints": true
     }
   ]
 }

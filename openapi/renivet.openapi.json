@@ -8549,6 +8549,776 @@
         "x-renivet-implementation-wave": "W2",
         "x-renivet-permission": "imports.write"
       }
+    },
+    "/api/v1/brands/{brandId}/product-imports/{batchId}/mapping": {
+      "post": {
+        "operationId": "saveImportMapping",
+        "parameters": [
+          {
+            "name": "batchId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "idempotency-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "if-match",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "description": "Current mapping version; use 0 for the first revision.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
+          },
+          {
+            "name": "brandId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "fieldMappings",
+                  "categoryMappings"
+                ],
+                "properties": {
+                  "fieldMappings": {
+                    "type": "object",
+                    "minProperties": 1,
+                    "maxProperties": 80,
+                    "additionalProperties": {
+                      "type": "string",
+                      "maxLength": 128
+                    }
+                  },
+                  "categoryMappings": {
+                    "type": "object",
+                    "maxProperties": 200,
+                    "additionalProperties": {
+                      "type": "string",
+                      "maxLength": 96
+                    }
+                  },
+                  "fieldMask": {
+                    "type": "array",
+                    "maxItems": 80,
+                    "items": {
+                      "type": "string",
+                      "maxLength": 128
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Mapping revision and immutable preview were saved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "mappingVersion",
+                    "previewRevision",
+                    "previewHash"
+                  ],
+                  "properties": {
+                    "mappingVersion": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "previewRevision": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "previewHash": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Brand permission, MFA, or CSRF denied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The import batch is not available.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Mapping version or idempotency conflict.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Mapping data or precondition is invalid.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Import storage is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Save an immutable import mapping revision and freeze its preview",
+        "tags": [
+          "Imports"
+        ],
+        "x-renivet-csrf-policy": "W1 session validates x-csrf-token and allowlisted Origin; CSRF state is session-bound.",
+        "x-renivet-implementation-wave": "W2",
+        "x-renivet-permission": "imports.write"
+      }
+    },
+    "/api/v1/brands/{brandId}/product-imports/{batchId}/preview": {
+      "get": {
+        "operationId": "getCatalogImportPreview",
+        "parameters": [
+          {
+            "name": "batchId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "brandId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The frozen preview.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "batchId",
+                    "brandId",
+                    "previewRevision",
+                    "sourceSha256",
+                    "sourceAsOf",
+                    "mappingVersion",
+                    "taxonomyVersion",
+                    "taxonomySnapshotSha256",
+                    "fieldMasks",
+                    "targetVersions",
+                    "rows",
+                    "counts",
+                    "previewHash"
+                  ],
+                  "properties": {
+                    "batchId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "brandId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "previewRevision": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "sourceSha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "sourceAsOf": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "mappingVersion": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "taxonomyVersion": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "taxonomySnapshotSha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "fieldMasks": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "targetVersions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "sourceRowNumber",
+                          "productId",
+                          "variantId",
+                          "productRowVersion",
+                          "variantRowVersion",
+                          "contentVersion"
+                        ],
+                        "properties": {
+                          "sourceRowNumber": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "productId": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "variantId": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "uuid"
+                          },
+                          "productRowVersion": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "variantRowVersion": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "contentVersion": {
+                            "type": "integer",
+                            "minimum": 1
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
+                    "rows": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "sourceRowNumber",
+                          "action",
+                          "proposed",
+                          "fieldMask",
+                          "targetVersion",
+                          "conflicts"
+                        ],
+                        "properties": {
+                          "sourceRowNumber": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "action": {
+                            "type": "string",
+                            "enum": [
+                              "CREATE",
+                              "UPDATE",
+                              "NOOP",
+                              "CONFLICT",
+                              "NEEDS_REVIEW",
+                              "INVALID"
+                            ]
+                          },
+                          "proposed": {
+                            "type": "object",
+                            "additionalProperties": true
+                          },
+                          "fieldMask": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "targetVersion": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "required": [
+                                  "productId",
+                                  "variantId",
+                                  "productRowVersion",
+                                  "variantRowVersion",
+                                  "contentVersion"
+                                ],
+                                "properties": {
+                                  "productId": {
+                                    "type": "string",
+                                    "format": "uuid"
+                                  },
+                                  "variantId": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ],
+                                    "format": "uuid"
+                                  },
+                                  "productRowVersion": {
+                                    "type": "integer",
+                                    "minimum": 1
+                                  },
+                                  "variantRowVersion": {
+                                    "type": "integer",
+                                    "minimum": 1
+                                  },
+                                  "contentVersion": {
+                                    "type": "integer",
+                                    "minimum": 1
+                                  }
+                                },
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "conflicts": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "required": [
+                                "code",
+                                "message"
+                              ],
+                              "properties": {
+                                "code": {
+                                  "type": "string"
+                                },
+                                "message": {
+                                  "type": "string"
+                                }
+                              },
+                              "additionalProperties": false
+                            }
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
+                    "counts": {
+                      "type": "object",
+                      "required": [
+                        "create",
+                        "update",
+                        "noop",
+                        "conflict",
+                        "review",
+                        "invalid"
+                      ],
+                      "properties": {
+                        "create": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "update": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "noop": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "conflict": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "review": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "invalid": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      },
+                      "additionalProperties": false
+                    },
+                    "previewHash": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The import is not readable by this brand principal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The import preview is not available.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The preview target changed and must be refreshed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Import storage is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "code",
+                    "message",
+                    "requestId"
+                  ],
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "details": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Retrieve the latest immutable import preview",
+        "tags": [
+          "Imports"
+        ],
+        "x-renivet-implementation-wave": "W2",
+        "x-renivet-permission": "imports.read"
+      }
     }
   },
   "info": {

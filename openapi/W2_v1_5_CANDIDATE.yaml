@@ -656,7 +656,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ActionReceipt'
+                $ref: '#/components/schemas/ImportMappingReceipt'
         '401': *id001
         '403': *id001
         '404': *id001
@@ -702,8 +702,8 @@ paths:
         '401': *id001
         '403': *id001
         '404': *id001
-        '409': *id001
-        '422': *id001
+        '409':
+          $ref: '#/components/responses/ErrorResponse'
         '503':
           $ref: '#/components/responses/ErrorResponse'
   /brands/{brandId}/product-imports/{batchId}/confirm:
@@ -2435,23 +2435,49 @@ components:
           enum:
           - ALL
           - FAILED_ONLY
+    ImportMappingReceipt:
+      type: object
+      additionalProperties: false
+      required:
+      - mappingVersion
+      - previewRevision
+      - previewHash
+      properties:
+        mappingVersion:
+          type: integer
+          minimum: 1
+        previewRevision:
+          type: integer
+          minimum: 1
+        previewHash:
+          type: string
+          pattern: ^[a-f0-9]{64}$
     ImportMapping:
       type: object
       additionalProperties: false
       required:
-      - sourceSchemaVersion
-      - mappings
-      - expectedBatchVersion
+      - fieldMappings
+      - categoryMappings
       properties:
-        sourceSchemaVersion:
-          type: string
-        mappings:
+        fieldMappings:
           type: object
+          minProperties: 1
+          maxProperties: 80
           additionalProperties:
             type: string
-        expectedBatchVersion:
-          type: integer
-          minimum: 1
+            maxLength: 128
+        categoryMappings:
+          type: object
+          maxProperties: 200
+          additionalProperties:
+            type: string
+            maxLength: 96
+        fieldMask:
+          type: array
+          maxItems: 80
+          items:
+            type: string
+            maxLength: 128
     ImportConfirm:
       type: object
       additionalProperties: false
@@ -3094,37 +3120,156 @@ components:
           format: uuid
     ImportPreviewSnapshot:
       type: object
+      additionalProperties: false
       required:
       - batchId
+      - brandId
       - previewRevision
-      - previewHash
-      - mappingVersion
       - sourceSha256
+      - sourceAsOf
+      - mappingVersion
+      - taxonomyVersion
       - taxonomySnapshotSha256
-      - conflicts
+      - fieldMasks
+      - targetVersions
+      - rows
+      - counts
+      - previewHash
       properties:
         batchId:
+          type: string
+          format: uuid
+        brandId:
           type: string
           format: uuid
         previewRevision:
           type: integer
           minimum: 1
-        previewHash:
-          type: string
-          pattern: ^[0-9a-f]{64}$
-        mappingVersion:
-          type: integer
-          minimum: 1
         sourceSha256:
           type: string
           pattern: ^[0-9a-f]{64}$
+        sourceAsOf:
+          type: string
+          format: date-time
+        mappingVersion:
+          type: integer
+          minimum: 1
+        taxonomyVersion:
+          type: integer
+          minimum: 1
         taxonomySnapshotSha256:
           type: string
           pattern: ^[0-9a-f]{64}$
-        conflicts:
+        fieldMasks:
+          type: array
+          items:
+            type: string
+        targetVersions:
           type: array
           items:
             type: object
+            additionalProperties: false
+            required: [sourceRowNumber, productId, variantId, productRowVersion, variantRowVersion, contentVersion]
+            properties:
+              sourceRowNumber:
+                type: integer
+                minimum: 1
+              productId:
+                type: string
+                format: uuid
+              variantId:
+                type: [string, 'null']
+                format: uuid
+              productRowVersion:
+                type: integer
+                minimum: 1
+              variantRowVersion:
+                type: integer
+                minimum: 1
+              contentVersion:
+                type: integer
+                minimum: 1
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [sourceRowNumber, action, proposed, fieldMask, targetVersion, conflicts]
+            properties:
+              sourceRowNumber:
+                type: integer
+                minimum: 1
+              action:
+                type: string
+                enum: [CREATE, UPDATE, NOOP, CONFLICT, NEEDS_REVIEW, INVALID]
+              proposed:
+                type: object
+                additionalProperties: true
+              fieldMask:
+                type: array
+                items:
+                  type: string
+              targetVersion:
+                anyOf:
+                - $ref: '#/components/schemas/ImportPreviewTargetVersion'
+                - type: 'null'
+              conflicts:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: [code, message]
+                  properties:
+                    code:
+                      type: string
+                    message:
+                      type: string
+        counts:
+          type: object
+          additionalProperties: false
+          required: [create, update, noop, conflict, review, invalid]
+          properties:
+            create:
+              type: integer
+              minimum: 0
+            update:
+              type: integer
+              minimum: 0
+            noop:
+              type: integer
+              minimum: 0
+            conflict:
+              type: integer
+              minimum: 0
+            review:
+              type: integer
+              minimum: 0
+            invalid:
+              type: integer
+              minimum: 0
+        previewHash:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+    ImportPreviewTargetVersion:
+      type: object
+      additionalProperties: false
+      required: [productId, variantId, productRowVersion, variantRowVersion, contentVersion]
+      properties:
+        productId:
+          type: string
+          format: uuid
+        variantId:
+          type: [string, 'null']
+          format: uuid
+        productRowVersion:
+          type: integer
+          minimum: 1
+        variantRowVersion:
+          type: integer
+          minimum: 1
+        contentVersion:
+          type: integer
+          minimum: 1
     ImportEffectReceipt:
       type: object
       required:

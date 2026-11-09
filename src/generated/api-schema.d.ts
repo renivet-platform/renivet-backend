@@ -648,6 +648,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/brands/{brandId}/product-imports/{batchId}/mapping": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Save an immutable import mapping revision and freeze its preview */
+        post: operations["saveImportMapping"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/brands/{brandId}/product-imports/{batchId}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve the latest immutable import preview */
+        get: operations["getCatalogImportPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -5343,6 +5377,304 @@ export interface operations {
                 };
             };
             /** @description Storage or database is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    saveImportMapping: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "if-match": string;
+                /** @description Current mapping version; use 0 for the first revision. */
+                "If-Match": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                batchId: string;
+                brandId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    fieldMappings: {
+                        [key: string]: string;
+                    };
+                    categoryMappings: {
+                        [key: string]: string;
+                    };
+                    fieldMask?: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description Mapping revision and immutable preview were saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        mappingVersion: number;
+                        previewRevision: number;
+                        previewHash: string;
+                    };
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Brand permission, MFA, or CSRF denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description The import batch is not available. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Mapping version or idempotency conflict. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Mapping data or precondition is invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Import storage is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    getCatalogImportPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batchId: string;
+                brandId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The frozen preview. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        batchId: string;
+                        /** Format: uuid */
+                        brandId: string;
+                        previewRevision: number;
+                        sourceSha256: string;
+                        /** Format: date-time */
+                        sourceAsOf: string;
+                        mappingVersion: number;
+                        taxonomyVersion: number;
+                        taxonomySnapshotSha256: string;
+                        fieldMasks: string[];
+                        targetVersions: {
+                            sourceRowNumber: number;
+                            /** Format: uuid */
+                            productId: string;
+                            /** Format: uuid */
+                            variantId: string | null;
+                            productRowVersion: number;
+                            variantRowVersion: number;
+                            contentVersion: number;
+                        }[];
+                        rows: {
+                            sourceRowNumber: number;
+                            /** @enum {string} */
+                            action: "CREATE" | "UPDATE" | "NOOP" | "CONFLICT" | "NEEDS_REVIEW" | "INVALID";
+                            proposed: {
+                                [key: string]: unknown;
+                            };
+                            fieldMask: string[];
+                            targetVersion: {
+                                /** Format: uuid */
+                                productId: string;
+                                /** Format: uuid */
+                                variantId: string | null;
+                                productRowVersion: number;
+                                variantRowVersion: number;
+                                contentVersion: number;
+                            } | null;
+                            conflicts: {
+                                code: string;
+                                message: string;
+                            }[];
+                        }[];
+                        counts: {
+                            create: number;
+                            update: number;
+                            noop: number;
+                            conflict: number;
+                            review: number;
+                            invalid: number;
+                        };
+                        previewHash: string;
+                    };
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description The import is not readable by this brand principal. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description The import preview is not available. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description The preview target changed and must be refreshed. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Import storage is unavailable. */
             503: {
                 headers: {
                     [name: string]: unknown;

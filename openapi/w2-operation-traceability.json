@@ -2,9 +2,8 @@
   "contract": "W2 v1.5 local design candidate",
   "candidateFile": "openapi/W2_v1_5_CANDIDATE.yaml",
   "sourceUrl": "https://github.com/renivet-platform/renivet-engineering-os/blob/main/docs/02-system-design/w2-catalog-inventory/v1.5/W2_OpenAPI_v1_5_CANDIDATE.yaml",
-  "candidateBlob": "b3b5ddd1a77d570c604692cb543215d9e2a30234",
   "expectedOperationCount": 45,
-  "candidateBlob": "0efc1995546898f237b37b7fe48ce25e095dbb78",
+  "candidateBlob": "f6217125a623facbf9305f9cf8033d5ba8bb4ea4",
   "qualityGates": [
     "G07",
     "G08",
@@ -572,10 +571,10 @@
       ],
       "ownerIssue": "REN2-77",
       "implementation": {
-        "status": "design_only",
+        "status": "implemented",
         "test": {
-          "status": "pending",
-          "path": "tests/w2/saveImportMapping.test.cjs"
+          "status": "verified",
+          "path": "tests/w2/import-preview.service.test.cjs"
         },
         "pullRequest": {
           "status": "pending",
@@ -597,10 +596,10 @@
       ],
       "ownerIssue": "REN2-77",
       "implementation": {
-        "status": "design_only",
+        "status": "implemented",
         "test": {
-          "status": "pending",
-          "path": "tests/w2/getCatalogImportPreview.test.cjs"
+          "status": "verified",
+          "path": "tests/w2/import-preview.service.test.cjs"
         },
         "pullRequest": {
           "status": "pending",

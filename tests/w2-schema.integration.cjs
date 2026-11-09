@@ -23,6 +23,7 @@ const W2_TABLES = [
   'catalogue.claim_evidence', 'catalogue.claim_review_events', 'catalogue.claim_mutation_receipts', 'catalogue.publication_events',
   'media.media_assets', 'media.media_derivatives', 'media.upload_audit_events', 'media.product_media', 'media.product_media_audit_events',
   'imports.import_batches', 'imports.import_rows', 'imports.import_uploads',
+  'imports.import_mapping_profiles',
   'imports.external_product_maps', 'imports.external_variant_maps', 'imports.import_previews',
   'imports.import_confirmations', 'imports.import_effect_receipts', 'inventory.stock_locations',
   'inventory.stock_balances', 'inventory.stock_events', 'inventory.stock_movements',
@@ -78,6 +79,13 @@ test('W2 brand-owned catalogue schemas enforce reviewed tables, tenant, uniquene
     const missing = W2_TABLES.filter((name) => !actual.has(name));
     assert.deepEqual(missing, [], `W2 tables missing after migration: ${missing.join(', ')}`);
     assert.deepEqual([...actual].sort(), [...W2_TABLES].sort(), 'migration may add only the reviewed W2 tables');
+
+    const mappingColumns = await client.query(`SELECT column_name FROM information_schema.columns
+      WHERE table_schema='imports' AND table_name='import_previews' AND column_name='preview_snapshot'`);
+    assert.equal(mappingColumns.rowCount, 1, 'preview snapshot must be persisted as an immutable payload');
+    const immutableMapping = await client.query(`SELECT tgname FROM pg_trigger
+      WHERE tgrelid='imports.import_mapping_profiles'::regclass AND NOT tgisinternal AND tgname='import_mapping_profiles_immutable'`);
+    assert.equal(immutableMapping.rowCount, 1, 'mapping revisions must be immutable');
 
     const duplicateBrandRoots = await client.query(
       `SELECT table_schema, table_name FROM information_schema.tables

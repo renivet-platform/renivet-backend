@@ -121,6 +121,12 @@ jobs:
         run: |
           npm run build
           node --test tests/w2/proposeCategorySchemaVersion.test.cjs tests/w2/publishCategorySchemaVersion.test.cjs tests/w2/taxonomy-admin-controller.test.cjs tests/w2/taxonomy-admin.integration.test.cjs
+      - name: Verify REN2-77 immutable import mappings, previews, tenant scope and replay
+        env:
+          RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
+        run: |
+          npm run build
+          node --test tests/w2/import-preview-engine.test.cjs tests/w2/import-preview.service.test.cjs tests/w2/import-preview.controller.test.cjs tests/w2/import-preview.integration.test.cjs
       - name: Verify REN2-61/62/71 product draft and immutable submission lifecycle
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
