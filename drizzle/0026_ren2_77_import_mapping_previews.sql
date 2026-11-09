@@ -32,5 +32,3 @@ EXECUTE FUNCTION catalogue.reject_mutation_of_immutable_row();
 ALTER TABLE imports.import_previews
   ADD COLUMN preview_snapshot jsonb NOT NULL DEFAULT '{}'::jsonb
     CHECK (jsonb_typeof(preview_snapshot) = 'object');
-
-\n
