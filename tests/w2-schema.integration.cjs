@@ -33,6 +33,9 @@ const W2_TABLES = [
   'inventory.stock_allocations', 'inventory.stock_commitment_events', 'inventory.stock_observations',
   'inventory.stock_adjustments', 'inventory.reconciliation_cases', 'inventory.cycle_counts',
   'inventory.stock_buffer_events', 'inventory.stock_transfers',
+  'inventory.stock_command_receipts', 'inventory.stock_adjustment_policy', 'inventory.stock_adjustment_policy_history',
+  'inventory.stock_adjustment_events', 'inventory.stock_returns', 'inventory.stock_return_events',
+  'inventory.reconciliation_case_events',
 ];
 
 function disposableDatabaseUrl() {
@@ -195,6 +198,47 @@ test('W2 brand-owned catalogue schemas enforce reviewed tables, tenant, uniquene
          VALUES ($1, $2, 'REN2-50-SKU', 'default', '{}'::jsonb) RETURNING id`,
         [brand.rows[0].id, product.rows[0].id],
       );
+
+      const location = await client.query(`INSERT INTO inventory.stock_locations(brand_id,location_code,name)
+        VALUES($1,'REN2-50-WH','REN2-50 Warehouse') RETURNING id`, [brand.rows[0].id]);
+      await client.query(`INSERT INTO inventory.stock_balances(brand_id,variant_id,location_id)
+        VALUES($1,$2,$3)`, [brand.rows[0].id, variant.rows[0].id, location.rows[0].id]);
+      const zeroPool = await client.query(`SELECT physical_on_hand,quarantined,allocated_not_dispatched,pre_commit_allocations,safety_buffer,row_version
+        FROM inventory.stock_balances WHERE brand_id=$1 AND variant_id=$2 AND location_id=$3`,
+      [brand.rows[0].id, variant.rows[0].id, location.rows[0].id]);
+      assert.deepEqual(zeroPool.rows[0], { physical_on_hand: '0', quarantined: '0', allocated_not_dispatched: '0', pre_commit_allocations: '0', safety_buffer: '0', row_version: '1' },
+        'new brand + SKU + location pools must start empty at genesis version 1');
+      await client.query('SAVEPOINT invalid_physical_stock_invariant');
+      await assert.rejects(client.query(`UPDATE inventory.stock_balances SET physical_on_hand=1,quarantined=1,allocated_not_dispatched=1
+        WHERE brand_id=$1 AND variant_id=$2 AND location_id=$3`, [brand.rows[0].id, variant.rows[0].id, location.rows[0].id]),
+      (error) => error.code === '23514', 'physical stock must cover quarantined and committed units');
+      await client.query('ROLLBACK TO SAVEPOINT invalid_physical_stock_invariant');
+      await client.query('RELEASE SAVEPOINT invalid_physical_stock_invariant');
+
+      await client.query('SAVEPOINT event_missing_detail');
+      const missingDetailId = randomUUID();
+      await client.query(`INSERT INTO inventory.stock_events(id,brand_id,variant_id,location_id,pool_sequence,event_kind,business_effect_key,payload_sha256,
+        delta_physical,before_balance,after_balance) VALUES($1,$2,$3,$4,2,'PHYSICAL','missing-detail',repeat('a',64),1,'{}','{}')`,
+      [missingDetailId, brand.rows[0].id, variant.rows[0].id, location.rows[0].id]);
+      await assert.rejects(client.query('SET CONSTRAINTS ALL IMMEDIATE'),
+        /STOCK_EVENT_REQUIRES_EXACTLY_ONE_TYPED_DETAIL/, 'every stock event requires exactly one typed journal detail');
+      await client.query('ROLLBACK TO SAVEPOINT event_missing_detail');
+      await client.query('RELEASE SAVEPOINT event_missing_detail');
+      await client.query('SET CONSTRAINTS ALL DEFERRED');
+
+      await client.query('SAVEPOINT event_with_detail');
+      const eventId = randomUUID();
+      await client.query(`INSERT INTO inventory.stock_events(id,brand_id,variant_id,location_id,pool_sequence,event_kind,business_effect_key,payload_sha256,
+        delta_physical,before_balance,after_balance) VALUES($1,$2,$3,$4,2,'PHYSICAL','valid-detail',repeat('b',64),1,'{}','{}')`,
+      [eventId, brand.rows[0].id, variant.rows[0].id, location.rows[0].id]);
+      await client.query(`INSERT INTO inventory.stock_movements(stock_event_id,brand_id,variant_id,location_id,delta_physical,movement_reason,
+        business_effect_key,source_type,source_reference,balance_version_after)
+        VALUES($1,$2,$3,$4,1,'TEST_RECEIPT','valid-detail','TEST','fixture',2)`,
+      [eventId, brand.rows[0].id, variant.rows[0].id, location.rows[0].id]);
+      await client.query('SET CONSTRAINTS ALL IMMEDIATE');
+      await client.query('ROLLBACK TO SAVEPOINT event_with_detail');
+      await client.query('RELEASE SAVEPOINT event_with_detail');
+      await client.query('SET CONSTRAINTS ALL DEFERRED');
 
       const otherProduct = await client.query(
         `INSERT INTO catalogue.products (brand_id, category_id, style_code, title, category_schema_version)

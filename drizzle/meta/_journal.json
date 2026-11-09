@@ -211,6 +211,13 @@
       "when": 1793880800000,
       "tag": "0029_ren2_82_secure_media_zip",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1793880900000,
+      "tag": "0030_ren2_83_89_inventory_ledger",
+      "breakpoints": true
     }
   ]
 }
