@@ -170,7 +170,13 @@ function mappedRecord(row: ImportPreviewSourceRow, mapping: ImportPreviewMapping
   if (Array.isArray(canonicalRecord.sourceImageUrls)) result.sourceImageUrls = canonicalRecord.sourceImageUrls;
   if (Array.isArray(canonicalRecord.sourceRowNumbers)) result.sourceRowNumbers = canonicalRecord.sourceRowNumbers;
   if (Array.isArray(canonicalRecord.sourceLossyFields)) result.sourceLossyFields = canonicalRecord.sourceLossyFields;
-  if (Array.isArray(canonicalRecord.reviewCodes)) result.sourceReviewCodes = canonicalRecord.reviewCodes;
+  if (Array.isArray(canonicalRecord.reviewCodes)) {
+    const explicitCategoryMapping = Object.entries(mapping.fields).some(([sourceName, target]) => target === 'categoryCode'
+      && Object.entries(mapping.categories).some(([sourceCode, targetCode]) => sourceCode.trim().toLocaleLowerCase('en-US')
+        === String(source.get(sourceName.trim().toLocaleLowerCase('en-US')) ?? '').trim().toLocaleLowerCase('en-US')
+        && Boolean(targetCode)));
+    result.sourceReviewCodes = canonicalRecord.reviewCodes.filter((code) => code !== 'UNIWARE_CATEGORY_MAPPING_REQUIRED' || !explicitCategoryMapping);
+  }
   const canonicalAttributes = isRecord(canonicalRecord.attributes) ? canonicalRecord.attributes : {};
   if (typeof canonicalAttributes.material === 'string' && canonicalAttributes.material.trim()
     && !Object.values(mapping.fields).includes('attributes.material')) {
@@ -248,10 +254,12 @@ export function buildImportPreview(input: {
     }
     if (proposed.categoryUnmapped) conflicts.push({ code: 'CATEGORY_UNMAPPED', message: 'Map this source category to an active Renivet category.' });
     for (const code of Array.isArray(proposed.sourceReviewCodes) ? proposed.sourceReviewCodes as string[] : []) {
-      if (typeof code === 'string' && /^SHOPIFY_[A-Z_]+$/.test(code)) {
-        conflicts.push({ code, message: code === 'SHOPIFY_UNMAPPED_FIELDS'
-          ? 'Some non-empty Shopify columns are retained as source data but are not represented in the Renivet catalog.'
-          : 'Review the Shopify source fields and mappings before confirmation.' });
+      if (typeof code === 'string' && /^(?:SHOPIFY|UNIWARE)_[A-Z_]+$/.test(code)) {
+        if (code === 'UNIWARE_CATEGORY_MAPPING_REQUIRED' && proposed.categoryUnmapped) continue;
+        const source = code.startsWith('SHOPIFY_') ? 'Shopify' : 'Uniware';
+        conflicts.push({ code, message: code.endsWith('_UNMAPPED_FIELDS')
+          ? `Some non-empty ${source} columns are retained as source data but are not represented in the Renivet catalog.`
+          : `Review the ${source} source fields and mappings before confirmation.` });
       }
     }
     const sku = normalizeText(proposed.sku).toLocaleUpperCase('en-US');

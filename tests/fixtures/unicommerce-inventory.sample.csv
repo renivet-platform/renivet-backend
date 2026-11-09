@@ -1,0 +1,7 @@
+﻿facilityCode,itemTypeSKU,inventory,openSale,openPurchase,putawayPending,inventoryBlocked,pendingStockTransfer,vendorInventory,virtualInventory,pendingInventoryAssessment
+BLR-01,RN-TSH-BLU-M,80,8,25,4,2,1,0,0,0
+BLR-01,RN-TSH-BLU-L,50,4,15,1,0,0,0,0,0
+BLR-01,RN-TSH-BLK-M,34,2,10,0,1,0,0,0,0
+BLR-01,RN-BAG-CNV-OS,65,8,40,5,3,0,0,0,0
+MUM-01,RN-TSH-BLU-M,25,3,5,0,0,0,0,0,0
+MUM-01,RN-BAG-CNV-OS,24,3,5,0,0,0,0,0,0

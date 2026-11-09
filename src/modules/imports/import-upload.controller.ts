@@ -263,7 +263,7 @@ export class ImportUploadController {
         parsed = mapImportWorkbook({ profile, sheets });
       } else {
         if (input.sourceKind === 'RENIVET_XLSX') throw new UnprocessableEntityException({ code: 'IMPORT_SOURCE_KIND_CONFLICT', message: 'The file format does not match the source type.' });
-        parsed = parseCatalogCsv({ bytes, sourceKind: input.sourceKind });
+        parsed = parseCatalogCsv({ bytes, sourceKind: input.sourceKind, sourceAsOf: input.sourceAsOf });
       }
     } catch (error) {
       if (error instanceof UnprocessableEntityException) throw error;

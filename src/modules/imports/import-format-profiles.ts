@@ -11,6 +11,7 @@ export interface ImportFormatProfile {
 export interface CatalogImportRow {
   sourceRecordKey: string;
   sourceProductKey: string | null;
+  sourceExternalKeys?: Record<string, string>;
   title: string;
   sku: string;
   options: Record<string, string>;
@@ -24,7 +25,14 @@ export interface CatalogImportRow {
   sourceLossyFields?: string[];
   reviewCodes?: string[];
 }
-export interface StockObservation { sourceRecordKey: string; locationKey?: string; quantity: number }
+export interface StockObservation {
+  sourceRecordKey: string;
+  locationKey?: string;
+  quantity: number;
+  externalSourceKey?: string;
+  sourceAsOf?: string;
+  sourceRowNumber?: number;
+}
 export interface MappedWorkbook {
   profileId: string;
   profileVersion: string;
