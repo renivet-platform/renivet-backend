@@ -757,7 +757,7 @@ paths:
       - Imports
       operationId: getImportResults
       summary: PROPOSED — getImportResults
-      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend.
+      description: Redacted, paginated row outcomes and retry status; CSV downloads contain row numbers, status codes and receipt IDs only.
       x-renivet-permission: imports.read
       x-renivet-implementation-wave: W2
       x-renivet-security-review:
@@ -767,11 +767,14 @@ paths:
       - immutable audit
       responses:
         '200':
-          description: Success
+          description: Redacted row results; use format=csv for a downloadable report.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ImportResults'
+            text/csv:
+              schema:
+                type: string
         '401': *id001
         '403': *id001
         '404': *id001
@@ -781,7 +784,21 @@ paths:
           $ref: '#/components/responses/ErrorResponse'
       parameters:
       - $ref: '#/components/parameters/cursor'
-      - $ref: '#/components/parameters/limit'
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+      - name: format
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [json, csv]
+          default: json
   /brands/{brandId}/product-imports/{batchId}/retry:
     parameters:
     - $ref: '#/components/parameters/brandId'
@@ -791,7 +808,7 @@ paths:
       - Imports
       operationId: retryImportFailures
       summary: PROPOSED — retryImportFailures
-      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend.
+      description: Queues brand-scoped failed-row retries through the W1 outbox and durable worker; successful target receipts are reused.
       x-renivet-permission: imports.write
       x-renivet-implementation-wave: W2
       x-renivet-security-review:
@@ -801,11 +818,26 @@ paths:
       - immutable audit
       responses:
         '202':
-          description: Versioned outcome / accepted command
+          description: Retry command persisted to the W1 outbox.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ActionReceipt'
+                type: object
+                additionalProperties: false
+                required: [batchId, retryRequestId, state, rowCount]
+                properties:
+                  batchId:
+                    type: string
+                    format: uuid
+                  retryRequestId:
+                    type: string
+                    format: uuid
+                  state:
+                    type: string
+                    enum: [QUEUED, COMPLETED, PARTIAL, FAILED]
+                  rowCount:
+                    type: integer
+                    minimum: 0
         '401': *id001
         '403': *id001
         '404': *id001
@@ -822,8 +854,7 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/RetryRequest'
-      x-renivet-csrf-policy: 'W1 validateCsrfRequest: allowlisted Origin, sec-fetch-site same-origin, x-csrf-token
-        session-bound; permission and MFA still required'
+      x-renivet-csrf-policy: 'W1 session-bound x-csrf-token, allowlisted Origin, same-origin fetch metadata, and MFA step-up required.'
   /brands/{brandId}/inventory/balances:
     parameters:
     - $ref: '#/components/parameters/brandId'
@@ -2558,8 +2589,10 @@ components:
           const: FAILED_ONLY
         errorCodes:
           type: array
+          maxItems: 64
           items:
             type: string
+            pattern: '^[A-Z][A-Z0-9_]{0,63}$'
     StockLocationCreate:
       type: object
       additionalProperties: false
@@ -2669,9 +2702,11 @@ components:
           additionalProperties: true
     ImportResults:
       type: object
+      additionalProperties: false
       required:
       - batchId
       - items
+      - retryRequests
       properties:
         batchId:
           type: string
@@ -2680,6 +2715,7 @@ components:
           type: array
           items:
             type: object
+            required: [rowNumber, status, errorCodes, effectReceiptIds]
             properties:
               rowNumber:
                 type: integer
@@ -2689,13 +2725,33 @@ components:
                 type: array
                 items:
                   type: string
-              effectReceiptId:
-                type: string
-                format: uuid
+              effectReceiptIds:
+                type: array
+                items:
+                  type: string
+                  format: uuid
         nextCursor:
           type:
           - string
           - 'null'
+        retryRequests:
+          type: array
+          items:
+            type: object
+            required: [retryRequestId, state, rowCount]
+            properties:
+              retryRequestId:
+                type: string
+                format: uuid
+              state:
+                type: string
+              rowCount:
+                type: integer
+                minimum: 0
+              errorCode:
+                type:
+                - string
+                - 'null'
     MovementSummary:
       type: object
       required:

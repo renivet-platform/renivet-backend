@@ -120,5 +120,3 @@ test('REN2-77 returns only the preview belonging to the requested brand and batc
   assert.deepEqual(query.params, [batchId, brandId, userId]);
   assert.ok(fixture.statements.some(({ sql }) => /imports\.preview\.read/.test(sql)), 'reading the preview creates an immutable audit event');
 });
-
-\n

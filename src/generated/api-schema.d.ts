@@ -699,6 +699,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/brands/{brandId}/product-imports/{batchId}/results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read sanitized, brand-scoped import outcomes */
+        get: operations["getImportResults"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/brands/{brandId}/product-imports/{batchId}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queue a safe retry for failed import rows */
+        post: operations["retryImportFailures"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -5828,6 +5862,288 @@ export interface operations {
                 };
             };
             /** @description Confirmation data or row effects are invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Import storage is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    getImportResults: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                batchId: string;
+                brandId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redacted row results; use format=csv for a downloadable report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        batchId: string;
+                        items: {
+                            rowNumber: number;
+                            status: string;
+                            errorCodes: string[];
+                            effectReceiptIds: string[];
+                        }[];
+                        nextCursor?: string | null;
+                        retryRequests: {
+                            /** Format: uuid */
+                            retryRequestId: string;
+                            state: string;
+                            rowCount: number;
+                            errorCode?: string | null;
+                        }[];
+                    };
+                    "text/csv": string;
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Brand access denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description The import batch is not available. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description The results cursor is invalid. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description The results page request is invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Import storage is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    retryImportFailures: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "if-match": string;
+                /** @description The exact current immutable preview revision. */
+                "If-Match": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                batchId: string;
+                brandId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    mode: "FAILED_ONLY";
+                    errorCodes?: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description Retry command persisted to the W1 outbox. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        batchId: string;
+                        /** Format: uuid */
+                        retryRequestId: string;
+                        /** @enum {string} */
+                        state: "QUEUED" | "COMPLETED" | "PARTIAL" | "FAILED";
+                        rowCount: number;
+                    };
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Brand, permission, MFA, or CSRF denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description The import batch is not available. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Stale preview, idempotency conflict, or no eligible failed rows. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description The retry request or precondition is invalid. */
             422: {
                 headers: {
                     [name: string]: unknown;

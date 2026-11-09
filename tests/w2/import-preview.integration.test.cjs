@@ -6,6 +6,10 @@ const { randomUUID } = require('node:crypto');
 const { Pool } = require('pg');
 const { ImportPreviewService } = require('../../dist/modules/imports/import-preview.service.js');
 const { ImportConfirmationService } = require('../../dist/modules/imports/import-confirmation.service.js');
+const { ImportRecoveryService } = require('../../dist/modules/imports/import-recovery.service.js');
+const { ImportRetryEventHandler } = require('../../dist/modules/imports/import-retry-event.handler.js');
+const { DurableWorker } = require('../../dist/workers/durable-worker.js');
+const { DatabaseWorkerAuthorizationService } = require('../../dist/workers/worker-authorization.js');
 const { ProductDraftPostgresRepository } = require('../../dist/modules/catalog/product-draft.repository.js');
 const { ProductMediaPostgresRepository } = require('../../dist/modules/media/product-media.repository.js');
 const { TaxonomyAdminPostgresRepository } = require('../../dist/modules/catalog/taxonomy-admin.repository.js');
@@ -51,6 +55,12 @@ test('REN2-77/78 persist immutable previews and atomically confirm per-target ef
   }
   await pool.query(`INSERT INTO access.role_assignments(user_id,role_id,brand_id,scope_type,active_from,granted_by_id)
     VALUES($1,$2,$3,'brand',now(),$4)`, [owner, role, brand, grantor]);
+  const retryActor = (await pool.query(`INSERT INTO identity.users(email,display_name,state)
+    VALUES($1,'REN2-79 retry actor','active') RETURNING id`, [`ren2-79-retry-${suffix}@example.invalid`])).rows[0].id;
+  await pool.query(`INSERT INTO brands.brand_memberships(brand_id,user_id,membership_state,invited_by_id,joined_at)
+    VALUES($1,$2,'active',$3,now())`, [brand, retryActor, grantor]);
+  await pool.query(`INSERT INTO access.role_assignments(user_id,role_id,brand_id,scope_type,active_from,granted_by_id)
+    VALUES($1,$2,$3,'brand',now(),$4)`, [retryActor, role, brand, grantor]);
 
   const categoryCode = `r77-${suffix.slice(0, 18)}`;
   const category = (await pool.query(`INSERT INTO catalogue.categories(code,name,active) VALUES($1,'REN2-77 synthetic category',false) RETURNING id`, [categoryCode])).rows[0].id;
@@ -174,9 +184,18 @@ test('REN2-77/78 persist immutable previews and atomically confirm per-target ef
     VALUES($1,'GENERIC_CSV',$2,$3,'REN2-78-test',now(),'RECEIVED','{"mode":"CREATE_ONLY"}'::jsonb,$4) RETURNING id`,
   [brand, 'd'.repeat(64), `synthetic/${suffix}-partial.csv`, owner])).rows[0].id;
   const partialSku = `PART-${suffix}`;
+  const retryAssetId = randomUUID();
+  await pool.query(`INSERT INTO media.media_assets
+    (id,brand_id,storage_key,sha256,mime_type,width,height,scan_state,rights_state,derivative_state,file_name,byte_length,
+     completed_at,rights_attested_by,rights_attested_at)
+    VALUES($1,$2,$3,$4,'image/webp',800,800,'PENDING','ATTESTED','READY','retry-image.webp',32,now(),$5,now())`,
+  [retryAssetId,brand,`ren2-79/${suffix}/retry/${retryAssetId}`,'e'.repeat(64),owner]);
+  for (const kind of ['PREVIEW','THUMBNAIL']) await pool.query(`INSERT INTO media.media_derivatives
+    (brand_id,media_asset_id,derivative_kind,storage_key,sha256,mime_type,byte_length,width,height)
+    VALUES($1,$2,$3,$4,$5,'image/webp',16,400,400)`, [brand,retryAssetId,kind,`ren2-79/${retryAssetId}/${kind.toLowerCase()}`,'f'.repeat(64)]);
   const partialVariants = ['S','M','L','XL'].map((value) => ({ sku: `${partialSku}-${value}`, options: { [colorCode]: 'Blue', [sizeCode]: value } }));
   const partialAssets = [{ mediaAssetId: mediaIds[0], displayRole: 'GALLERY', displayOrder: 0 },
-    { mediaAssetId: randomUUID(), displayRole: 'GALLERY', displayOrder: 1 },
+    { mediaAssetId: retryAssetId, displayRole: 'GALLERY', displayOrder: 1 },
     { mediaAssetId: mediaIds[2], displayRole: 'GALLERY', displayOrder: 1 }];
   await pool.query(`INSERT INTO imports.import_rows(batch_id,brand_id,source_row_number,raw_record,canonical_record)
     VALUES($1,$2,2,$3::jsonb,$4::jsonb)`, [partialBatch, brand, JSON.stringify({ Title: 'Partial shirt', Style: partialSku, SKU: partialSku,
@@ -187,8 +206,53 @@ test('REN2-77/78 persist immutable previews and atomically confirm per-target ef
   assert.equal(partialResult.state, 'PARTIAL');
   assert.equal(partialResult.failedRows, 1);
   assert.equal(partialResult.effectsApplied, 6, 'successful variants and two approved media links remain committed around one failed media target');
-  assert.deepEqual(partialResult.failed.map((failure) => failure.code), ['PRODUCT_MEDIA_NOT_FOUND'], 'failure results expose only a stable domain code');
+  assert.deepEqual(partialResult.failed.map((failure) => failure.code), ['PRODUCT_MEDIA_ASSET_NOT_READY'], 'failure results expose only a stable domain code');
   assert.equal(Number((await pool.query('SELECT count(*)::integer AS count FROM imports.import_effect_receipts WHERE batch_id=$1 AND brand_id=$2', [partialBatch, brand])).rows[0].count), 6);
+  const recovery = new ImportRecoveryService({ pool }, confirmation);
+  const resultPage = await recovery.getResults({ brandId: brand, batchId: partialBatch, actorUserId: owner, cursor: null, limit: 10, format: 'json' });
+  assert.equal(resultPage.page.items[0].status, 'PARTIAL');
+  assert.deepEqual(resultPage.page.items[0].errorCodes, ['PRODUCT_MEDIA_ASSET_NOT_READY']);
+  assert.doesNotMatch(JSON.stringify(resultPage.page), /Partial shirt|Cotton|raw_record|supplier/i, 'result APIs omit imported raw fields');
+  assert.match(resultPage.csv, /"row_number","status","error_codes","effect_receipt_ids"/);
+  assert.doesNotMatch(resultPage.csv, /Partial shirt|Cotton|raw_record/i, 'downloadable report contains only redacted row metadata');
+  await assert.rejects(recovery.getResults({ brandId: randomUUID(), batchId: partialBatch, actorUserId: owner, cursor: null, limit: 10, format: 'json' }),
+    (error) => error?.status === 404);
+  await assert.rejects(recovery.getResults({ brandId: brand, batchId: partialBatch, actorUserId: owner, cursor: '1e2', limit: 10, format: 'json' }),
+    (error) => error?.status === 409 && error?.response?.code === 'IMPORT_RESULTS_CURSOR_INVALID');
+  const retryInput = { brandId: brand, batchId: partialBatch, actorUserId: retryActor, requestId: `retry-${suffix}`, idempotencyKey: `retry-${suffix}`,
+    previewRevision: partialPreview.previewRevision, errorCodes: ['PRODUCT_MEDIA_ASSET_NOT_READY'] };
+  await assert.rejects(recovery.retryFailures({ ...retryInput, brandId: randomUUID(), idempotencyKey: `retry-foreign-${suffix}` }),
+    (error) => error?.status === 404 && error?.response?.code === 'IMPORT_BATCH_NOT_FOUND');
+  await assert.rejects(recovery.retryFailures({ ...retryInput, idempotencyKey: `retry-no-rows-${suffix}`, errorCodes: ['NO_SUCH_IMPORT_FAILURE'] }),
+    (error) => error?.status === 409 && error?.response?.code === 'IMPORT_RETRY_NO_ELIGIBLE_ROWS');
+  const retryReceipt = await recovery.retryFailures(retryInput);
+  assert.equal(retryReceipt.state, 'QUEUED');
+  assert.equal(retryReceipt.rowCount, 1);
+  assert.deepEqual(await recovery.retryFailures(retryInput), retryReceipt, 'exact retry-command replay returns its stored receipt');
+  await assert.rejects(recovery.retryFailures({ ...retryInput, errorCodes: [] }), (error) => error?.status === 409);
+  await pool.query("UPDATE media.media_assets SET scan_state='CLEAN',row_version=row_version+1 WHERE id=$1 AND brand_id=$2", [retryAssetId,brand]);
+  const principalId = randomUUID();
+  const workerAuthorization = new DatabaseWorkerAuthorizationService(pool, { async authenticate() {
+    return { id: principalId, active: true, permittedConsumers: ['imports.retry'], provenance: 'w1.service.worker' };
+  } });
+  const worker = new DurableWorker(pool, [new ImportRetryEventHandler(recovery)], { maxAttempts: 3, workerAuthorization });
+  const retryRun = await worker.runOnce('imports.retry', `retry-worker-${suffix}`, 10);
+  assert.ok(retryRun.processed >= 1, 'the durable retry consumer processes queued import retries');
+  const retryJob = await pool.query(`SELECT j.state FROM platform.durable_jobs j JOIN platform.outbox_events o ON o.id::text=j.business_key
+    WHERE j.job_kind='imports.retry' AND o.event_payload->>'retryRequestId'=$1`, [retryReceipt.retryRequestId]);
+  assert.equal(retryJob.rows[0].state, 'succeeded');
+  assert.equal((await worker.runOnce('imports.retry', `retry-replay-${suffix}`, 10)).claimed, 0, 'completed retry receipts are not replayed by later polls');
+  assert.equal((await pool.query('SELECT state FROM imports.import_retry_requests WHERE id=$1', [retryReceipt.retryRequestId])).rows[0].state, 'COMPLETED');
+  assert.equal((await pool.query(`SELECT actor_user_id FROM access.security_audit_events WHERE action='imports.retry_completed' AND subject_id=$1`, [partialBatch])).rows[0].actor_user_id,
+    retryActor, 'retry effects and completion audit use the currently authorized retry requester, not the earlier confirmation actor');
+  assert.equal(Number((await pool.query('SELECT count(*)::integer AS count FROM imports.import_effect_receipts WHERE batch_id=$1 AND brand_id=$2', [partialBatch,brand])).rows[0].count), 7,
+    'retry adds only the missing target receipt and preserves all six successful receipts');
+  assert.equal(Number((await pool.query('SELECT count(*)::integer AS count FROM media.product_media WHERE brand_id=$1 AND product_id=(SELECT target_product_id FROM imports.import_effect_receipts WHERE batch_id=$2 AND brand_id=$1 LIMIT 1)', [brand,partialBatch])).rows[0].count), 3,
+    'retry attaches the corrected ready asset without repeating the two successful links');
+  const recoveredPage = await recovery.getResults({ brandId: brand, batchId: partialBatch, actorUserId: owner, cursor: null, limit: 10, format: 'json' });
+  assert.equal(recoveredPage.page.items[0].status, 'APPLIED');
+  assert.deepEqual(recoveredPage.page.items[0].errorCodes, []);
+  assert.equal(recoveredPage.page.retryRequests[0].state, 'COMPLETED');
   const mappingRows = await pool.query('SELECT count(*)::integer AS count FROM imports.import_mapping_profiles WHERE batch_id=$1 AND brand_id=$2', [batch, brand]);
   assert.equal(mappingRows.rows[0].count, 1, 'concurrent replay stores exactly one immutable mapping revision');
   const profile = await pool.query('SELECT id,preview_revision,preview_hash FROM imports.import_mapping_profiles WHERE batch_id=$1 AND brand_id=$2', [batch, brand]);

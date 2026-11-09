@@ -9,7 +9,7 @@ import { ProductMediaMutationContext } from '../media/product-media.service';
 import { IdentityInfrastructure } from '../identity/identity-infrastructure';
 import { deriveImportEffectKey, ImportEffectKind } from './import-effect-keys';
 
-type ConfirmInput = { brandId: string; batchId: string; actorUserId: string; idempotencyKey: string;
+export type ConfirmInput = { brandId: string; batchId: string; actorUserId: string; idempotencyKey: string;
   previewRevision: number; previewHash: string; allowPartial: boolean; requestId: string };
 type TargetVersion = { sourceRowNumber: number; productId: string; variantId: string | null;
   productRowVersion: number; variantRowVersion: number; contentVersion: number };
@@ -118,7 +118,7 @@ export class ImportConfirmationService {
           const rowState = outcome.failures.length ? 'PARTIAL' : 'APPLIED';
           await client.query(`UPDATE imports.import_rows SET row_state=$7,target_product_id=$3,target_variant_id=$4,result_receipt=$5::jsonb
             WHERE id=$1 AND batch_id=$2 AND brand_id=$6`, [rowId, input.batchId, outcome.productId ?? null, outcome.variantId ?? null,
-            JSON.stringify({ effectCount: outcome.effectCount, failedEffectCount: outcome.failures.length, status: rowState }), input.brandId, rowState]);
+            JSON.stringify({ effectCount: outcome.effectCount, failedEffectCount: outcome.failures.length, failures: outcome.failures, status: rowState }), input.brandId, rowState]);
           await client.query('RELEASE SAVEPOINT import_row_effect');
           applied.push({ sourceRowNumber: row.sourceRowNumber, effectCount: outcome.effectCount, productId: outcome.productId ?? null });
           failed.push(...outcome.failures.map((failure) => ({ sourceRowNumber: row.sourceRowNumber, ...failure })));
@@ -195,6 +195,54 @@ export class ImportConfirmationService {
         throw new ConflictException({ code: 'PREVIEW_STALE', message: 'A target product changed after preview. No rows were applied; generate a fresh preview.' });
       }
     }
+  }
+
+  async applyRetryRow(client: PoolClient, input: ConfirmInput, rowId: string, row: PreviewRow): Promise<{
+    effectCount: number; productId: string | null; variantId: string | null; failures: Array<{ target: string; code: string }>;
+  }> {
+    const prior = await client.query(`SELECT effect_kind,logical_target_key,target_product_id,target_variant_id FROM imports.import_effect_receipts
+      WHERE batch_id=$1 AND brand_id=$2 AND row_id=$3 ORDER BY effect_kind,logical_target_key`, [input.batchId,input.brandId,rowId]);
+    if (!prior.rowCount) return this.applyRow(client, input, rowId, row);
+    const productId = prior.rows.find((effect: Record<string, unknown>) => effect.target_product_id)?.target_product_id as string | undefined;
+    if (!productId) throw new ConflictException({ code: 'IMPORT_EFFECT_RECEIPT_INVALID', message: 'The saved import effects cannot be reconciled.' });
+    const proposed = asRecord(row.proposed);
+    const variants = Array.isArray(proposed.variants) ? proposed.variants as Array<Record<string, unknown>> : [{ sku: proposed.sku, options: asRecord(proposed.options) }];
+    const variantBySku = new Map<string,string>();
+    for (const effect of prior.rows as Array<Record<string, unknown>>) {
+      if (String(effect.effect_kind) === 'VARIANT_UPSERT' && String(effect.logical_target_key).startsWith('sku:') && effect.target_variant_id) {
+        variantBySku.set(String(effect.logical_target_key).slice(4), String(effect.target_variant_id));
+      }
+    }
+    const media = Array.isArray(proposed.mediaAssets) ? proposed.mediaAssets as Array<Record<string, unknown>> : [];
+    const failures: Array<{target: string;code: string}> = [];
+    let effectCount = 0;
+    for (let index = 0; index < media.length; index += 1) {
+      const asset = media[index];
+      const logicalKey = `media:${String(asset.mediaAssetId)}:${index}`;
+      const existing = prior.rows.some((effect: Record<string, unknown>) => String(effect.effect_kind) === 'MEDIA_LINK' && String(effect.logical_target_key) === logicalKey);
+      if (existing) continue;
+      const variantIndex = asset.variantSku ? variants.findIndex((variant) => variant.sku === asset.variantSku) : -1;
+      if (asset.variantSku && variantIndex < 0) { failures.push({target:`media-${index + 1}`,code:'IMPORT_MEDIA_VARIANT_NOT_FOUND'}); continue; }
+      const sku = variantIndex < 0 ? null : String(variants[variantIndex].sku).normalize('NFC').trim().toUpperCase();
+      const attach: AttachProductMediaDto = { mediaAssetId: String(asset.mediaAssetId), variantId: sku ? variantBySku.get(sku) ?? null : null,
+        displayRole: String(asset.displayRole ?? 'GALLERY'), displayOrder: Number(asset.displayOrder ?? index), altText: String(asset.altText ?? '') };
+      if (sku && !attach.variantId) { failures.push({target:`media-${index + 1}`,code:'IMPORT_MEDIA_VARIANT_NOT_FOUND'}); continue; }
+      const mediaContext: ProductMediaMutationContext = { brandId: input.brandId, userId: input.actorUserId, permission: 'catalog.write',
+        requestId: input.requestId, idempotencyKey: `imp:${input.batchId}:${rowId}:media:${index}` };
+      await client.query('SAVEPOINT import_retry_media_effect');
+      try {
+        await this.productMedia.attachInTransaction(productId, attach, mediaContext, client);
+        await this.insertEffect(client,input,row.sourceRowNumber,rowId,'MEDIA_LINK',logicalKey,{mediaAssetId:attach.mediaAssetId,productId,
+          variantId:attach.variantId,displayRole:attach.displayRole,displayOrder:attach.displayOrder,altText:attach.altText ?? ''},productId,attach.variantId ?? null,String(asset.mediaAssetId),'APPLIED');
+        await client.query('RELEASE SAVEPOINT import_retry_media_effect');
+        effectCount += 1;
+      } catch (error) {
+        await client.query('ROLLBACK TO SAVEPOINT import_retry_media_effect');
+        await client.query('RELEASE SAVEPOINT import_retry_media_effect');
+        failures.push({target:`media-${index + 1}`,code:apiError(error).code});
+      }
+    }
+    return { effectCount, productId, variantId: String(prior.rows.find((effect: Record<string,unknown>) => effect.target_variant_id)?.target_variant_id ?? row.targetVersion?.variantId ?? '') || null, failures };
   }
 
   private async applyRow(client: PoolClient, input: ConfirmInput, rowId: string, row: PreviewRow): Promise<{
