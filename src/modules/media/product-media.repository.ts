@@ -15,7 +15,11 @@ export class ProductMediaPostgresRepository implements ProductMediaRepositoryPor
   constructor(private readonly infrastructure: IdentityInfrastructure) {}
 
   attach(productId: string, input: AttachProductMediaDto, context: ProductMediaMutationContext): Promise<Record<string, unknown>> {
-    return this.transaction(async (client) => {
+    return this.transaction((client) => this.attachInTransaction(productId, input, context, client));
+  }
+
+  async attachInTransaction(productId: string, input: AttachProductMediaDto, context: ProductMediaMutationContext,
+    client: PoolClient): Promise<Record<string, unknown>> {
       await this.lockAuthorizedProduct(client, productId, context);
       const operation = 'attachProductMedia';
       const requestHash = productMediaRequestHash({ productId, input });
@@ -60,7 +64,12 @@ export class ProductMediaPostgresRepository implements ProductMediaRepositoryPor
       await this.audit(client, link, context, operation, beforeGallery, gallerySnapshot(afterRows));
       await this.receipt(client, context, operation, requestHash, productId, response);
       return response;
-    });
+  }
+
+  async attachImportedInTransaction(productId: string, input: Omit<AttachProductMediaDto, 'displayOrder'>,
+    context: ProductMediaMutationContext, client: PoolClient): Promise<Record<string, unknown>> {
+    const rows = await this.lockGallery(client, productId, input.variantId ?? null, context.brandId);
+    return this.attachInTransaction(productId, { ...input, displayOrder: rows.length }, context, client);
   }
 
   update(productId: string, linkId: string, input: UpdateProductMediaDto, productVersion: number,

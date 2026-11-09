@@ -11,14 +11,28 @@ export interface ImportFormatProfile {
 export interface CatalogImportRow {
   sourceRecordKey: string;
   sourceProductKey: string | null;
+  sourceExternalKeys?: Record<string, string>;
   title: string;
   sku: string;
   options: Record<string, string>;
   attributes: Record<string, string>;
   sourceMrp?: number;
   sourceImageUrl?: string;
+  variants?: Array<{ sku: string; options: Record<string, string> }>;
+  sourceVariantDetails?: Array<{ sku: string; barcode?: string; price?: number; compareAtPrice?: number; rawPrice?: string; rawCompareAtPrice?: string }>;
+  sourceImageUrls?: Array<{ url: string; sourceRowNumber: number; sourceColumn: string; variantSku?: string }>;
+  sourceRowNumbers?: number[];
+  sourceLossyFields?: string[];
+  reviewCodes?: string[];
 }
-export interface StockObservation { sourceRecordKey: string; locationKey?: string; quantity: number }
+export interface StockObservation {
+  sourceRecordKey: string;
+  locationKey?: string;
+  quantity: number;
+  externalSourceKey?: string;
+  sourceAsOf?: string;
+  sourceRowNumber?: number;
+}
 export interface MappedWorkbook {
   profileId: string;
   profileVersion: string;

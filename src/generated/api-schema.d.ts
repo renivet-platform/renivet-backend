@@ -619,7 +619,7 @@ export interface paths {
         put?: never;
         /**
          * Create a private source-file upload intent
-         * @description Creates a brand-bound, short-lived upload capability for one CSV/XLSX file. The file remains private and is not applied to catalog or inventory.
+         * @description Creates a brand-bound, short-lived capability for CSV/XLSX source files. MEDIA_ZIP upload is gated and returns MEDIA_ZIP_IMPORT_INACTIVE until runtime evidence gates and owner activation are complete.
          */
         post: operations["beginCatalogImportUpload"];
         delete?: never;
@@ -642,6 +642,91 @@ export interface paths {
          * @description Verifies and parses the private uploaded source, stores normalized rows and row-level errors in an immutable batch, and does not write product or stock records.
          */
         post: operations["createCatalogImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/brands/{brandId}/product-imports/{batchId}/mapping": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Save an immutable import mapping revision and freeze its preview */
+        post: operations["saveImportMapping"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/brands/{brandId}/product-imports/{batchId}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve the latest immutable import preview */
+        get: operations["getCatalogImportPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/brands/{brandId}/product-imports/{batchId}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm a frozen import preview and apply draft-only effects atomically */
+        post: operations["confirmCatalogImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/brands/{brandId}/product-imports/{batchId}/results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read sanitized, brand-scoped import outcomes */
+        get: operations["getImportResults"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/brands/{brandId}/product-imports/{batchId}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queue a safe retry for failed import rows */
+        post: operations["retryImportFailures"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5093,10 +5178,10 @@ export interface operations {
             content: {
                 "application/json": {
                     /** @enum {string} */
-                    sourceKind: "RENIVET_CSV" | "RENIVET_XLSX" | "SHOPIFY_CSV" | "UNIWARE_CSV" | "GENERIC_CSV";
+                    sourceKind: "RENIVET_CSV" | "RENIVET_XLSX" | "SHOPIFY_CSV" | "UNIWARE_CSV" | "GENERIC_CSV" | "MEDIA_ZIP";
                     fileName: string;
                     /** @enum {string} */
-                    mimeType: "text/csv" | "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+                    mimeType: "text/csv" | "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" | "application/zip";
                     byteLength: number;
                     sha256: string;
                 };
@@ -5204,7 +5289,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description Storage or database is unavailable. */
+            /** @description Storage/database unavailable or MEDIA_ZIP upload is not activated. */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -5343,6 +5428,738 @@ export interface operations {
                 };
             };
             /** @description Storage or database is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    saveImportMapping: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "if-match": string;
+                /** @description Current mapping version; use 0 for the first revision. */
+                "If-Match": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                batchId: string;
+                brandId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    fieldMappings: {
+                        [key: string]: string;
+                    };
+                    categoryMappings: {
+                        [key: string]: string;
+                    };
+                    fieldMask?: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description Mapping revision and immutable preview were saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        mappingVersion: number;
+                        previewRevision: number;
+                        previewHash: string;
+                    };
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Brand permission, MFA, or CSRF denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description The import batch is not available. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Mapping version or idempotency conflict. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Mapping data or precondition is invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Import storage is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    getCatalogImportPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batchId: string;
+                brandId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The frozen preview. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        batchId: string;
+                        /** Format: uuid */
+                        brandId: string;
+                        previewRevision: number;
+                        sourceSha256: string;
+                        /** Format: date-time */
+                        sourceAsOf: string;
+                        mappingVersion: number;
+                        taxonomyVersion: number;
+                        taxonomySnapshotSha256: string;
+                        fieldMasks: string[];
+                        targetVersions: {
+                            sourceRowNumber: number;
+                            /** Format: uuid */
+                            productId: string;
+                            /** Format: uuid */
+                            variantId: string | null;
+                            productRowVersion: number;
+                            variantRowVersion: number;
+                            contentVersion: number;
+                        }[];
+                        rows: {
+                            sourceRowNumber: number;
+                            /** @enum {string} */
+                            action: "CREATE" | "UPDATE" | "NOOP" | "CONFLICT" | "NEEDS_REVIEW" | "INVALID";
+                            proposed: {
+                                [key: string]: unknown;
+                            };
+                            fieldMask: string[];
+                            targetVersion: {
+                                /** Format: uuid */
+                                productId: string;
+                                /** Format: uuid */
+                                variantId: string | null;
+                                productRowVersion: number;
+                                variantRowVersion: number;
+                                contentVersion: number;
+                            } | null;
+                            conflicts: {
+                                code: string;
+                                message: string;
+                            }[];
+                        }[];
+                        counts: {
+                            create: number;
+                            update: number;
+                            noop: number;
+                            conflict: number;
+                            review: number;
+                            invalid: number;
+                        };
+                        previewHash: string;
+                    };
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description The import is not readable by this brand principal. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description The import preview is not available. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description The preview target changed and must be refreshed. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Import storage is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    confirmCatalogImport: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "if-match": string;
+                /** @description The immutable preview revision being confirmed. */
+                "If-Match": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                batchId: string;
+                brandId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    previewHash: string;
+                    previewRevision: number;
+                    allowPartial: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description The confirmation result and per-target effect receipt counts. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        confirmationId: string;
+                        /** Format: uuid */
+                        batchId: string;
+                        previewRevision: number;
+                        previewHash: string;
+                        /** @enum {string} */
+                        state: "COMPLETED" | "PARTIAL";
+                        appliedRows: number;
+                        failedRows: number;
+                        effectsApplied: number;
+                        noopRows: number;
+                        applied?: {
+                            [key: string]: unknown;
+                        }[];
+                        failed?: {
+                            [key: string]: unknown;
+                        }[];
+                    };
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Brand permission, MFA, or CSRF denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description The import batch is not available. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Preview stale or idempotency conflict. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Confirmation data or row effects are invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Import storage is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    getImportResults: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+                format?: "json" | "csv";
+            };
+            header?: never;
+            path: {
+                batchId: string;
+                brandId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redacted row results; use format=csv for a downloadable report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        batchId: string;
+                        items: {
+                            rowNumber: number;
+                            status: string;
+                            errorCodes: string[];
+                            effectReceiptIds: string[];
+                        }[];
+                        nextCursor?: string | null;
+                        retryRequests: {
+                            /** Format: uuid */
+                            retryRequestId: string;
+                            state: string;
+                            rowCount: number;
+                            errorCode?: string | null;
+                        }[];
+                    };
+                    "text/csv": string;
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Brand access denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description The import batch is not available. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description The results cursor is invalid. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description The results page request is invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Import storage is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    retryImportFailures: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "if-match": string;
+                /** @description The exact current immutable preview revision. */
+                "If-Match": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                batchId: string;
+                brandId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    mode: "FAILED_ONLY";
+                    errorCodes?: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description Retry command persisted to the W1 outbox. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        batchId: string;
+                        /** Format: uuid */
+                        retryRequestId: string;
+                        /** @enum {string} */
+                        state: "QUEUED" | "COMPLETED" | "PARTIAL" | "FAILED";
+                        rowCount: number;
+                    };
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Brand, permission, MFA, or CSRF denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description The import batch is not available. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Stale preview, idempotency conflict, or no eligible failed rows. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description The retry request or precondition is invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Import storage is unavailable. */
             503: {
                 headers: {
                     [name: string]: unknown;

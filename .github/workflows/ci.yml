@@ -93,6 +93,13 @@ jobs:
           npm run build
           node --test tests/media-lifecycle.integration.cjs tests/w2-schema.integration.cjs
           node --test tests/w2/beginMediaUpload.test.cjs tests/w2/completeMediaUpload.test.cjs tests/w2/getMediaAssetStatus.test.cjs tests/media-validation.test.cjs tests/media-adapters.test.cjs tests/media-service.test.cjs tests/media-exception-filter.test.cjs
+      - name: Verify REN2-82 bounded ZIP and remote media ingestion, brand mapping, receipts, and recovery schema
+        env:
+          RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
+        run: |
+          npm run build
+          node --test tests/media-zip-api-contract.test.cjs tests/media-zip-ingestion.test.cjs tests/media-zip-service.test.cjs tests/media-zip-worker.test.cjs tests/w2/import-upload-contract.test.cjs
+          node --test tests/w2/media-zip-import.integration.test.cjs
       - name: Verify REN2-67 product and variant media associations, ordering CAS, tenant scope, and revision history
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
@@ -121,6 +128,12 @@ jobs:
         run: |
           npm run build
           node --test tests/w2/proposeCategorySchemaVersion.test.cjs tests/w2/publishCategorySchemaVersion.test.cjs tests/w2/taxonomy-admin-controller.test.cjs tests/w2/taxonomy-admin.integration.test.cjs
+      - name: Verify REN2-77 immutable import mappings, previews, tenant scope and replay
+        env:
+          RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
+        run: |
+          npm run build
+          node --test tests/w2/import-preview-engine.test.cjs tests/w2/import-preview.service.test.cjs tests/w2/import-preview.controller.test.cjs tests/w2/import-preview.integration.test.cjs
       - name: Verify REN2-61/62/71 product draft and immutable submission lifecycle
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci

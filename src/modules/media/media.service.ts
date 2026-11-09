@@ -4,6 +4,7 @@ import { Injectable } from '@nestjs/common';
 import { InvalidMediaImageError } from './sharp-media-image-processor';
 import { MediaStorageUnavailableError, mediaObjectKey } from './spaces-media-storage';
 import { MAX_MEDIA_UPLOAD_BYTES, MediaUploadInit, MediaValidationError, detectMediaMime, normalizeMediaUploadInit } from './media-validation';
+import type { MediaZipImage } from './media-zip-ingestion';
 
 export interface MediaAccessContext {
   brandId: string;
@@ -109,6 +110,48 @@ export class MediaService {
       if (error instanceof MediaStorageUnavailableError) throw this.unavailable('MEDIA_STORAGE_UNAVAILABLE', error.message);
       throw this.unavailable('MEDIA_STORAGE_UNAVAILABLE', 'Media storage could not issue an upload URL.');
     }
+  }
+
+  /** Internal, idempotent path used only by an authorized media ZIP worker. */
+  async ingestZipImage(image: MediaZipImage, context: MediaMutationContext): Promise<{ mediaAssetId: string }> {
+    this.validateIdempotencyKey(context.idempotencyKey);
+    if (image.brandId !== context.brandId || !image.bytes.length || image.bytes.length > MAX_MEDIA_UPLOAD_BYTES
+      || detectMediaMime(image.bytes) !== image.mimeType || !/^[a-f0-9]{64}$/.test(image.effectKey)) {
+      throw new MediaServiceError(422, 'MEDIA_ZIP_IMAGE_INVALID', 'The media image failed validation.');
+    }
+    if (!this.storage.isConfigured()) throw this.unavailable('MEDIA_STORAGE_UNAVAILABLE', 'Media storage is not configured.');
+    if (!this.scanner.isConfigured()) throw this.unavailable('MEDIA_SCANNER_UNAVAILABLE', 'Media malware scanning is not configured.');
+    const assetId = effectKeyToUuid(image.effectKey);
+    const sha256 = digest(image.bytes);
+    const request: MediaUploadInit = { fileName: image.archivePath.split('/').at(-1) ?? 'image', mimeType: image.mimeType,
+      byteLength: image.bytes.length, rightsAttested: true, sha256 };
+    const requestSha256 = digest(request);
+    const asset = await this.repository.createIntent({ assetId,
+      storageKey: mediaObjectKey(context.brandId, assetId, 'original'),
+      uploadKey: mediaObjectKey(context.brandId, assetId, 'incoming', assetId), request, requestSha256, context });
+    if (asset.scanState === 'CLEAN' && asset.derivativeState === 'READY' && asset.rightsState === 'ATTESTED') return { mediaAssetId: asset.id };
+    if (asset.scanState === 'REJECTED') throw this.rejected(asset.rejectionCode ?? 'MEDIA_REJECTED');
+    if (asset.expectedSha256 && asset.expectedSha256 !== sha256) throw new MediaServiceError(409, 'MEDIA_IDEMPOTENCY_CONFLICT', 'The media image conflicts with its saved upload.');
+    let scan: 'CLEAN' | 'INFECTED';
+    try { scan = await this.scanner.scan(image.bytes); }
+    catch { throw this.unavailable('MEDIA_SCANNER_UNAVAILABLE', 'Media malware scanning is temporarily unavailable.'); }
+    const completionRequestSha256 = digest({ sha256, sizeBytes: image.bytes.length });
+    if (scan !== 'CLEAN') return this.reject(asset, context, 'MEDIA_MALWARE_REJECTED', 'MALWARE_DETECTED', sha256, completionRequestSha256);
+    let derivatives: MediaDerivative[];
+    try { derivatives = await this.processor.createDerivatives(image.bytes, image.mimeType, asset.brandId, asset.id); }
+    catch (error) {
+      if (error instanceof InvalidMediaImageError) return this.reject(asset, context, 'MEDIA_IMAGE_INVALID', 'INVALID_IMAGE', sha256, completionRequestSha256);
+      throw this.unavailable('MEDIA_DERIVATIVE_UNAVAILABLE', 'Media derivatives could not be created.');
+    }
+    try {
+      await this.storage.putPrivateObject({ key: asset.storageKey, bytes: image.bytes, mimeType: image.mimeType, brandId: asset.brandId, assetId: asset.id });
+      for (const derivative of derivatives) await this.storage.putPrivateObject({ key: derivative.key, bytes: derivative.bytes,
+        mimeType: derivative.mimeType, brandId: asset.brandId, assetId: asset.id });
+    } catch { throw this.unavailable('MEDIA_STORAGE_UNAVAILABLE', 'Verified media could not be stored privately.'); }
+    const clean = await this.repository.markClean({ asset, context, sha256, width: derivatives[0]?.width ?? 1,
+      height: derivatives[0]?.height ?? 1, derivatives, completionRequestSha256 });
+    await this.storage.deleteObject(asset.uploadKey).catch(() => undefined);
+    return { mediaAssetId: clean.id };
   }
 
   async complete(mediaId: string, value: unknown, context: MediaMutationContext): Promise<Record<string, unknown>> {
@@ -258,6 +301,14 @@ export class MediaService {
 function digest(value: unknown): string {
   const bytes = Buffer.isBuffer(value) ? value : Buffer.from(JSON.stringify(value));
   return createHash('sha256').update(bytes).digest('hex');
+}
+
+function effectKeyToUuid(value: string): string {
+  const bytes = Buffer.from(value.slice(0, 32), 'hex');
+  bytes[6] = (bytes[6] & 0x0f) | 0x50;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = bytes.toString('hex');
+  return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
 }
 
 function isMissingObject(error: unknown): boolean {

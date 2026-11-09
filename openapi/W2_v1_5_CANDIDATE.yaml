@@ -2,9 +2,9 @@ openapi: 3.1.0
 info:
   title: Renivet 2.0 W2 Catalog Import and Inventory — PROPOSED
   version: 1.5.0-LOCAL-DESIGN-CANDIDATE
-  description: W2 v1.5 contract closure. Brand-owned catalogue and inventory. Technical remediation approved for
-    local documentation; routes, Drizzle migrations, W1 permission seeds and PostgreSQL tests not yet executed.
-    W3 admission and COD are external dependencies.
+  description: W2 v1.5 proposed contract. Brand-owned catalogue and inventory. Routes REN2-82 are implemented behind an
+    activation gate and remain dormant pending runtime evidence. PostgreSQL migration and integration checks run against
+    a disposable PostgreSQL 16 database; W3 admission and COD remain external dependencies.
 servers:
 - url: /api/v1
 security:
@@ -288,7 +288,7 @@ paths:
       - immutable audit
       responses:
         '202':
-          description: Versioned outcome / accepted command
+          description: The confirmation result and per-target effect receipt counts.
           content:
             application/json:
               schema:
@@ -356,7 +356,7 @@ paths:
       - immutable audit
       responses:
         '202':
-          description: Versioned outcome / accepted command
+          description: The confirmation result and per-target effect receipt counts.
           content:
             application/json:
               schema:
@@ -509,6 +509,45 @@ paths:
               $ref: '#/components/schemas/UploadInit'
       x-renivet-csrf-policy: 'W1 validateCsrfRequest: allowlisted Origin, sec-fetch-site same-origin, x-csrf-token
         session-bound; permission and MFA still required'
+  /brands/{brandId}/media/zip-mapping-manifests:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    post:
+      tags:
+      - Media
+      operationId: createMediaZipMappingManifest
+      summary: PROPOSED — createMediaZipMappingManifest
+      description: Saves an immutable brand-owned SKU-to-product/variant mapping and rights attestation for later media ZIP imports.
+      x-renivet-permission: media.write
+      x-renivet-implementation-wave: W2
+      x-renivet-security-review:
+      - W1 effective permissions
+      - scoped product and variant ownership
+      - cookie CSRF and MFA policy
+      - immutable audit
+      responses:
+        '201':
+          description: Immutable mapping manifest receipt.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionReceipt'
+        '401': *id001
+        '403': *id001
+        '409': *id001
+        '422': *id001
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMediaZipMappingManifest'
+      x-renivet-csrf-policy: 'W1 validateCsrfRequest: allowlisted Origin, sec-fetch-site same-origin, x-csrf-token
+        session-bound; permission and MFA still required'
   /brands/{brandId}/media/zip-imports:
     parameters:
     - $ref: '#/components/parameters/brandId'
@@ -549,6 +588,36 @@ paths:
               $ref: '#/components/schemas/ZipImport'
       x-renivet-csrf-policy: 'W1 validateCsrfRequest: allowlisted Origin, sec-fetch-site same-origin, x-csrf-token
         session-bound; permission and MFA still required'
+  /brands/{brandId}/media/zip-imports/{batchId}:
+    parameters:
+    - $ref: '#/components/parameters/brandId'
+    - name: batchId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    get:
+      tags:
+      - Media
+      operationId: getMediaZipImportStatus
+      summary: PROPOSED — getMediaZipImportStatus
+      description: Reads only a brand-owned media ZIP batch state and effect counts.
+      x-renivet-permission: media.write
+      x-renivet-implementation-wave: W2
+      responses:
+        '200':
+          description: Batch state and per-image outcome counts.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaZipImportStatus'
+        '401': *id001
+        '403': *id001
+        '404': *id001
+        '422': *id001
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
   /brands/{brandId}/product-imports:
     parameters:
     - $ref: '#/components/parameters/brandId'
@@ -599,6 +668,8 @@ paths:
       summary: PROPOSED — beginCatalogImportUpload
       description: >-
         Issues a short-lived private upload intent for one CSV/XLSX source file.
+        MEDIA_ZIP upload intents are gated and return MEDIA_ZIP_IMPORT_INACTIVE
+        until runtime evidence gates and owner activation are complete.
         The returned fileUploadId is single-use, brand-bound, and consumed by
         createCatalogImport after object checksum and metadata verification.
         Linear: REN2-76.
@@ -622,6 +693,7 @@ paths:
         '409': *id001
         '422': *id001
         '503':
+          description: Storage/database unavailable or MEDIA_ZIP upload is not activated.
           $ref: '#/components/responses/ErrorResponse'
       parameters:
       - $ref: '#/components/parameters/idempotencyKey'
@@ -656,7 +728,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ActionReceipt'
+                $ref: '#/components/schemas/ImportMappingReceipt'
         '401': *id001
         '403': *id001
         '404': *id001
@@ -702,8 +774,8 @@ paths:
         '401': *id001
         '403': *id001
         '404': *id001
-        '409': *id001
-        '422': *id001
+        '409':
+          $ref: '#/components/responses/ErrorResponse'
         '503':
           $ref: '#/components/responses/ErrorResponse'
   /brands/{brandId}/product-imports/{batchId}/confirm:
@@ -714,8 +786,8 @@ paths:
       tags:
       - Imports
       operationId: confirmCatalogImport
-      summary: PROPOSED — confirmCatalogImport
-      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend.
+      summary: Confirm a frozen import preview and apply draft-only effects
+      description: Atomically revalidates the preview, mapping, taxonomy and target versions. Exact replays return the saved receipt; changed idempotency payloads and stale snapshots conflict.
       x-renivet-permission: imports.confirm
       x-renivet-implementation-wave: W2
       x-renivet-security-review:
@@ -729,7 +801,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ActionReceipt'
+                $ref: '#/components/schemas/ImportConfirmationReceipt'
         '401': *id001
         '403': *id001
         '404': *id001
@@ -757,7 +829,7 @@ paths:
       - Imports
       operationId: getImportResults
       summary: PROPOSED — getImportResults
-      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend.
+      description: Redacted, paginated row outcomes and retry status; CSV downloads contain row numbers, status codes and receipt IDs only.
       x-renivet-permission: imports.read
       x-renivet-implementation-wave: W2
       x-renivet-security-review:
@@ -767,11 +839,14 @@ paths:
       - immutable audit
       responses:
         '200':
-          description: Success
+          description: Redacted row results; use format=csv for a downloadable report.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ImportResults'
+            text/csv:
+              schema:
+                type: string
         '401': *id001
         '403': *id001
         '404': *id001
@@ -781,7 +856,21 @@ paths:
           $ref: '#/components/responses/ErrorResponse'
       parameters:
       - $ref: '#/components/parameters/cursor'
-      - $ref: '#/components/parameters/limit'
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+      - name: format
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [json, csv]
+          default: json
   /brands/{brandId}/product-imports/{batchId}/retry:
     parameters:
     - $ref: '#/components/parameters/brandId'
@@ -791,7 +880,7 @@ paths:
       - Imports
       operationId: retryImportFailures
       summary: PROPOSED — retryImportFailures
-      description: Brand-scoped W2 candidate; owner identity and resource predicates validated by backend.
+      description: Queues brand-scoped failed-row retries through the W1 outbox and durable worker; successful target receipts are reused.
       x-renivet-permission: imports.write
       x-renivet-implementation-wave: W2
       x-renivet-security-review:
@@ -801,11 +890,26 @@ paths:
       - immutable audit
       responses:
         '202':
-          description: Versioned outcome / accepted command
+          description: Retry command persisted to the W1 outbox.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ActionReceipt'
+                type: object
+                additionalProperties: false
+                required: [batchId, retryRequestId, state, rowCount]
+                properties:
+                  batchId:
+                    type: string
+                    format: uuid
+                  retryRequestId:
+                    type: string
+                    format: uuid
+                  state:
+                    type: string
+                    enum: [QUEUED, COMPLETED, PARTIAL, FAILED]
+                  rowCount:
+                    type: integer
+                    minimum: 0
         '401': *id001
         '403': *id001
         '404': *id001
@@ -822,8 +926,7 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/RetryRequest'
-      x-renivet-csrf-policy: 'W1 validateCsrfRequest: allowlisted Origin, sec-fetch-site same-origin, x-csrf-token
-        session-bound; permission and MFA still required'
+      x-renivet-csrf-policy: 'W1 session-bound x-csrf-token, allowlisted Origin, same-origin fetch metadata, and MFA step-up required.'
   /brands/{brandId}/inventory/balances:
     parameters:
     - $ref: '#/components/parameters/brandId'
@@ -2043,6 +2146,7 @@ components:
           - SHOPIFY_CSV
           - UNIWARE_CSV
           - GENERIC_CSV
+          - MEDIA_ZIP
         fileName:
           type: string
           minLength: 1
@@ -2053,11 +2157,12 @@ components:
           enum:
           - text/csv
           - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+          - application/zip
         byteLength:
           type: integer
           minimum: 1
-          maximum: 10485760
-          description: One source upload is limited to 10 MiB.
+          maximum: 104857600
+          description: CSV/XLSX uploads are limited to 10 MiB; MEDIA_ZIP uploads are limited to 100 MiB but remain disabled until activation gates pass.
         sha256:
           type: string
           pattern: '^[a-f0-9]{64}$'
@@ -2417,11 +2522,80 @@ components:
         sha256:
           type: string
           pattern: ^[0-9a-f]{64}$
+    MediaZipImportStatus:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - status
+      - rowVersion
+      - effectCount
+      - succeededCount
+      - failedCount
+      - errorCode
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - QUEUED
+          - PROCESSING
+          - PARTIAL
+          - SUCCEEDED
+          - FAILED
+        rowVersion:
+          type: integer
+          minimum: 1
+        effectCount:
+          type: integer
+          minimum: 0
+        succeededCount:
+          type: integer
+          minimum: 0
+        failedCount:
+          type: integer
+          minimum: 0
+        errorCode:
+          type: string
+          nullable: true
+    CreateMediaZipMappingManifest:
+      type: object
+      additionalProperties: false
+      required:
+      - mappings
+      - rightsAttested
+      properties:
+        mappings:
+          type: array
+          minItems: 1
+          maxItems: 12000
+          items:
+            type: object
+            additionalProperties: false
+            required:
+            - sku
+            - productId
+            - variantId
+            properties:
+              sku:
+                type: string
+                pattern: '^[A-Za-z0-9_.-]{1,40}$'
+              productId:
+                type: string
+                format: uuid
+              variantId:
+                type: string
+                format: uuid
+        rightsAttested:
+          type: boolean
+          enum:
+          - true
     ZipImport:
       type: object
       additionalProperties: false
       required:
-      - fileUploadId
       - mappingManifestId
       properties:
         fileUploadId:
@@ -2430,28 +2604,77 @@ components:
         mappingManifestId:
           type: string
           format: uuid
-        retryMode:
+        remoteImages:
+          type: array
+          minItems: 1
+          maxItems: 400
+          items:
+            type: object
+            additionalProperties: false
+            required:
+            - sku
+            - slot
+            - url
+            properties:
+              sku:
+                type: string
+                pattern: '^[A-Za-z0-9_.-]{1,40}$'
+              slot:
+                type: integer
+                minimum: 1
+                maximum: 99
+              url:
+                type: string
+                maxLength: 2048
+                pattern: '^https://'
+      oneOf:
+      - required:
+        - fileUploadId
+      - required:
+        - remoteImages
+    ImportMappingReceipt:
+      type: object
+      additionalProperties: false
+      required:
+      - mappingVersion
+      - previewRevision
+      - previewHash
+      properties:
+        mappingVersion:
+          type: integer
+          minimum: 1
+        previewRevision:
+          type: integer
+          minimum: 1
+        previewHash:
           type: string
-          enum:
-          - ALL
-          - FAILED_ONLY
+          pattern: ^[a-f0-9]{64}$
     ImportMapping:
       type: object
       additionalProperties: false
       required:
-      - sourceSchemaVersion
-      - mappings
-      - expectedBatchVersion
+      - fieldMappings
+      - categoryMappings
       properties:
-        sourceSchemaVersion:
-          type: string
-        mappings:
+        fieldMappings:
           type: object
+          minProperties: 1
+          maxProperties: 80
           additionalProperties:
             type: string
-        expectedBatchVersion:
-          type: integer
-          minimum: 1
+            maxLength: 128
+        categoryMappings:
+          type: object
+          maxProperties: 200
+          additionalProperties:
+            type: string
+            maxLength: 96
+        fieldMask:
+          type: array
+          maxItems: 80
+          items:
+            type: string
+            maxLength: 128
     ImportConfirm:
       type: object
       additionalProperties: false
@@ -2468,6 +2691,59 @@ components:
           minimum: 1
         allowPartial:
           type: boolean
+    ImportConfirmationReceipt:
+      type: object
+      additionalProperties: false
+      required:
+      - confirmationId
+      - batchId
+      - previewRevision
+      - previewHash
+      - state
+      - appliedRows
+      - failedRows
+      - effectsApplied
+      - noopRows
+      properties:
+        confirmationId:
+          type: string
+          format: uuid
+        batchId:
+          type: string
+          format: uuid
+        previewRevision:
+          type: integer
+          minimum: 1
+        previewHash:
+          type: string
+          pattern: ^[0-9a-f]{64}$
+        state:
+          type: string
+          enum:
+          - COMPLETED
+          - PARTIAL
+        appliedRows:
+          type: integer
+          minimum: 0
+        failedRows:
+          type: integer
+          minimum: 0
+        effectsApplied:
+          type: integer
+          minimum: 0
+        noopRows:
+          type: integer
+          minimum: 0
+        applied:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        failed:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
     RetryRequest:
       type: object
       additionalProperties: false
@@ -2479,8 +2755,10 @@ components:
           const: FAILED_ONLY
         errorCodes:
           type: array
+          maxItems: 64
           items:
             type: string
+            pattern: '^[A-Z][A-Z0-9_]{0,63}$'
     StockLocationCreate:
       type: object
       additionalProperties: false
@@ -2590,9 +2868,11 @@ components:
           additionalProperties: true
     ImportResults:
       type: object
+      additionalProperties: false
       required:
       - batchId
       - items
+      - retryRequests
       properties:
         batchId:
           type: string
@@ -2601,6 +2881,7 @@ components:
           type: array
           items:
             type: object
+            required: [rowNumber, status, errorCodes, effectReceiptIds]
             properties:
               rowNumber:
                 type: integer
@@ -2610,13 +2891,33 @@ components:
                 type: array
                 items:
                   type: string
-              effectReceiptId:
-                type: string
-                format: uuid
+              effectReceiptIds:
+                type: array
+                items:
+                  type: string
+                  format: uuid
         nextCursor:
           type:
           - string
           - 'null'
+        retryRequests:
+          type: array
+          items:
+            type: object
+            required: [retryRequestId, state, rowCount]
+            properties:
+              retryRequestId:
+                type: string
+                format: uuid
+              state:
+                type: string
+              rowCount:
+                type: integer
+                minimum: 0
+              errorCode:
+                type:
+                - string
+                - 'null'
     MovementSummary:
       type: object
       required:
@@ -3094,37 +3395,156 @@ components:
           format: uuid
     ImportPreviewSnapshot:
       type: object
+      additionalProperties: false
       required:
       - batchId
+      - brandId
       - previewRevision
-      - previewHash
-      - mappingVersion
       - sourceSha256
+      - sourceAsOf
+      - mappingVersion
+      - taxonomyVersion
       - taxonomySnapshotSha256
-      - conflicts
+      - fieldMasks
+      - targetVersions
+      - rows
+      - counts
+      - previewHash
       properties:
         batchId:
+          type: string
+          format: uuid
+        brandId:
           type: string
           format: uuid
         previewRevision:
           type: integer
           minimum: 1
-        previewHash:
-          type: string
-          pattern: ^[0-9a-f]{64}$
-        mappingVersion:
-          type: integer
-          minimum: 1
         sourceSha256:
           type: string
           pattern: ^[0-9a-f]{64}$
+        sourceAsOf:
+          type: string
+          format: date-time
+        mappingVersion:
+          type: integer
+          minimum: 1
+        taxonomyVersion:
+          type: integer
+          minimum: 1
         taxonomySnapshotSha256:
           type: string
           pattern: ^[0-9a-f]{64}$
-        conflicts:
+        fieldMasks:
+          type: array
+          items:
+            type: string
+        targetVersions:
           type: array
           items:
             type: object
+            additionalProperties: false
+            required: [sourceRowNumber, productId, variantId, productRowVersion, variantRowVersion, contentVersion]
+            properties:
+              sourceRowNumber:
+                type: integer
+                minimum: 1
+              productId:
+                type: string
+                format: uuid
+              variantId:
+                type: [string, 'null']
+                format: uuid
+              productRowVersion:
+                type: integer
+                minimum: 1
+              variantRowVersion:
+                type: integer
+                minimum: 1
+              contentVersion:
+                type: integer
+                minimum: 1
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [sourceRowNumber, action, proposed, fieldMask, targetVersion, conflicts]
+            properties:
+              sourceRowNumber:
+                type: integer
+                minimum: 1
+              action:
+                type: string
+                enum: [CREATE, UPDATE, NOOP, CONFLICT, NEEDS_REVIEW, INVALID]
+              proposed:
+                type: object
+                additionalProperties: true
+              fieldMask:
+                type: array
+                items:
+                  type: string
+              targetVersion:
+                anyOf:
+                - $ref: '#/components/schemas/ImportPreviewTargetVersion'
+                - type: 'null'
+              conflicts:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: [code, message]
+                  properties:
+                    code:
+                      type: string
+                    message:
+                      type: string
+        counts:
+          type: object
+          additionalProperties: false
+          required: [create, update, noop, conflict, review, invalid]
+          properties:
+            create:
+              type: integer
+              minimum: 0
+            update:
+              type: integer
+              minimum: 0
+            noop:
+              type: integer
+              minimum: 0
+            conflict:
+              type: integer
+              minimum: 0
+            review:
+              type: integer
+              minimum: 0
+            invalid:
+              type: integer
+              minimum: 0
+        previewHash:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+    ImportPreviewTargetVersion:
+      type: object
+      additionalProperties: false
+      required: [productId, variantId, productRowVersion, variantRowVersion, contentVersion]
+      properties:
+        productId:
+          type: string
+          format: uuid
+        variantId:
+          type: [string, 'null']
+          format: uuid
+        productRowVersion:
+          type: integer
+          minimum: 1
+        variantRowVersion:
+          type: integer
+          minimum: 1
+        contentVersion:
+          type: integer
+          minimum: 1
     ImportEffectReceipt:
       type: object
       required:

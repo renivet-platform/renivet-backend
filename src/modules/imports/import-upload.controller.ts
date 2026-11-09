@@ -8,7 +8,7 @@ import { MfaGuard, RequireMfa } from '../../common/guards/require-mfa';
 import { BrandAccessGuard, BrandAccessRequest, RequireBrandPermission } from '../access/brand-access.guard';
 import { IdentityInfrastructure } from '../identity/identity-infrastructure';
 import { csrfMatches, readSessionToken, SessionService } from '../identity/session.service';
-import { BeginCatalogImportUploadDto, CreateCatalogImportDto } from './import-upload.dto';
+import { BeginCatalogImportUploadDto, CreateCatalogImportDto, MAX_MEDIA_ZIP_IMPORT_BYTES, MAX_IMPORT_BYTES } from './import-upload.dto';
 import { readXlsxWorkbook, MAX_IMPORT_FILE_BYTES } from './import-workbook-reader';
 import { detectImportFormatProfile, mapImportWorkbook } from './import-format-profiles';
 import { parseCatalogCsv } from './import-csv-parser';
@@ -17,6 +17,8 @@ import { ImportExceptionFilter } from './import-exception.filter';
 interface ImportRequest extends BrandAccessRequest { id?: string }
 const VALIDATION = new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true,
   exceptionFactory: () => new UnprocessableEntityException({ code: 'IMPORT_UPLOAD_INVALID', message: 'The import upload request is invalid.' }) });
+/** ZIP uploads remain disabled until G04/G07/G10 runtime evidence and owner activation are recorded. */
+const MEDIA_ZIP_UPLOAD_ENABLED = false;
 const ERROR_SCHEMA = { type: 'object', required: ['code', 'message', 'requestId'], properties: {
   code: { type: 'string' }, message: { type: 'string' }, requestId: { type: 'string' }, details: { type: 'object', additionalProperties: true },
 } };
@@ -52,13 +54,13 @@ export class ImportUploadController {
   @ApiExtension('x-renivet-permission', 'imports.write')
   @ApiExtension('x-renivet-implementation-wave', 'W2')
   @ApiExtension('x-renivet-csrf-policy', 'W1 session-bound X-CSRF-Token, allowlisted Origin, and Sec-Fetch-Site same-origin validation required; imports.write permission and MFA step-up are required.')
-  @ApiOperation({ operationId: 'beginCatalogImportUpload', summary: 'Create a private source-file upload intent', description: 'Creates a brand-bound, short-lived upload capability for one CSV/XLSX file. The file remains private and is not applied to catalog or inventory.' })
+  @ApiOperation({ operationId: 'beginCatalogImportUpload', summary: 'Create a private source-file upload intent', description: 'Creates a brand-bound, short-lived capability for CSV/XLSX source files. MEDIA_ZIP upload is gated and returns MEDIA_ZIP_IMPORT_INACTIVE until runtime evidence gates and owner activation are complete.' })
   @ApiHeader({ name: 'Idempotency-Key', required: true, schema: { type: 'string', minLength: 1, maxLength: 120 } })
   @ApiBody({ schema: { type: 'object', additionalProperties: false, required: ['sourceKind','fileName','mimeType','byteLength','sha256'], properties: {
-    sourceKind: { type: 'string', enum: ['RENIVET_CSV','RENIVET_XLSX','SHOPIFY_CSV','UNIWARE_CSV','GENERIC_CSV'] },
+    sourceKind: { type: 'string', enum: ['RENIVET_CSV','RENIVET_XLSX','SHOPIFY_CSV','UNIWARE_CSV','GENERIC_CSV','MEDIA_ZIP'] },
     fileName: { type: 'string', minLength: 1, maxLength: 160 },
-    mimeType: { type: 'string', enum: ['text/csv','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'] },
-    byteLength: { type: 'integer', minimum: 1, maximum: 10485760 },
+    mimeType: { type: 'string', enum: ['text/csv','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/zip'] },
+    byteLength: { type: 'integer', minimum: 1, maximum: MAX_MEDIA_ZIP_IMPORT_BYTES },
     sha256: { type: 'string', pattern: '^[a-f0-9]{64}$' },
   } } })
   @ApiResponse({ status: 201, description: 'Short-lived private source-file upload intent.', schema: UPLOAD_INTENT_SCHEMA })
@@ -67,12 +69,16 @@ export class ImportUploadController {
   @ApiNotFoundResponse({ description: 'Brand was not found or is not accessible.', schema: ERROR_SCHEMA })
   @ApiResponse({ status: 409, description: 'Idempotency conflict or expired intent.', schema: ERROR_SCHEMA })
   @ApiResponse({ status: 422, description: 'File metadata is invalid.', schema: ERROR_SCHEMA })
-  @ApiResponse({ status: 503, description: 'Storage or database is unavailable.', schema: ERROR_SCHEMA })
+  @ApiResponse({ status: 503, description: 'Storage/database unavailable or MEDIA_ZIP upload is not activated.', schema: ERROR_SCHEMA })
   async begin(@Body() input: BeginCatalogImportUploadDto, @Req() request: ImportRequest, @Headers('Idempotency-Key') key?: string) {
     if (!key || !/^[A-Za-z0-9._:-]{1,120}$/.test(key)) {
       throw new UnprocessableEntityException({ code: 'IMPORT_UPLOAD_INVALID', message: 'A valid idempotency key is required.' });
     }
-    if ((input.sourceKind === 'RENIVET_XLSX') !== (input.mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')) {
+    const expectedMime = input.sourceKind === 'MEDIA_ZIP' ? 'application/zip'
+      : input.sourceKind === 'RENIVET_XLSX' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'text/csv';
+    if (input.mimeType !== expectedMime
+      || (input.sourceKind !== 'MEDIA_ZIP' && input.byteLength > MAX_IMPORT_BYTES)
+      || (input.sourceKind === 'MEDIA_ZIP' && input.byteLength > MAX_MEDIA_ZIP_IMPORT_BYTES)) {
       throw new UnprocessableEntityException({ code: 'IMPORT_SOURCE_KIND_CONFLICT', message: 'The file format does not match the source type.' });
     }
     const token = readSessionToken(request.headers.cookie);
@@ -81,6 +87,9 @@ export class ImportUploadController {
     const origins = this.config.get<string[]>('AUTH_ALLOWED_ORIGINS') ?? [];
     if (!csrfMatches(request.headers, origins, this.sessions.expectedCsrf(token))) {
       throw new ForbiddenException({ code: 'CSRF_REJECTED', message: 'The operation could not be authorized.' });
+    }
+    if (input.sourceKind === 'MEDIA_ZIP' && !MEDIA_ZIP_UPLOAD_ENABLED) {
+      throw new ServiceUnavailableException({ code: 'MEDIA_ZIP_IMPORT_INACTIVE', message: 'Media ZIP imports are not activated.' });
     }
     const endpoint = this.config.get<string>('MEDIA_SPACES_ENDPOINT');
     const bucket = this.config.get<string>('MEDIA_SPACES_BUCKET')?.trim();
@@ -263,7 +272,7 @@ export class ImportUploadController {
         parsed = mapImportWorkbook({ profile, sheets });
       } else {
         if (input.sourceKind === 'RENIVET_XLSX') throw new UnprocessableEntityException({ code: 'IMPORT_SOURCE_KIND_CONFLICT', message: 'The file format does not match the source type.' });
-        parsed = parseCatalogCsv({ bytes, sourceKind: input.sourceKind });
+        parsed = parseCatalogCsv({ bytes, sourceKind: input.sourceKind, sourceAsOf: input.sourceAsOf });
       }
     } catch (error) {
       if (error instanceof UnprocessableEntityException) throw error;

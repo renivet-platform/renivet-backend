@@ -183,6 +183,34 @@
       "when": 1793880400000,
       "tag": "0025_ren2_76_import_uploads",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1793880500000,
+      "tag": "0026_ren2_77_import_mapping_previews",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1793880600000,
+      "tag": "0027_ren2_78_import_confirmation",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1793880700000,
+      "tag": "0028_ren2_79_import_recovery",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1793880800000,
+      "tag": "0029_ren2_82_secure_media_zip",
+      "breakpoints": true
     }
   ]
 }
