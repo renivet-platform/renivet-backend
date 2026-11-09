@@ -533,7 +533,7 @@
       "implementation": {
         "status": "implemented",
         "test": {"status": "verified", "path": "tests/w2/import-upload-contract.test.cjs"},
-        "pullRequest": {"status": "pending", "url": null}
+        "pullRequest": {"status": "open", "url": "https://github.com/renivet-platform/renivet-backend/pull/61"}
       },
       "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-76"
     },
@@ -553,8 +553,8 @@
         "status": "implemented",
         "test": {"status": "verified", "path": "tests/w2/createCatalogImport.test.cjs"},
         "pullRequest": {
-          "status": "pending",
-          "url": null
+          "status": "open",
+          "url": "https://github.com/renivet-platform/renivet-backend/pull/61"
         }
       },
       "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-76"
