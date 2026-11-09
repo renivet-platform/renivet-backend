@@ -120,7 +120,7 @@ function allowedTarget(target: string): boolean {
 
 function flattenTargets(value: Record<string, unknown>, prefix = ''): string[] {
   return Object.entries(value).flatMap(([key, item]) => {
-    if (key === 'categoryUnmapped' || key === 'variants' || key === 'mediaAssets') return [];
+    if (['categoryUnmapped', 'variants', 'mediaAssets', 'sourceIdentity', 'sourceVariantDetails', 'sourceImageUrls', 'sourceRowNumbers', 'sourceLossyFields', 'sourceReviewCodes'].includes(key)) return [];
     const path = prefix ? `${prefix}.${key}` : key;
     return isRecord(item) ? flattenTargets(item, path) : [path];
   });
@@ -154,10 +154,27 @@ function mappedRecord(row: ImportPreviewSourceRow, mapping: ImportPreviewMapping
       && typeof item.sku === 'string' && isRecord(item.options))) fail('IMPORT_VARIANTS_INVALID');
     result.variants = canonicalRecord.variants;
   }
+  const sourceProductKey = typeof canonicalRecord.sourceProductKey === 'string' ? canonicalRecord.sourceProductKey : '';
+  const sourceRecordKey = typeof canonicalRecord.sourceRecordKey === 'string' ? canonicalRecord.sourceRecordKey : '';
+  if (sourceProductKey || sourceRecordKey) {
+    result.sourceIdentity = { productKey: sourceProductKey || null, recordKey: sourceRecordKey || null,
+      variantKeys: Array.isArray(canonicalRecord.variants) ? canonicalRecord.variants.flatMap((item) => isRecord(item)
+        && typeof item.sku === 'string' ? [item.sku] : []) : [] };
+  }
   if (Array.isArray(canonicalRecord.mediaAssets)) {
     if (canonicalRecord.mediaAssets.length > 50 || !canonicalRecord.mediaAssets.every((item) => isRecord(item)
       && typeof item.mediaAssetId === 'string' && /^[0-9a-f-]{36}$/i.test(item.mediaAssetId))) fail('IMPORT_MEDIA_ASSETS_INVALID');
     result.mediaAssets = canonicalRecord.mediaAssets;
+  }
+  if (Array.isArray(canonicalRecord.sourceVariantDetails)) result.sourceVariantDetails = canonicalRecord.sourceVariantDetails;
+  if (Array.isArray(canonicalRecord.sourceImageUrls)) result.sourceImageUrls = canonicalRecord.sourceImageUrls;
+  if (Array.isArray(canonicalRecord.sourceRowNumbers)) result.sourceRowNumbers = canonicalRecord.sourceRowNumbers;
+  if (Array.isArray(canonicalRecord.sourceLossyFields)) result.sourceLossyFields = canonicalRecord.sourceLossyFields;
+  if (Array.isArray(canonicalRecord.reviewCodes)) result.sourceReviewCodes = canonicalRecord.reviewCodes;
+  const canonicalAttributes = isRecord(canonicalRecord.attributes) ? canonicalRecord.attributes : {};
+  if (typeof canonicalAttributes.material === 'string' && canonicalAttributes.material.trim()
+    && !Object.values(mapping.fields).includes('attributes.material')) {
+    result.sourceReviewCodes = [...new Set([...(Array.isArray(result.sourceReviewCodes) ? result.sourceReviewCodes as string[] : []), 'SHOPIFY_MATERIAL_MAPPING_REQUIRED'])];
   }
   return result;
 }
@@ -230,6 +247,13 @@ export function buildImportPreview(input: {
         conflicts: [{ code: 'IMPORT_REQUIRED_FIELD', message: 'Map a title, style code, and SKU before previewing this row.' }] };
     }
     if (proposed.categoryUnmapped) conflicts.push({ code: 'CATEGORY_UNMAPPED', message: 'Map this source category to an active Renivet category.' });
+    for (const code of Array.isArray(proposed.sourceReviewCodes) ? proposed.sourceReviewCodes as string[] : []) {
+      if (typeof code === 'string' && /^SHOPIFY_[A-Z_]+$/.test(code)) {
+        conflicts.push({ code, message: code === 'SHOPIFY_UNMAPPED_FIELDS'
+          ? 'Some non-empty Shopify columns are retained as source data but are not represented in the Renivet catalog.'
+          : 'Review the Shopify source fields and mappings before confirmation.' });
+      }
+    }
     const sku = normalizeText(proposed.sku).toLocaleUpperCase('en-US');
     if (sku && (skuRows.get(sku)?.length ?? 0) > 1) conflicts.push({ code: 'DUPLICATE_SOURCE_SKU', message: 'The source contains this SKU more than once.' });
     const targets = input.targets.filter((target) => target.rowNumber === source.rowNumber
@@ -246,8 +270,14 @@ export function buildImportPreview(input: {
       && normalizeText(proposed.categoryCode).toLocaleLowerCase('en-US') !== normalizeText(target.categoryCode).toLocaleLowerCase('en-US')) {
       conflicts.push({ code: 'CATEGORY_CHANGE_REQUIRES_REVIEW', message: 'Changing an existing product category requires a separate reviewed correction.' });
     }
-    if (proposed.sourceMrp !== undefined) conflicts.push({ code: 'PRICE_REVIEW_REQUIRED', message: 'Source price data is retained for review and is not applied by catalog confirmation.' });
+    if (proposed.sourceMrp !== undefined || (Array.isArray(proposed.sourceVariantDetails)
+      && proposed.sourceVariantDetails.some((item) => isRecord(item) && (item.price !== undefined || item.compareAtPrice !== undefined)))) {
+      conflicts.push({ code: 'PRICE_REVIEW_REQUIRED', message: 'Source price data is retained for review and is not applied by catalog confirmation.' });
+    }
     if (typeof proposed.imageUrl === 'string' && proposed.imageUrl.trim()) {
+      conflicts.push({ code: 'MEDIA_REVIEW_REQUIRED', message: 'Image URLs must pass the approved media intake and rights checks before confirmation.' });
+    }
+    if (Array.isArray(proposed.sourceImageUrls) && proposed.sourceImageUrls.length > 0) {
       conflicts.push({ code: 'MEDIA_REVIEW_REQUIRED', message: 'Image URLs must pass the approved media intake and rights checks before confirmation.' });
     }
     const mappedAttributes = isRecord(proposed.attributes) ? proposed.attributes : {};
@@ -288,7 +318,8 @@ export function buildImportPreview(input: {
           productRowVersion: target.productRowVersion ?? target.rowVersion, variantRowVersion: target.variantRowVersion ?? target.rowVersion,
           contentVersion: target.contentVersion ?? 1 } : null, conflicts };
       const needsReview = conflicts.every(({ code }) => ['CATEGORY_UNMAPPED','CATEGORY_INACTIVE','CATEGORY_REQUIRED','CATEGORY_SCHEMA_UNAVAILABLE',
-        'ATTRIBUTE_NOT_IN_SCHEMA','ATTRIBUTE_SCOPE_MISMATCH','CATEGORY_CHANGE_REQUIRES_REVIEW','PRICE_REVIEW_REQUIRED','MEDIA_REVIEW_REQUIRED'].includes(code));
+        'ATTRIBUTE_NOT_IN_SCHEMA','ATTRIBUTE_SCOPE_MISMATCH','CATEGORY_CHANGE_REQUIRES_REVIEW','PRICE_REVIEW_REQUIRED','MEDIA_REVIEW_REQUIRED'].includes(code)
+        || code.startsWith('SHOPIFY_'));
       return { sourceRowNumber: source.rowNumber, action: needsReview ? 'NEEDS_REVIEW' : 'CONFLICT', proposed,
         fieldMask: rowFieldMasks, targetVersion: target ? { productId: target.productId, variantId: target.variantId ?? null,
           productRowVersion: target.productRowVersion ?? target.rowVersion, variantRowVersion: target.variantRowVersion ?? target.rowVersion,

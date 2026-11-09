@@ -13,6 +13,7 @@ const { DatabaseWorkerAuthorizationService } = require('../../dist/workers/worke
 const { ProductDraftPostgresRepository } = require('../../dist/modules/catalog/product-draft.repository.js');
 const { ProductMediaPostgresRepository } = require('../../dist/modules/media/product-media.repository.js');
 const { TaxonomyAdminPostgresRepository } = require('../../dist/modules/catalog/taxonomy-admin.repository.js');
+const { ImportUploadController } = require('../../dist/modules/imports/import-upload.controller.js');
 
 const url = process.env.RENIVET_TEST_DATABASE_URL;
 function assertDisposable(value) {
@@ -55,6 +56,29 @@ test('REN2-77/78 persist immutable previews and atomically confirm per-target ef
   }
   await pool.query(`INSERT INTO access.role_assignments(user_id,role_id,brand_id,scope_type,active_from,granted_by_id)
     VALUES($1,$2,$3,'brand',now(),$4)`, [owner, role, brand, grantor]);
+  const replayUploadId = randomUUID();
+  const replayIdempotencyKey = `ren2-80-replay-${suffix}`;
+  const replaySourceAsOf = '2026-11-09T00:00:00.000Z';
+  await pool.query(`INSERT INTO imports.import_uploads
+    (id,brand_id,source_kind,file_name,mime_type,byte_length,source_sha256,storage_key,status,idempotency_key,created_by,expires_at,consumed_at)
+    VALUES($1,$2,'SHOPIFY_CSV','shopify.csv','text/csv',10,$3,$4,'CONSUMED',$5,$6,now()+interval '1 hour',now())`,
+  [replayUploadId, brand, 'a'.repeat(64), `synthetic/${suffix}/shopify.csv`, `upload-${suffix}`, owner]);
+  const replayBatchId = (await pool.query(`INSERT INTO imports.import_batches
+    (brand_id,source_kind,source_sha256,raw_storage_key,schema_version,source_as_of,job_state,requested_policy,created_by,file_upload_id)
+    VALUES($1,'SHOPIFY_CSV',$2,$3,'shopify-product-csv@2026-11-09',$4,'RECEIVED',$5::jsonb,$6,$7) RETURNING id`,
+  [brand, 'a'.repeat(64), `synthetic/${suffix}/shopify-import.csv`, replaySourceAsOf,
+    JSON.stringify({ mode: 'CREATE_ONLY', idempotencyKey: replayIdempotencyKey }), owner, replayUploadId])).rows[0].id;
+  const uploadController = new ImportUploadController({ pool },
+    { authenticate: async () => ({ userId: owner }), expectedCsrf: () => 'csrf-token' },
+    { get: (key) => key === 'AUTH_ALLOWED_ORIGINS' ? ['https://app.renivet.example'] : undefined });
+  const replayRequest = { id: `request-${suffix}`, headers: { cookie: '__Host-renivet_session=' + 'a'.repeat(43),
+    origin: 'https://app.renivet.example', 'sec-fetch-site': 'same-origin', 'x-csrf-token': 'csrf-token' },
+  brandAccess: { brandId: brand, userId: owner, permission: 'imports.write' } };
+  assert.deepEqual(await uploadController.create({ sourceKind: 'SHOPIFY_CSV', sourceAsOf: replaySourceAsOf,
+    fileUploadId: replayUploadId, mode: 'CREATE_ONLY' }, replayRequest, replayIdempotencyKey),
+  { batchId: replayBatchId, status: 'RECEIVED' }, 'a real PostgreSQL replay of the same consumed Shopify file returns its existing batch');
+  assert.equal(Number((await pool.query('SELECT count(*)::integer AS count FROM imports.import_batches WHERE file_upload_id=$1 AND brand_id=$2',
+    [replayUploadId, brand])).rows[0].count), 1, 'replaying the Shopify upload does not create a second batch');
   const retryActor = (await pool.query(`INSERT INTO identity.users(email,display_name,state)
     VALUES($1,'REN2-79 retry actor','active') RETURNING id`, [`ren2-79-retry-${suffix}@example.invalid`])).rows[0].id;
   await pool.query(`INSERT INTO brands.brand_memberships(brand_id,user_id,membership_state,invited_by_id,joined_at)
@@ -132,6 +156,38 @@ test('REN2-77/78 persist immutable previews and atomically confirm per-target ef
   assert.equal(preview.rows[0].action, 'CREATE');
   assert.equal(preview.rows[0].proposed.variants.length, 4, 'the frozen row carries all four canonical variants');
   assert.equal(preview.rows[0].proposed.mediaAssets.length, 3, 'the frozen row carries all three approved media asset references');
+
+  const shopifyBatch = (await pool.query(`INSERT INTO imports.import_batches
+    (brand_id,source_kind,source_sha256,raw_storage_key,schema_version,source_as_of,job_state,requested_policy,created_by)
+    VALUES($1,'SHOPIFY_CSV',$2,$3,'shopify-product-csv@2026-11-09',now(),'RECEIVED','{"mode":"CREATE_ONLY"}'::jsonb,$4) RETURNING id`,
+  [brand, 'f'.repeat(64), `synthetic/${suffix}-shopify.csv`, owner])).rows[0].id;
+  const shopifyHandle = `shopify-${suffix.slice(0, 12)}`;
+  const shopifyVariants = ['S','M'].map((size) => ({ sku: `${shopifyHandle}-${size}`, options: { [colorCode]: 'Blue', [sizeCode]: size } }));
+  const shopifyCanonical = { sourceRecordKey: shopifyHandle, sourceProductKey: shopifyHandle, title: 'Shopify synthetic shirt',
+    sku: shopifyVariants[0].sku, options: shopifyVariants[0].options, attributes: { material: 'Cotton' }, variants: shopifyVariants,
+    sourceVariantDetails: shopifyVariants.map(({ sku }) => ({ sku, barcode: 'gtin:8900000000000', price: 29.99, compareAtPrice: 39.99 })),
+    sourceImageUrls: [{ url: 'https://cdn.shopify.example/fixture.webp', sourceRowNumber: 2, sourceColumn: 'product image url' }],
+    sourceRowNumbers: [2,3,4], sourceLossyFields: ['Status'], reviewCodes: ['SHOPIFY_UNMAPPED_FIELDS'] };
+  await pool.query(`INSERT INTO imports.import_rows(batch_id,brand_id,source_row_number,raw_record,canonical_record)
+    VALUES($1,$2,2,$3::jsonb,$4::jsonb)`, [shopifyBatch, brand,
+    JSON.stringify({ Title: 'Shopify synthetic shirt', Handle: shopifyHandle, SKU: shopifyVariants[0].sku,
+      Category: 'Shopify Apparel', Material: 'Cotton' }), JSON.stringify(shopifyCanonical)]);
+  const shopifyRequest = { ...request, batchId: shopifyBatch, idempotencyKey: `shopify-mapping-${suffix}`,
+    mapping: { fieldMappings: { Title: 'title', Handle: 'styleCode', SKU: 'sku', Category: 'categoryCode', Material: `attributes.${materialCode}` },
+      categoryMappings: { 'Shopify Apparel': categoryCode } } };
+  const shopifyMapping = await service.saveMapping(shopifyRequest);
+  const shopifyPreview = await service.getPreview({ brandId: brand, batchId: shopifyBatch, userId: owner, requestId: `shopify-read-${suffix}` });
+  assert.equal(shopifyPreview.previewHash, shopifyMapping.previewHash);
+  assert.equal(shopifyPreview.rows[0].action, 'NEEDS_REVIEW');
+  assert.deepEqual(shopifyPreview.rows[0].proposed.variants, shopifyVariants);
+  assert.deepEqual(shopifyPreview.rows[0].proposed.sourceIdentity,
+    { productKey: shopifyHandle, recordKey: shopifyHandle, variantKeys: shopifyVariants.map(({ sku }) => sku) });
+  assert.equal(shopifyPreview.rows[0].proposed.sourceVariantDetails[0].price, 29.99);
+  assert.equal(shopifyPreview.rows[0].proposed.sourceImageUrls[0].sourceRowNumber, 2);
+  assert.deepEqual(shopifyPreview.rows[0].proposed.sourceLossyFields, ['Status']);
+  assert.ok(shopifyPreview.rows[0].conflicts.some(({ code }) => code === 'PRICE_REVIEW_REQUIRED'));
+  assert.ok(shopifyPreview.rows[0].conflicts.some(({ code }) => code === 'MEDIA_REVIEW_REQUIRED'));
+  assert.ok(!shopifyPreview.rows[0].proposed.mediaAssets, 'an external Shopify URL does not become an approved media asset');
 
   await assert.rejects(service.saveMapping({ ...request, mapping: { ...request.mapping, fieldMappings: { ...request.mapping.fieldMappings, Title: 'imageUrl' } } }),
     (error) => error?.status === 409 && error?.response?.code === 'IMPORT_IDEMPOTENCY_CONFLICT');

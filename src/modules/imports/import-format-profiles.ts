@@ -17,6 +17,12 @@ export interface CatalogImportRow {
   attributes: Record<string, string>;
   sourceMrp?: number;
   sourceImageUrl?: string;
+  variants?: Array<{ sku: string; options: Record<string, string> }>;
+  sourceVariantDetails?: Array<{ sku: string; barcode?: string; price?: number; compareAtPrice?: number; rawPrice?: string; rawCompareAtPrice?: string }>;
+  sourceImageUrls?: Array<{ url: string; sourceRowNumber: number; sourceColumn: string; variantSku?: string }>;
+  sourceRowNumbers?: number[];
+  sourceLossyFields?: string[];
+  reviewCodes?: string[];
 }
 export interface StockObservation { sourceRecordKey: string; locationKey?: string; quantity: number }
 export interface MappedWorkbook {

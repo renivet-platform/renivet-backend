@@ -69,10 +69,129 @@ function sourceNumber(value: string): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
+function parseShopifyProductCsv(headers: string[], data: string[][]): MappedWorkbook {
+  const indexOf = (names: string[]) => headers.findIndex((header) => names.includes(header));
+  const values = (row: string[]) => headers.map((header, index) => [header, (row[index] ?? '').trim()] as const);
+  const get = (row: string[], names: string[]) => {
+    const index = indexOf(names);
+    return index < 0 ? '' : (row[index] ?? '').trim();
+  };
+  const handleIndex = indexOf(['url handle', 'handle']);
+  const titleIndex = indexOf(['title']);
+  const skuIndex = indexOf(['sku', 'variant sku']);
+  if (handleIndex < 0 || titleIndex < 0 || skuIndex < 0 || indexOf(['option1 value']) < 0) {
+    throw new ImportCsvError('IMPORT_CSV_HEADER_INVALID');
+  }
+
+  const groups = new Map<string, Array<{ row: string[]; rowNumber: number }>>();
+  const rowErrors: Array<{ sourceRowNumber: number; code: string }> = [];
+  const rawRows: MappedWorkbook['rawRows'] = [];
+  for (const [index, row] of data.entries()) {
+    const rowNumber = index + 2;
+    const handle = (row[handleIndex] ?? '').trim();
+    if (!handle) {
+      rowErrors.push({ sourceRowNumber: rowNumber, code: 'SHOPIFY_HANDLE_MISSING' });
+      rawRows.push({ sourceRowNumber: rowNumber, rawRecord: Object.fromEntries(values(row)) });
+      continue;
+    }
+    groups.set(handle, [...(groups.get(handle) ?? []), { row, rowNumber }]);
+  }
+
+  const catalogRows: CatalogImportRow[] = [];
+  const catalogRowNumbers: number[] = [];
+  for (const [handle, lines] of groups) {
+    const titleLine = lines.find(({ row }) => (row[titleIndex] ?? '').trim());
+    const title = titleLine ? (titleLine.row[titleIndex] ?? '').trim() : '';
+    const representative = titleLine ?? lines[0];
+    const variants: NonNullable<CatalogImportRow['variants']> = [];
+    const sourceVariantDetails: NonNullable<CatalogImportRow['sourceVariantDetails']> = [];
+    const sourceImageUrls: NonNullable<CatalogImportRow['sourceImageUrls']> = [];
+    const sourceRowNumbers = lines.map(({ rowNumber }) => rowNumber);
+    let invalidPrice = false;
+    const materialColumns = headers.flatMap((header, column) => /(?:material|fabric|composition)/i.test(header) ? [column] : []);
+    const materialIndex = materialColumns.find((column) => lines.some(({ row }) => Boolean((row[column] ?? '').trim()))) ?? materialColumns[0];
+    const ignoredMaterialColumns = materialColumns.filter((column) => column !== materialIndex
+      && lines.some(({ row }) => Boolean((row[column] ?? '').trim())));
+    const supportedSourceHeaders = new Set(['url handle', 'handle', 'title', 'sku', 'variant sku', 'variant barcodes', 'barcodes', 'barcode',
+      'option1 name', 'option1 value', 'option2 name', 'option2 value', 'option3 name', 'option3 value', 'price', 'compare-at price',
+      'compare at price', 'product image url', 'image url', 'image src', 'variant image url', 'product category', 'type']);
+    const sourceLossyFields = headers.filter((header, column) => (!supportedSourceHeaders.has(header)
+      && !/(?:material|fabric|composition)/i.test(header) || ignoredMaterialColumns.includes(column))
+      && lines.some(({ row }) => Boolean((row[column] ?? '').trim())));
+    const optionNames = [1, 2, 3].map((n) => lines.map(({ row }) => get(row, [`option${n} name`]).toLowerCase()).find(Boolean) ?? '');
+    let material = '';
+    for (const { row, rowNumber } of lines) {
+      const sku = (row[skuIndex] ?? '').trim();
+      if (sku) {
+        const options: Record<string, string> = {};
+        for (const n of [1, 2, 3]) {
+          const name = get(row, [`option${n} name`]) || optionNames[n - 1] || `option${n}`;
+          const value = get(row, [`option${n} value`]);
+          if (value && !/^(?:\s*|\bdefault title\b)$/i.test(value)) options[name.toLowerCase()] = value;
+        }
+        variants.push({ sku, options });
+        const detail: NonNullable<CatalogImportRow['sourceVariantDetails']>[number] = { sku };
+        const barcode = get(row, ['variant barcodes', 'barcodes', 'barcode']);
+        const rawPrice = get(row, ['price']);
+        const rawCompareAtPrice = get(row, ['compare-at price', 'compare at price']);
+        const price = sourceNumber(rawPrice);
+        const compareAtPrice = sourceNumber(rawCompareAtPrice);
+        if (barcode) detail.barcode = barcode;
+        if (price !== undefined) detail.price = price;
+        else if (rawPrice) { detail.rawPrice = rawPrice; invalidPrice = true; }
+        if (compareAtPrice !== undefined) detail.compareAtPrice = compareAtPrice;
+        else if (rawCompareAtPrice) { detail.rawCompareAtPrice = rawCompareAtPrice; invalidPrice = true; }
+        sourceVariantDetails.push(detail);
+      }
+      for (const [imageHeader, variantSpecific] of [['product image url', false], ['image url', false], ['image src', false], ['variant image url', true]] as const) {
+        const image = get(row, [imageHeader]);
+        if (/^https?:\/\//i.test(image) && !sourceImageUrls.some((item) => item.url === image && item.sourceColumn === imageHeader
+          && item.variantSku === (variantSpecific ? (row[skuIndex] ?? '').trim() || undefined : undefined))) {
+          sourceImageUrls.push({ url: image, sourceRowNumber: rowNumber, sourceColumn: imageHeader,
+            ...(variantSpecific && (row[skuIndex] ?? '').trim() ? { variantSku: (row[skuIndex] ?? '').trim() } : {}) });
+        }
+      }
+      if (!material) {
+        if (materialIndex !== undefined) material = (row[materialIndex] ?? '').trim();
+      }
+    }
+    const sourceProductCategory = lines.map(({ row }) => get(row, ['product category'])).find(Boolean)
+      ?? lines.map(({ row }) => get(row, ['type'])).find(Boolean) ?? '';
+    const reviewCodes: string[] = [];
+    if (!sourceProductCategory) reviewCodes.push('SHOPIFY_CATEGORY_MISSING');
+    if (!material) reviewCodes.push('SHOPIFY_MATERIAL_MISSING');
+    if (!variants.some((variant) => Object.entries(variant.options).some(([name, value]) => /size/i.test(name) && value))) {
+      reviewCodes.push('SHOPIFY_SIZE_MISSING');
+    }
+    if (sourceLossyFields.length) reviewCodes.push('SHOPIFY_UNMAPPED_FIELDS');
+    if (new Set(variants.map(({ sku }) => sku.toLocaleUpperCase('en-US'))).size !== variants.length) {
+      reviewCodes.push('SHOPIFY_DUPLICATE_VARIANT_SKU');
+    }
+    if (invalidPrice) reviewCodes.push('SHOPIFY_PRICE_INVALID');
+    if (!title || variants.length === 0 || variants.length > 100) {
+      rowErrors.push({ sourceRowNumber: representative.rowNumber, code: !title || variants.length === 0
+        ? 'IMPORT_ROW_REQUIRED_FIELD' : 'IMPORT_VARIANT_LIMIT_EXCEEDED' });
+    }
+    rawRows.push({ sourceRowNumber: representative.rowNumber,
+      rawRecord: Object.fromEntries(values(representative.row)) });
+    if (!title || variants.length === 0 || variants.length > 100) continue;
+    const product: CatalogImportRow = { sourceRecordKey: handle, sourceProductKey: handle, title, sku: variants[0].sku,
+      options: variants[0].options, attributes: material ? { material } : {}, variants, sourceVariantDetails,
+      sourceImageUrls, sourceRowNumbers, sourceLossyFields, reviewCodes };
+    catalogRows.push(product);
+    catalogRowNumbers.push(representative.rowNumber);
+  }
+  rawRows.sort((left, right) => left.sourceRowNumber - right.sourceRowNumber);
+  if (catalogRows.length > MAX_IMPORT_ROWS) throw new ImportCsvError('IMPORT_ROW_LIMIT_EXCEEDED');
+  return { profileId: 'shopify-product-csv', profileVersion: '2026-11-09', catalogRows, catalogRowNumbers,
+    stockObservations: [], rowErrors, rawRows };
+}
+
 export function parseCatalogCsv(input: { bytes: Buffer; sourceKind: string }): MappedWorkbook {
   const [headersRow, ...data] = records(input.bytes);
   const headers = headersRow.map((value) => value.trim().toLowerCase());
   if (headers.some((value) => !value) || new Set(headers).size !== headers.length) throw new ImportCsvError('IMPORT_CSV_HEADER_INVALID');
+  if (input.sourceKind === 'SHOPIFY_CSV') return parseShopifyProductCsv(headers, data);
   if (!headers.some((value) => ['sku','variant sku','sku code','uniquesku','unique product code'].includes(value))
     || !headers.some((value) => ['title','name','style name','product name'].includes(value))) {
     throw new ImportCsvError('IMPORT_CSV_HEADER_INVALID');

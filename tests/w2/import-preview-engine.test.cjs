@@ -137,6 +137,33 @@ test('REN2-78 keeps source price and image URL out of confirmation until their r
   assert.deepEqual(preview.rows[0].conflicts.map((conflict) => conflict.code).sort(), ['MEDIA_REVIEW_REQUIRED', 'PRICE_REVIEW_REQUIRED']);
 });
 
+test('REN2-80 keeps Shopify price and image provenance visible while requiring material mapping and review', () => {
+  const preview = buildImportPreview({
+    batch: { id: 'shopify-provenance', brandId: 'brand-shopify', sourceSha256: 'a'.repeat(64), sourceAsOf: '2026-11-09T00:00:00.000Z' },
+    mapping: { ...mapping, fields: { ...mapping.fields, 'URL handle': 'sourceProductKey' } },
+    taxonomy: taxonomy(),
+    sourceRows: [{ rowNumber: 2, rawRecord: { 'product name': 'Organic Shirt', 'style code': 'organic-shirt', sku: 'SHIRT-BLUE-S', category: 'Tops' },
+      canonicalRecord: {
+        variants: [{ sku: 'SHIRT-BLUE-S', options: { color: 'Blue', size: 'S' } }],
+        attributes: { material: 'Cotton' },
+        sourceVariantDetails: [{ sku: 'SHIRT-BLUE-S', price: 29.99, compareAtPrice: 39.99 }],
+        sourceImageUrls: [{ url: 'https://cdn.shopify.example/front.webp', sourceRowNumber: 2 }],
+        sourceRowNumbers: [2, 3], reviewCodes: [],
+      } }],
+    targets: [],
+  });
+  const row = preview.rows[0];
+  assert.equal(row.action, 'NEEDS_REVIEW');
+  assert.deepEqual(row.proposed.variants, [{ sku: 'SHIRT-BLUE-S', options: { color: 'Blue', size: 'S' } }]);
+  assert.deepEqual(row.proposed.sourceImageUrls, [{ url: 'https://cdn.shopify.example/front.webp', sourceRowNumber: 2 }]);
+  assert.deepEqual(row.proposed.sourceRowNumbers, [2, 3]);
+  assert.ok(!row.proposed.mediaAssets, 'a source URL is never treated as an approved media asset');
+  assert.ok(row.conflicts.some(({ code }) => code === 'PRICE_REVIEW_REQUIRED'));
+  assert.ok(row.conflicts.some(({ code }) => code === 'MEDIA_REVIEW_REQUIRED'));
+  assert.ok(row.conflicts.some(({ code }) => code === 'SHOPIFY_MATERIAL_MAPPING_REQUIRED'));
+  assert.ok(!row.fieldMask.some((field) => field.startsWith('source')));
+});
+
 test('REN2-77 detects duplicate SKU/attribute identities and stale source dates', () => {
   const input = {
     batch: { id: 'batch-1', brandId: 'brand-1', sourceSha256: 'a'.repeat(64), sourceAsOf: '2025-01-01T00:00:00.000Z' },

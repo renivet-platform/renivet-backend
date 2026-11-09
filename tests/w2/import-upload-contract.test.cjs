@@ -54,3 +54,25 @@ test('REN2-76 issues a short-lived brand-bound private upload URL and records it
   assert.equal(calls.length, 2);
   assert.match(calls[1].sql, /access\.security_audit_events/);
 });
+
+test('REN2-80 returns the original batch when the same Shopify file import is retried', async () => {
+  const batchId = '44444444-4444-4444-8444-444444444444';
+  const uploadId = '55555555-5555-4555-8555-555555555555';
+  const pool = { async query(sql) {
+    if (/SELECT \* FROM imports\.import_uploads/.test(sql)) return { rows: [{ id: uploadId,
+      brand_id: '11111111-1111-4111-8111-111111111111', source_kind: 'SHOPIFY_CSV', status: 'CONSUMED',
+      expires_at: new Date(Date.now() + 60_000).toISOString() }] };
+    if (/SELECT id,source_kind,source_as_of,requested_policy FROM imports\.import_batches/.test(sql)) return { rows: [{ id: batchId,
+      source_kind: 'SHOPIFY_CSV', source_as_of: '2026-11-09T00:00:00.000Z', requested_policy: { mode: 'CREATE_ONLY', idempotencyKey: 'shopify-replay-80' } }] };
+    throw new Error('unexpected query');
+  } };
+  const sessions = { authenticate: async () => ({ userId: '33333333-3333-4333-8333-333333333333' }), expectedCsrf: () => 'csrf-token' };
+  const config = { get: (key) => key === 'AUTH_ALLOWED_ORIGINS' ? ['https://app.renivet.example'] : undefined };
+  const controller = new ImportUploadController({ pool }, sessions, config);
+  const request = { id: 'request-80-replay', headers: { cookie: '__Host-renivet_session=' + 'a'.repeat(43), origin: 'https://app.renivet.example',
+    'sec-fetch-site': 'same-origin', 'x-csrf-token': 'csrf-token' }, brandAccess: { brandId: '11111111-1111-4111-8111-111111111111',
+      userId: '33333333-3333-4333-8333-333333333333', permission: 'imports.write' } };
+  const result = await controller.create({ sourceKind: 'SHOPIFY_CSV', sourceAsOf: '2026-11-09T00:00:00.000Z',
+    fileUploadId: uploadId, mode: 'CREATE_ONLY' }, request, 'shopify-replay-80');
+  assert.deepEqual(result, { batchId, status: 'RECEIVED' });
+});
