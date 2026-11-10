@@ -49,12 +49,48 @@ test('REN2-51 denies cross-brand media and stock replays and preserves authoriza
     `INSERT INTO inventory.stock_locations (brand_id, location_code, name) VALUES ($1, $2, 'REN2-51') RETURNING id`, [brandA, tag],
   )).rows[0].id;
   await pool.query('INSERT INTO inventory.stock_balances (brand_id, variant_id, location_id) VALUES ($1, $2, $3)', [brandA, variant, location]);
-  const stockEvent = (await pool.query(
-    `INSERT INTO inventory.stock_events
-       (brand_id, variant_id, location_id, pool_sequence, event_kind, business_effect_key, payload_sha256, delta_physical)
-     VALUES ($1, $2, $3, 2, 'PHYSICAL', $4, $5, 1) RETURNING id`,
-    [brandA, variant, location, tag, createHash('sha256').update(tag).digest('hex')],
-  )).rows[0].id;
+  const stockClient = await pool.connect();
+  let stockEvent;
+  try {
+    await stockClient.query('BEGIN');
+    const zeroBalance = { physical: 0, quarantine: 0, otherNonSellable: 0, allocatedNotDispatched: 0, buffer: 0, availableToSell: 0, version: 1 };
+    const receiptBalance = { ...zeroBalance, physical: 1, availableToSell: 1, version: 2 };
+    const genesisKey = `genesis.${variant}.${location}`;
+    const genesis = (await stockClient.query(
+      `INSERT INTO inventory.stock_events
+         (brand_id,variant_id,location_id,pool_sequence,event_kind,business_effect_key,payload_sha256,
+          before_balance,after_balance)
+       VALUES($1,$2,$3,1,'PHYSICAL',$4,$5,$6::jsonb,$6::jsonb) RETURNING id`,
+      [brandA, variant, location, genesisKey, createHash('sha256').update(`${tag}:genesis`).digest('hex'), JSON.stringify(zeroBalance)],
+    )).rows[0].id;
+    await stockClient.query(
+      `INSERT INTO inventory.stock_movements
+         (stock_event_id,brand_id,variant_id,location_id,delta_physical,movement_reason,business_effect_key,
+          source_type,source_reference,balance_version_after)
+       VALUES($1,$2,$3,$4,0,'GENESIS',$5,'SYSTEM',$6,1)`,
+      [genesis, brandA, variant, location, genesisKey, `pool:${variant}:${location}`],
+    );
+    stockEvent = (await stockClient.query(
+      `INSERT INTO inventory.stock_events
+         (brand_id,variant_id,location_id,pool_sequence,event_kind,business_effect_key,payload_sha256,
+          delta_physical,before_balance,after_balance)
+       VALUES($1,$2,$3,2,'PHYSICAL',$4,$5,1,$6::jsonb,$7::jsonb) RETURNING id`,
+      [brandA, variant, location, tag, createHash('sha256').update(tag).digest('hex'), JSON.stringify(zeroBalance), JSON.stringify(receiptBalance)],
+    )).rows[0].id;
+    await stockClient.query(
+      `INSERT INTO inventory.stock_movements
+         (stock_event_id,brand_id,variant_id,location_id,delta_physical,movement_reason,business_effect_key,
+          source_type,source_reference,balance_version_after)
+       VALUES($1,$2,$3,$4,1,'TEST_RECEIPT',$5,'TEST',$6,2)`,
+      [stockEvent, brandA, variant, location, tag, tag],
+    );
+    await stockClient.query('COMMIT');
+  } catch (error) {
+    await stockClient.query('ROLLBACK');
+    throw error;
+  } finally {
+    stockClient.release();
+  }
   const mediaAsset = (await pool.query(
     `INSERT INTO media.media_assets (brand_id, storage_key, sha256, mime_type)
      VALUES ($1, $2, $3, 'image/jpeg') RETURNING id`,

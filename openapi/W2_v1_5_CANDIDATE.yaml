@@ -3777,6 +3777,9 @@ x-renivet-known-gaps:
 - Returned list item schemas are semantic candidates and may need paginated response wrappers before SDK generation.
 - Actual W1 CSRF cookie/header and permission roles must be mapped, not invented.
 - Category conditional validation and media upload ticket protocol need implemented/contract-tested.
+- Inventory implementation additions are drafted on REN2-45 but are withheld from the 47 executable candidate operations pending a reviewed contract amendment and G07/G08/G17 evidence.
+- Ten inventory amendment routes have implementation drafts, but remain dormant until their complete request/response schemas are approved and G07/G08/G17 pass.
+- Inventory balances follow Master A4: subtract Q, U, A and B once. Transfers remain IN_TRANSIT after dispatch; destination physical changes only on separate receipt.
 - No public W3 allocation endpoint; COD priority still requires an explicit W3 decision.
 x-renivet-contract-boundaries:
   W2: Catalog/media/import/stock-ops technical contracts, no verified handlers yet
@@ -3784,3 +3787,55 @@ x-renivet-contract-boundaries:
   security: Brand routes require W1 BrandAccessGuard and same-statement scoped predicate; platform taxonomy requires
     reviewed separate global guard
   sessions: __Host-renivet_session; CSRF and MFA conditions follow W1
+x-renivet-dormant-inventory-amendments:
+- operationId: createStockPool
+  method: POST
+  path: /brands/{brandId}/inventory/balances
+  permission: inventory.submit
+  effect: Create a brand-owned zero pool with an immutable sequence-one genesis event; never set stock quantities.
+- operationId: recordOpeningStockReceipt
+  method: POST
+  path: /brands/{brandId}/inventory/opening-receipts
+  permission: inventory.submit
+  effect: Atomically create the initial zero pool and first physical receipt, once, with source and idempotency evidence.
+- operationId: listStockObservationSignals
+  method: GET
+  path: /brands/{brandId}/inventory/observations
+  permission: inventory.read
+  effect: Return bounded brand-scoped observation history with derived source freshness, conflict and balance-version review signals.
+- operationId: proposeAdjustmentFromStockObservation
+  method: POST
+  path: /brands/{brandId}/inventory/observations/{observationId}/propose-adjustment
+  permission: inventory.adjust.propose
+  effect: Stage a physical correction from a current observation; only an independent approved adjustment changes authoritative stock.
+- operationId: listStockAdjustmentHistory
+  method: GET
+  path: /brands/{brandId}/inventory/adjustments
+  permission: inventory.read
+  effect: Return brand-scoped adjustment before/after snapshots, evidence and immutable proposal/review/application history.
+- operationId: recordPhysicalStockMovement
+  method: POST
+  path: /brands/{brandId}/inventory/movements
+  permission: inventory.submit
+  effect: Record a validated physical receipt or movement through the append-only journal.
+- operationId: transferStockBetweenLocations
+  method: POST
+  path: /brands/{brandId}/inventory/transfers
+  permission: inventory.submit
+  effect: Journal source dispatch and create an IN_TRANSIT record; destination physical remains unchanged until receipt.
+- operationId: receiveStockTransfer
+  method: POST
+  path: /brands/{brandId}/inventory/transfers/{transferId}/receive
+  permission: inventory.submit
+  effect: Credit the destination only after actual receipt and an If-Match version check.
+- operationId: submitStockReturnForInspection
+  method: POST
+  path: /brands/{brandId}/inventory/returns
+  permission: inventory.submit
+  effect: Place returned quantities in quarantine until independent inspection.
+- operationId: decideStockReturnInspection
+  method: POST
+  path: /admin/brands/{brandId}/inventory/returns/{returnId}/decision
+  permission: inventory.adjust.approve
+  effect: Require platform-global reviewer permission, MFA, CSRF and maker/checker separation.
+  activation: Requires approved OpenAPI paths and schemas plus G07/G08/G17 passing evidence.

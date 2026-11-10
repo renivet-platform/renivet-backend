@@ -211,6 +211,62 @@
       "when": 1793880800000,
       "tag": "0029_ren2_82_secure_media_zip",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1793880900000,
+      "tag": "0030_ren2_83_89_inventory_ledger",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1794248575000,
+      "tag": "0031_ren2_86_repeatable_observations_and_single_detail",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1794249100000,
+      "tag": "0032_ren2_88_bind_reconciliation_adjustments",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1794288900000,
+      "tag": "0033_ren2_84_master_a4_single_allocation_bucket",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1794288960000,
+      "tag": "0034_ren2_87_adjustment_policy_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1794297000000,
+      "tag": "0035_ren2_86_freshness_and_observation_adjustments",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1794297060000,
+      "tag": "0036_ren2_84_explicit_stock_pool_genesis",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1794297120000,
+      "tag": "0037_ren2_84_allow_pool_genesis_event",
+      "breakpoints": true
     }
   ]
 }
