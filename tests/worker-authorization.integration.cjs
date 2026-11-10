@@ -175,7 +175,51 @@ test('REN2-51 denies cross-brand media and stock replays and preserves authoriza
     /immutable/,
   );
 
+  const checkoutConsumer = 'ren2_51_checkout_admission_auth';
+  const checkoutEvents = [];
+  for (const [name, payloadBrandId] of [['valid', brandA], ['payload_spoof', brandB]]) {
+    const checkoutId = randomUUID();
+    const checkoutEvent = (await pool.query(
+      `INSERT INTO platform.outbox_events
+         (aggregate_type, aggregate_id, event_type, event_version, event_payload, event_key)
+       VALUES ('checkout.order', $1, 'checkout.allocation_eligible', 1, $2::jsonb, $3) RETURNING id`,
+      [checkoutId, JSON.stringify({ brandId: payloadBrandId, acceptedEventId: randomUUID(),
+        acceptedSequence: 1, eligibilitySequence: 1, requestHash: 'a'.repeat(64),
+        line: { checkoutLineId: randomUUID(), variantId: variant, locationId: location, quantity: 1 } }), `${tag}:checkout:${name}`],
+    )).rows[0].id;
+    checkoutEvents.push({ name, id: checkoutEvent });
+  }
+  const checkoutAuthWorker = new DurableWorker(pool, [{
+    consumerId: checkoutConsumer,
+    eventTypes: ['checkout.allocation_eligible'],
+    authorization: { scope: 'brand', purpose: 'inventory.checkout_admission', effects: ['inventory.allocate'] },
+    async handle(event, _transaction, context) {
+      await context.authorizeEffect('inventory.allocate', event.eventPayload.brandId);
+      effects.push(event.id);
+    },
+  }], {
+    maxAttempts: 1,
+    workerAuthorization: new DatabaseWorkerAuthorizationService(pool, {
+      async authenticate() {
+        return { id: workerPrincipalId, active: true, permittedConsumers: [checkoutConsumer], provenance: 'internal.service.port' };
+      },
+    }),
+  });
+  assert.equal(await checkoutAuthWorker.enqueueOutboxBatch(), 2);
+  const checkoutAuthResult = await checkoutAuthWorker.runOnce(checkoutConsumer, `${tag}:checkout-auth`, 2);
+  assert.equal(checkoutAuthResult.processed, 1);
+  assert.equal(checkoutAuthResult.deadLetter, 1);
+  assert.deepEqual(effects, [allowedEvent, checkoutEvents.find((item) => item.name === 'valid').id],
+    'checkout worker brand is derived from the variant and active warehouse, and a spoofed payload brand is denied');
+  const checkoutBindings = await pool.query(
+    `SELECT brand_id FROM platform.worker_job_authorizations WHERE source_event_id = ANY($1::uuid[])`,
+    [checkoutEvents.map((item) => item.id)],
+  );
+  assert.equal(checkoutBindings.rowCount, 2);
+  assert.ok(checkoutBindings.rows.every((row) => row.brand_id === brandA));
+
   const revokedConsumer = 'ren2_51_revoked_worker';
+  const effectsBeforeRevocationCheck = [...effects];
   let revokedPrincipalActive = true;
   const revokedEvent = (await pool.query(
     `INSERT INTO platform.outbox_events
@@ -201,7 +245,7 @@ test('REN2-51 denies cross-brand media and stock replays and preserves authoriza
   revokedPrincipalActive = false;
   const revokedResult = await revokedWorker.runOnce(revokedConsumer, `${tag}:revoked-worker`, 1);
   assert.equal(revokedResult.deadLetter, 1);
-  assert.deepEqual(effects, [allowedEvent], 'revoked worker principal must not reach the handler');
+  assert.deepEqual(effects, effectsBeforeRevocationCheck, 'revoked worker principal must not reach the handler');
   const revokedDecision = await pool.query(
     `SELECT decision, reason_code FROM platform.worker_authorization_audit
      WHERE source_event_id = $1`, [revokedEvent],

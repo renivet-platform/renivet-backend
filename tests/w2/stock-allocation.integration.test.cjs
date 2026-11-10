@@ -5,6 +5,8 @@ const test = require('node:test');
 const { createHash, randomUUID } = require('node:crypto');
 const { Pool } = require('pg');
 const { InventoryPostgresRepository } = require('../../dist/modules/inventory/inventory.repository.js');
+const { DurableWorker } = require('../../dist/workers/durable-worker.js');
+const { CheckoutAdmissionEventHandler } = require('../../dist/workers/checkout-admission-event.handler.js');
 
 const sourceUrl = process.env.RENIVET_TEST_DATABASE_URL;
 function disposableUrl(value) {
@@ -350,6 +352,45 @@ test('REN2-90/93 serializes checkout allocation and lifecycle effects exactly on
       WHERE brand_id=$1 AND variant_id=$2 AND location_id=$3`, [brandId, variantId, locationId])).rows[0];
     assert.equal(Number(lifecycleBalance.physical_on_hand), 4, 'shipping decreases P only for dispatched units');
     assert.equal(Number(lifecycleBalance.allocated_not_dispatched), 3, 'dispatch releases shipped A and cancellation releases only unshipped A');
+
+    await pool.query(`UPDATE platform.outbox_events SET delivered_at=now(),updated_at=now()
+      WHERE event_type IN ('checkout.allocation_eligible','checkout.allocation_skipped') AND delivered_at IS NULL`);
+    const admissionWorker = new DurableWorker(pool, [new CheckoutAdmissionEventHandler(repository)], {
+      maxAttempts: 2, baseRetryDelayMs: 2_000, maxRetryDelayMs: 2_000, jitterMs: 0, random: () => 0,
+      workerAuthorization: {
+        async bindJob() {},
+        async authorize({ job, event, policy }) {
+          return { principalId: 'renivet.synthetic.w3', jobId: job.id, sourceEventId: event.id,
+            brandId, purpose: policy.purpose, effects: [...policy.effects], provenance: 'synthetic.accepted-checkout',
+            async authorizeEffect(effect, targetBrandId) {
+              if (!policy.effects.includes(effect) || targetBrandId !== brandId) throw Object.assign(new Error('denied'), { code: 'WORKER_AUTHORIZATION_DENIED' });
+            } };
+        },
+      },
+    });
+    const workerSuccessorCheckout = randomUUID();
+    const workerSuccessorLine = { checkoutLineId: randomUUID(), variantId, locationId, quantity: 1 };
+    const workerSuccessorEvent = await eligibleEvent(workerSuccessorCheckout, `ren2-92-successor-${suffix}`, 108, 106,
+      workerSuccessorLine);
+    const successorRetry = await admissionWorker.runOnce('inventory.checkout_admission', `ren2-92-worker-${suffix}`, 1);
+    assert.equal(successorRetry.retry, 1, 'a W3 proof ahead of the per-pool head receives a durable retry');
+    const workerHeadCheckout = randomUUID();
+    const workerHeadLine = { checkoutLineId: randomUUID(), variantId, locationId, quantity: 1 };
+    const workerHeadEvent = await eligibleEvent(workerHeadCheckout, `ren2-92-head-${suffix}`, 107, 105,
+      workerHeadLine);
+    assert.equal((await admissionWorker.runOnce('inventory.checkout_admission', `ren2-92-worker-${suffix}`, 1)).processed, 1,
+      'the current W3 head commits through the registered worker handler');
+    await new Promise((resolve) => setTimeout(resolve, 2_050));
+    assert.equal((await admissionWorker.runOnce('inventory.checkout_admission', `ren2-92-worker-${suffix}`, 1)).processed, 1,
+      'the retried successor resumes after the head has a durable outcome');
+    const workerJobs = await pool.query(`SELECT business_key,state,attempt_count,last_error_code
+      FROM platform.durable_jobs WHERE job_kind='inventory.checkout_admission' AND business_key = ANY($1::text[])`,
+    [[workerSuccessorEvent, workerHeadEvent]]);
+    assert.equal(workerJobs.rowCount, 2);
+    assert.ok(workerJobs.rows.every((row) => row.state === 'succeeded'));
+    assert.equal(Number(workerJobs.rows.find((row) => row.business_key === workerSuccessorEvent).attempt_count), 2);
+    assert.equal(workerJobs.rows.find((row) => row.business_key === workerSuccessorEvent).last_error_code,
+      'CHECKOUT_ELIGIBLE_HEAD_NOT_READY', 'only a safe, allowlisted head-wait code is persisted for retry');
 
     await assert.rejects(pool.query(`UPDATE inventory.stock_allocations SET quantity=quantity+1 WHERE id=$1`,
       [lifecycleAllocation.allocationId]), /STOCK_ALLOCATION_IDENTITY_IMMUTABLE/);

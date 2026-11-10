@@ -4,7 +4,8 @@ import type { BrandWorkerPolicy, WorkerAuthorizationContext, WorkerAuthorization
 
 const MAX_LEASE_SECONDS = 300;
 const DEFAULT_MAX_ATTEMPTS = 5;
-const SAFE_FAILURE_CODES = new Set(['EAI_AGAIN', 'ECONNRESET', 'ETIMEDOUT', 'EVENT_NOT_FOUND', 'LEASE_EXPIRED']);
+const SAFE_FAILURE_CODES = new Set(['EAI_AGAIN', 'ECONNRESET', 'ETIMEDOUT', 'EVENT_NOT_FOUND', 'LEASE_EXPIRED',
+  'CHECKOUT_ELIGIBLE_HEAD_NOT_READY']);
 const SAFE_RECOVERY_REASONS = new Set(['OPERATOR_RETRY', 'DATA_CORRECTED', 'DEPENDENCY_RESTORED']);
 
 export type RetryOptions = {
@@ -29,9 +30,9 @@ export function calculateRetryDelayMs(attempt: number, options: RetryOptions = {
 }
 
 export function safeFailureCode(error: unknown): string {
-  const code = error && typeof error === 'object' && 'code' in error
-    ? (error as { code?: unknown }).code
-    : undefined;
+  const object = error && typeof error === 'object' ? error as { code?: unknown; response?: unknown } : undefined;
+  const response = object?.response && typeof object.response === 'object' ? object.response as { code?: unknown } : undefined;
+  const code = object?.code ?? response?.code;
   return typeof code === 'string' && SAFE_FAILURE_CODES.has(code)
     ? code
     : 'WORKER_FAILURE';
