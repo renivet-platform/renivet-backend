@@ -110,6 +110,19 @@ test('REN2-75 rechecks PostgreSQL publication, SKU and effective price inside a 
     await checkout.query('COMMIT');
   } catch (error) { await checkout.query('ROLLBACK'); throw error; } finally { checkout.release(); }
 
+  await pool.query("UPDATE brands.brands SET onboarding_state='suspended' WHERE id=$1", [brand]);
+  const suspendedRecheck = await pool.connect();
+  try {
+    await suspendedRecheck.query('BEGIN');
+    const denied = await port.validate(suspendedRecheck, request, 'w3.checkout.synthetic');
+    assert.equal(denied.decision, 'DENIED');
+    assert.equal(denied.code, 'NOT_BUYABLE');
+    await suspendedRecheck.query('ROLLBACK');
+  } finally { suspendedRecheck.release(); }
+  const retainedProduct = await pool.query('SELECT publication_state FROM catalogue.products WHERE id=$1 AND brand_id=$2', [product, brand]);
+  assert.equal(retainedProduct.rows[0]?.publication_state, 'PUBLISHED', 'brand suspension suppresses buyability without deleting or rewriting the published product');
+  await pool.query("UPDATE brands.brands SET onboarding_state='approved' WHERE id=$1", [brand]);
+
   const restricted = await publication.restrict(product, { reasonCode: 'SAFETY_RECALL' }, { userId: operator, brandId: brand,
     expectedProductVersion: published.rowVersion, idempotencyKey: `restrict-${tag}` });
   const recheck = await pool.connect();
