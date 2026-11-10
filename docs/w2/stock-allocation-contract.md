@@ -10,8 +10,10 @@ The source event must be a persisted `platform.outbox_events` row with:
 - `event_type = checkout.accepted`
 - `aggregate_id = checkoutId`
 - payload `brandId` equal to the authorized brand
+- payload `acceptedSequence` equal to the command's sequence
+- exactly one canonical line matching the command's checkout line, variant, location and quantity
 
-The trusted checkout boundary must emit `checkout.accepted` only after verified prepaid completion. Unverified, COD-like, missing, cross-brand, or unrelated source events fail closed with `WORKER_SOURCE_NOT_VERIFIED`. The live checkout, payment gateway, refund provider, COD policy, and W3 transport remain outside this command.
+The trusted checkout boundary must emit `checkout.accepted` only after verified prepaid completion and attach its durable ordering proof and canonical lines. W2 checks the requested line against that persisted event; it does not create the acceptance inbox or claim to enforce overlap-aware FIFO. Those remain W3 responsibilities. Mixed/multi-line atomicity remains open; this single-line port rejects multi-line checkout events with `CHECKOUT_MULTI_LINE_POLICY_UNRESOLVED`. Unverified, COD-like, missing, cross-brand, mismatched-sequence, or unrelated source events fail closed with `WORKER_SOURCE_NOT_VERIFIED`. The live checkout, payment gateway, refund provider, COD policy, and W3 transport remain outside this command.
 
 ## Command input
 

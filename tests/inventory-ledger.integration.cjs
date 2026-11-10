@@ -343,7 +343,14 @@ test('REN2-83..89 stock ledger serializes 100 concurrent commands, replays idemp
     const submittedReturn = await repository.createReturn(context, { variantId: fixture.variantId, locationId: fixture.secondLocationId,
       quantity: 1, condition: 'INSPECT', reason: 'CUSTOMER_RETURN', evidenceReference: 'fixture:return-inspection' }, 'return-inspect');
     assert.equal(submittedReturn.state, 'PENDING_INSPECTION');
-    await repository.decideReturn(approvalContext, { returnId: submittedReturn.id, expectedDecision: 'ACCEPT', reason: 'Inspection passed.' }, 'return-inspect-accept');
+    const submittedReturnReplay = await repository.createReturn(context, { variantId: fixture.variantId, locationId: fixture.secondLocationId,
+      quantity: 1, condition: 'INSPECT', reason: 'CUSTOMER_RETURN', evidenceReference: 'fixture:return-inspection' }, 'return-inspect');
+    assert.equal(submittedReturnReplay.id, submittedReturn.id, 'duplicate return intake reuses the same quarantined return');
+    const acceptedReturn = await repository.decideReturn(approvalContext,
+      { returnId: submittedReturn.id, expectedDecision: 'ACCEPT', reason: 'Inspection passed.' }, 'return-inspect-accept');
+    const acceptedReturnReplay = await repository.decideReturn(approvalContext,
+      { returnId: submittedReturn.id, expectedDecision: 'ACCEPT', reason: 'Inspection passed.' }, 'return-inspect-accept');
+    assert.equal(acceptedReturnReplay.id, acceptedReturn.id, 'duplicate return review reuses the recorded decision');
     const damagedReturn = await repository.createReturn(context, { variantId: fixture.variantId, locationId: fixture.secondLocationId,
       quantity: 2, condition: 'DAMAGED', reason: 'DAMAGED_RETURN', evidenceReference: 'fixture:return-damaged' }, 'return-damaged');
     await assert.rejects(repository.decideReturn(approvalContext, { returnId: damagedReturn.id, expectedDecision: 'ACCEPT', reason: 'Damage observed.' }, 'return-damaged-accept'),

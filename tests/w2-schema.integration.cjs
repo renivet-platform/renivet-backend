@@ -35,7 +35,7 @@ const W2_TABLES = [
   'inventory.stock_buffer_events', 'inventory.stock_transfers',
   'inventory.stock_command_receipts', 'inventory.stock_adjustment_policy', 'inventory.stock_adjustment_policy_history',
   'inventory.stock_adjustment_events', 'inventory.stock_returns', 'inventory.stock_return_events',
-  'inventory.reconciliation_case_events',
+  'inventory.reconciliation_case_events', 'inventory.stock_paid_unavailable_cases',
 ];
 
 function disposableDatabaseUrl() {

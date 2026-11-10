@@ -95,7 +95,7 @@ jobs:
         run: |
           npm run build
           node --test tests/inventory-ledger.integration.cjs
-      - name: Verify REN2-90 trusted checkout allocation, tenant isolation, and concurrent stock protection
+      - name: Verify REN2-90/93 trusted allocation, tenant isolation, lifecycle, and concurrent stock protection
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
         run: |
