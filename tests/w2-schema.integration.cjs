@@ -36,6 +36,8 @@ const W2_TABLES = [
   'inventory.stock_command_receipts', 'inventory.stock_adjustment_policy', 'inventory.stock_adjustment_policy_history',
   'inventory.stock_adjustment_events', 'inventory.stock_returns', 'inventory.stock_return_events',
   'inventory.reconciliation_case_events', 'inventory.stock_paid_unavailable_cases',
+  'inventory.checkout_pool_admission_cursors', 'inventory.checkout_admission_claims',
+  'inventory.checkout_admission_proofs', 'inventory.checkout_admission_skips',
 ];
 
 function disposableDatabaseUrl() {
