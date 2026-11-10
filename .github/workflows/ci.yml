@@ -30,6 +30,8 @@ jobs:
       - name: Check generated OpenAPI, TypeScript client, and Postman contract artifacts
         run: npm run api:check
       - run: npm test
+      - name: Verify W2 inventory ATS and adjustment policy unit tests
+        run: node --test tests/w2/inventory-domain.test.cjs tests/w2/inventory-route-activation.test.cjs
   postgres-integration:
     name: PostgreSQL 16 disposable integration
     runs-on: ubuntu-24.04
@@ -41,6 +43,7 @@ jobs:
           POSTGRES_DB: renivet_ci
           POSTGRES_USER: renivet_ci
           POSTGRES_PASSWORD: ci_disposable_only
+          POSTGRES_INITDB_ARGS: -c max_connections=150
         ports:
           - 5432:5432
         options: >-
@@ -86,6 +89,12 @@ jobs:
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
         run: node --test tests/w2-schema.integration.cjs
+      - name: Verify REN2-83..89 stock ledger isolation, concurrency, replay, and rollback
+        env:
+          RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
+        run: |
+          npm run build
+          node --test tests/inventory-ledger.integration.cjs
       - name: Verify REN2-66 private media lifecycle, rights, derivatives, and brand scope
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
@@ -245,6 +254,12 @@ jobs:
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
         run: node --test tests/w2-schema.integration.cjs
+      - name: Re-verify REN2-83..89 stock ledger after recovery
+        env:
+          RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
+        run: |
+          npm run build
+          node --test tests/inventory-ledger.integration.cjs
       - name: Re-verify REN2-66 private media lifecycle after recovery
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
