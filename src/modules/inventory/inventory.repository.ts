@@ -205,7 +205,7 @@ export class InventoryPostgresRepository {
       (!/^[a-z][a-z0-9._-]{0,127}$/.test(authorization.principalId) && !uuid.test(authorization.principalId)) ||
       typeof authorization.jobId !== 'string' || !uuid.test(authorization.jobId) ||
       typeof authorization.sourceEventId !== 'string' || !uuid.test(authorization.sourceEventId) ||
-      authorization.purpose !== 'inventory.allocate' || !Array.isArray(authorization.effects) ||
+      !['inventory.allocate', 'inventory.checkout_admission'].includes(authorization.purpose) || !Array.isArray(authorization.effects) ||
       !authorization.effects.includes('inventory.allocate') || typeof authorization.authorizeEffect !== 'function') {
       throw failure('WORKER_AUTHORIZATION_DENIED', 403);
     }
@@ -226,23 +226,47 @@ export class InventoryPostgresRepository {
       ].sort();
       for (const lockKey of lockKeys) await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [lockKey]);
 
-      const source = await client.query(`SELECT aggregate_type,event_type,aggregate_id,event_payload->>'brandId' AS brand_id,
-          event_payload->>'acceptedSequence' AS accepted_sequence,event_payload->'lines' AS lines
+      const source = await client.query(`SELECT aggregate_type,event_type,event_version,aggregate_id,event_payload
         FROM platform.outbox_events WHERE id=$1 FOR SHARE`,
       [authorization.sourceEventId]);
-      const accepted = source.rows[0];
-      if (!accepted || accepted.aggregate_type !== 'checkout.order' || accepted.event_type !== 'checkout.accepted' ||
-        accepted.aggregate_id !== input.checkoutId || accepted.brand_id !== input.brandId ||
-        !/^[1-9][0-9]*$/.test(accepted.accepted_sequence ?? '') ||
-        BigInt(accepted.accepted_sequence) !== BigInt(input.acceptedSequence)) {
+      const eligibility = source.rows[0];
+      const eligibilityPayload = eligibility?.event_payload as Record<string, unknown> | undefined;
+      const eligibilitySequence = eligibilityPayload?.eligibilitySequence;
+      const acceptedEventId = eligibilityPayload?.acceptedEventId;
+      if (!eligibility || eligibility.aggregate_type !== 'checkout.order' || eligibility.event_type !== 'checkout.allocation_eligible' ||
+        eligibility.event_version !== 1 ||
+        eligibility.aggregate_id !== input.checkoutId || !eligibilityPayload || eligibilityPayload.brandId !== input.brandId ||
+        !uuid.test(String(acceptedEventId)) || !Number.isSafeInteger(eligibilitySequence) || Number(eligibilitySequence) < 1 ||
+        eligibilityPayload.acceptedSequence !== input.acceptedSequence ||
+        typeof eligibilityPayload.requestHash !== 'string' || !/^[0-9a-f]{64}$/.test(eligibilityPayload.requestHash)) {
         throw failure('WORKER_SOURCE_NOT_VERIFIED', 403);
       }
-      if (Array.isArray(accepted.lines) && accepted.lines.length > 1) {
+      const verifiedAcceptedEventId = acceptedEventId as string;
+
+      const acceptedSource = await client.query(`SELECT aggregate_type,event_type,event_version,aggregate_id,event_payload
+        FROM platform.outbox_events WHERE id=$1 FOR SHARE`, [verifiedAcceptedEventId]);
+      const accepted = acceptedSource.rows[0];
+      const acceptedPayload = accepted?.event_payload as Record<string, unknown> | undefined;
+      const acceptedLines = acceptedPayload?.lines;
+      if (!accepted || accepted.aggregate_type !== 'checkout.order' || accepted.event_type !== 'checkout.accepted' || accepted.event_version !== 1 ||
+        accepted.aggregate_id !== input.checkoutId || !acceptedPayload || acceptedPayload.brandId !== input.brandId ||
+        acceptedPayload.acceptedSequence !== input.acceptedSequence || typeof acceptedPayload.requestHash !== 'string' ||
+        !/^[0-9a-f]{64}$/.test(acceptedPayload.requestHash)) {
+        throw failure('WORKER_SOURCE_NOT_VERIFIED', 403);
+      }
+      if (Array.isArray(acceptedLines) && acceptedLines.length > 1) {
         throw failure('CHECKOUT_MULTI_LINE_POLICY_UNRESOLVED', 409);
       }
-      const sourceLine = Array.isArray(accepted.lines) ? accepted.lines[0] : null;
-      if (!sourceLine || sourceLine.checkoutLineId !== input.checkoutLineId || sourceLine.variantId !== input.variantId ||
-        sourceLine.locationId !== input.locationId || sourceLine.quantity !== input.quantity) {
+      const sourceLine = Array.isArray(acceptedLines) ? acceptedLines[0] as Record<string, unknown> | undefined : undefined;
+      const canonicalLine = sourceLine && Object.keys(sourceLine).sort().join(',') === 'checkoutLineId,locationId,quantity,variantId'
+        ? { checkoutLineId: sourceLine.checkoutLineId, variantId: sourceLine.variantId,
+          locationId: sourceLine.locationId, quantity: sourceLine.quantity } : null;
+      const canonicalRequestHash = canonicalLine ? digest({ brandId: input.brandId, checkoutId: input.checkoutId,
+        acceptedSequence: input.acceptedSequence, lines: [canonicalLine] }) : null;
+      if (!canonicalLine || canonicalLine.checkoutLineId !== input.checkoutLineId || canonicalLine.variantId !== input.variantId ||
+        canonicalLine.locationId !== input.locationId || canonicalLine.quantity !== input.quantity ||
+        acceptedPayload.requestHash !== canonicalRequestHash || eligibilityPayload.requestHash !== canonicalRequestHash ||
+        !eligibilityPayload.line || stable(eligibilityPayload.line) !== stable(canonicalLine)) {
         throw failure('WORKER_SOURCE_NOT_VERIFIED', 403);
       }
 
@@ -258,6 +282,32 @@ export class InventoryPostgresRepository {
         return { ...prior.rows[0].response, replayed: true };
       }
 
+      const proofReplay = await client.query(`SELECT request_sha256,result_payload FROM inventory.checkout_admission_proofs
+        WHERE eligibility_event_id=$1 FOR UPDATE`, [authorization.sourceEventId]);
+      if (proofReplay.rows[0]) {
+        if (proofReplay.rows[0].request_sha256 !== canonicalRequestHash) throw failure('WORKER_SOURCE_NOT_VERIFIED', 403);
+        const response = { ...proofReplay.rows[0].result_payload, replayed: true };
+        await this.recordWorkerAllocationReceipt(client, authorization, input, requestHash, response);
+        return response;
+      }
+
+      const target = await client.query(`SELECT 1 FROM catalogue.product_variants v
+        JOIN brands.brands b ON b.id=v.brand_id AND b.onboarding_state='approved'
+        JOIN inventory.stock_locations l ON l.brand_id=v.brand_id AND l.id=$3 AND l.active
+        WHERE v.id=$2 AND v.brand_id=$1`, [input.brandId, input.variantId, input.locationId]);
+      if (!target.rowCount) throw failure('STOCK_TARGET_NOT_FOUND', 404);
+
+      await client.query(`INSERT INTO inventory.checkout_pool_admission_cursors(brand_id,variant_id,location_id)
+        VALUES($1,$2,$3) ON CONFLICT DO NOTHING`, [input.brandId,input.variantId,input.locationId]);
+      const cursor = await client.query(`SELECT last_eligibility_sequence FROM inventory.checkout_pool_admission_cursors
+        WHERE brand_id=$1 AND variant_id=$2 AND location_id=$3 FOR UPDATE`, [input.brandId,input.variantId,input.locationId]);
+      if (!cursor.rows[0]) throw failure('CHECKOUT_ADMISSION_CURSOR_UNAVAILABLE', 503);
+      const lastEligibilitySequence = Number(cursor.rows[0].last_eligibility_sequence);
+      if (Number(eligibilitySequence) !== lastEligibilitySequence + 1) {
+        throw failure(Number(eligibilitySequence) > lastEligibilitySequence + 1
+          ? 'CHECKOUT_ELIGIBLE_HEAD_NOT_READY' : 'CHECKOUT_ELIGIBLE_HEAD_ALREADY_CONSUMED', 409);
+      }
+
       const existing = await client.query(`SELECT id,brand_id,variant_id,location_id,checkout_id,checkout_line_id,
           accepted_sequence,quantity,allocation_state FROM inventory.stock_allocations
         WHERE checkout_id=$1 AND checkout_line_id=$2 AND location_id=$3 FOR UPDATE`,
@@ -269,7 +319,9 @@ export class InventoryPostgresRepository {
           throw failure('CHECKOUT_ALLOCATION_CONFLICT', 409);
         }
         const response = { state: allocation.allocation_state, allocationId: allocation.id,
-          acceptedSequence: Number(allocation.accepted_sequence), replayed: true };
+          acceptedSequence: Number(allocation.accepted_sequence), replayed: false };
+        await this.recordCheckoutAdmissionProof(client, input, authorization.sourceEventId, verifiedAcceptedEventId,
+          canonicalRequestHash!, Number(eligibilitySequence), response);
         await this.recordWorkerAllocationReceipt(client, authorization, input, requestHash, response);
         return response;
       }
@@ -280,16 +332,13 @@ export class InventoryPostgresRepository {
       if (priorUnavailable.rows[0]) {
         const response = { state: 'PAID_STOCK_UNAVAILABLE', allocationId: null,
           reconciliationCaseId: priorUnavailable.rows[0].id, acceptedSequence: input.acceptedSequence,
-          reason: priorUnavailable.rows[0].reason_code, replayed: true };
+          reason: priorUnavailable.rows[0].reason_code, replayed: false };
+        await this.recordCheckoutAdmissionProof(client, input, authorization.sourceEventId, verifiedAcceptedEventId,
+          canonicalRequestHash!, Number(eligibilitySequence), response);
         await this.recordWorkerAllocationReceipt(client, authorization, input, requestHash, response);
         return response;
       }
 
-      const target = await client.query(`SELECT 1 FROM catalogue.product_variants v
-        JOIN brands.brands b ON b.id=v.brand_id AND b.onboarding_state='approved'
-        JOIN inventory.stock_locations l ON l.brand_id=v.brand_id AND l.id=$3 AND l.active
-        WHERE v.id=$2 AND v.brand_id=$1`, [input.brandId, input.variantId, input.locationId]);
-      if (!target.rowCount) throw failure('STOCK_TARGET_NOT_FOUND', 404);
       const locked = await client.query<StockBalance>(`SELECT * FROM inventory.stock_balances
         WHERE brand_id=$1 AND variant_id=$2 AND location_id=$3 FOR UPDATE`, [input.brandId, input.variantId, input.locationId]);
       const before = locked.rows[0];
@@ -342,9 +391,119 @@ export class InventoryPostgresRepository {
             eventSequence: sequence, balanceVersion: sequence, replayed: false };
         }
       }
+      await this.recordCheckoutAdmissionProof(client, input, authorization.sourceEventId, verifiedAcceptedEventId,
+        canonicalRequestHash!, Number(eligibilitySequence), response);
       await this.recordWorkerAllocationReceipt(client, authorization, input, requestHash, response);
       return response;
     });
+  }
+
+  private async recordCheckoutAdmissionProof(client: PoolClient,
+    input: { brandId: string; checkoutId: string; checkoutLineId: string; acceptedSequence: number;
+      variantId: string; locationId: string; quantity: number },
+    eligibilityEventId: string, acceptedEventId: string, requestSha256: string, eligibilitySequence: number,
+    response: Record<string, unknown>): Promise<void> {
+    const resultState = response.state;
+    if (resultState !== 'ALLOCATED' && resultState !== 'PAID_STOCK_UNAVAILABLE') throw failure('CHECKOUT_ADMISSION_RESULT_INVALID');
+    await this.recordCheckoutAdmissionClaim(client, { ...input, eligibilitySequence }, acceptedEventId, eligibilityEventId, 'ALLOCATION');
+    await client.query(`INSERT INTO inventory.checkout_admission_proofs(brand_id,checkout_id,checkout_line_id,variant_id,
+      location_id,accepted_sequence,eligibility_sequence,quantity,request_sha256,accepted_event_id,eligibility_event_id,
+      result_state,result_payload)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb)`,
+    [input.brandId,input.checkoutId,input.checkoutLineId,input.variantId,input.locationId,input.acceptedSequence,
+      eligibilitySequence,input.quantity,requestSha256,acceptedEventId,eligibilityEventId,resultState,JSON.stringify(response)]);
+    const advanced = await client.query(`UPDATE inventory.checkout_pool_admission_cursors
+      SET last_eligibility_sequence=$4,row_version=row_version+1,updated_at=now()
+      WHERE brand_id=$1 AND variant_id=$2 AND location_id=$3 AND last_eligibility_sequence=$4-1 RETURNING row_version`,
+    [input.brandId,input.variantId,input.locationId,eligibilitySequence]);
+    if (advanced.rowCount !== 1) throw failure('CHECKOUT_ELIGIBLE_HEAD_NOT_READY',409);
+  }
+
+  private async recordCheckoutAdmissionClaim(client: PoolClient,
+    input: { brandId: string; checkoutId: string; acceptedSequence: number; variantId: string;
+      locationId: string; eligibilitySequence: number }, acceptedEventId: string, sourceEventId: string,
+    outcomeKind: 'ALLOCATION' | 'SKIP'): Promise<void> {
+    try {
+      await client.query(`INSERT INTO inventory.checkout_admission_claims(brand_id,checkout_id,accepted_sequence,
+        accepted_event_id,eligibility_sequence,variant_id,location_id,source_event_id,outcome_kind)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [input.brandId,input.checkoutId,input.acceptedSequence,acceptedEventId,input.eligibilitySequence,
+        input.variantId,input.locationId,sourceEventId,outcomeKind]);
+    } catch (error) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === '23505') {
+        throw failure('CHECKOUT_ADMISSION_OUTCOME_ALREADY_RECORDED',409);
+      }
+      throw error;
+    }
+  }
+
+  async skipCheckoutAdmission(authorization: WorkerAuthorizationContext, input: {
+    brandId: string; checkoutId: string; acceptedSequence: number; acceptedEventId: string;
+    variantId: string; locationId: string; eligibilitySequence: number;
+    reasonCode: 'PREDECESSOR_INVALID' | 'PREDECESSOR_EXPIRED' | 'PREDECESSOR_CANCELLED' | 'OPERATOR_RECOVERY';
+    idempotencyKey: string;
+  }) {
+    this.validateTrustedActor(authorization,input?.brandId,'inventory.admission.skip','inventory.admission.skip');
+    if (!uuidLike(input.acceptedEventId) || !uuidLike(input.checkoutId) || !uuidLike(input.variantId) ||
+      !uuidLike(input.locationId) || !Number.isSafeInteger(input.acceptedSequence) || input.acceptedSequence < 1 ||
+      !Number.isSafeInteger(input.eligibilitySequence) || input.eligibilitySequence < 1 ||
+      !['PREDECESSOR_INVALID','PREDECESSOR_EXPIRED','PREDECESSOR_CANCELLED','OPERATOR_RECOVERY'].includes(input.reasonCode)) {
+      throw failure('CHECKOUT_ADMISSION_SKIP_INVALID');
+    }
+    await authorization.authorizeEffect('inventory.admission.skip',input.brandId);
+    return this.transaction(async (client) => this.trustedCommand(client,authorization,input.brandId,
+      'checkout.admission.skip',input.idempotencyKey,input,async () => {
+        const source = await client.query(`SELECT aggregate_type,event_type,event_version,aggregate_id,event_payload
+          FROM platform.outbox_events WHERE id=$1 FOR SHARE`, [authorization.sourceEventId]);
+        const sourceEvent = source.rows[0];
+        const payload = sourceEvent?.event_payload as Record<string, unknown> | undefined;
+        const line = payload?.line as Record<string, unknown> | undefined;
+        if (!sourceEvent || sourceEvent.aggregate_type !== 'checkout.order' ||
+          sourceEvent.event_type !== 'checkout.allocation_skipped' || sourceEvent.event_version !== 1 ||
+          sourceEvent.aggregate_id !== input.checkoutId ||
+          !payload || payload.brandId !== input.brandId || payload.acceptedEventId !== input.acceptedEventId ||
+          payload.acceptedSequence !== input.acceptedSequence || payload.eligibilitySequence !== input.eligibilitySequence ||
+          payload.reasonCode !== input.reasonCode || typeof payload.requestHash !== 'string' ||
+          !/^[0-9a-f]{64}$/.test(payload.requestHash) || !line) throw failure('WORKER_SOURCE_NOT_VERIFIED',403);
+        const acceptedSource = await client.query(`SELECT aggregate_type,event_type,event_version,aggregate_id,event_payload
+          FROM platform.outbox_events WHERE id=$1 FOR SHARE`, [input.acceptedEventId]);
+        const acceptedEvent = acceptedSource.rows[0];
+        const accepted = acceptedEvent?.event_payload as Record<string, unknown> | undefined;
+        const lines = accepted?.lines;
+        const canonicalLine = Array.isArray(lines) && lines.length === 1 ? lines[0] as Record<string, unknown> : null;
+        const requestSha256 = canonicalLine ? digest({ brandId: input.brandId, checkoutId: input.checkoutId,
+          acceptedSequence: input.acceptedSequence, lines: [canonicalLine] }) : null;
+        if (!acceptedEvent || acceptedEvent.aggregate_type !== 'checkout.order' || acceptedEvent.event_type !== 'checkout.accepted' ||
+          acceptedEvent.event_version !== 1 ||
+          acceptedEvent.aggregate_id !== input.checkoutId || !accepted || accepted.brandId !== input.brandId ||
+          accepted.acceptedSequence !== input.acceptedSequence || accepted.requestHash !== requestSha256 ||
+          payload.requestHash !== requestSha256 || stable(line) !== stable(canonicalLine) ||
+          line.variantId !== input.variantId || line.locationId !== input.locationId) throw failure('WORKER_SOURCE_NOT_VERIFIED',403);
+
+        await client.query(`INSERT INTO inventory.checkout_pool_admission_cursors(brand_id,variant_id,location_id)
+          VALUES($1,$2,$3) ON CONFLICT DO NOTHING`, [input.brandId,input.variantId,input.locationId]);
+        const cursor = await client.query(`SELECT last_eligibility_sequence FROM inventory.checkout_pool_admission_cursors
+          WHERE brand_id=$1 AND variant_id=$2 AND location_id=$3 FOR UPDATE`, [input.brandId,input.variantId,input.locationId]);
+        if (!cursor.rows[0]) throw failure('CHECKOUT_ADMISSION_CURSOR_UNAVAILABLE',503);
+        const lastSequence = Number(cursor.rows[0].last_eligibility_sequence);
+        if (input.eligibilitySequence !== lastSequence + 1) {
+          throw failure(input.eligibilitySequence > lastSequence + 1
+            ? 'CHECKOUT_ELIGIBLE_HEAD_NOT_READY' : 'CHECKOUT_ELIGIBLE_HEAD_ALREADY_CONSUMED',409);
+        }
+        await this.recordCheckoutAdmissionClaim(client, input, input.acceptedEventId, authorization.sourceEventId, 'SKIP');
+        await client.query(`INSERT INTO inventory.checkout_admission_skips(brand_id,checkout_id,accepted_sequence,
+          eligibility_sequence,variant_id,location_id,accepted_event_id,source_event_id,reason_code)
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [input.brandId,input.checkoutId,input.acceptedSequence,input.eligibilitySequence,input.variantId,input.locationId,
+          input.acceptedEventId,authorization.sourceEventId,input.reasonCode]);
+        const advanced = await client.query(`UPDATE inventory.checkout_pool_admission_cursors
+          SET last_eligibility_sequence=$4,row_version=row_version+1,updated_at=now()
+          WHERE brand_id=$1 AND variant_id=$2 AND location_id=$3 AND last_eligibility_sequence=$4-1 RETURNING row_version`,
+        [input.brandId,input.variantId,input.locationId,input.eligibilitySequence]);
+        if (advanced.rowCount !== 1) throw failure('CHECKOUT_ELIGIBLE_HEAD_NOT_READY',409);
+        return { state:'SKIPPED',checkoutId:input.checkoutId,acceptedSequence:input.acceptedSequence,
+          eligibilitySequence:input.eligibilitySequence,replayed:false };
+      }));
   }
 
   private async recordPaidStockUnavailable(client: PoolClient, authorization: WorkerAuthorizationContext,
@@ -381,7 +540,9 @@ export class InventoryPostgresRepository {
       !(/^[a-z][a-z0-9._-]{0,127}$/.test(authorization.principalId) || uuid.test(authorization.principalId)) ||
       typeof authorization.jobId !== 'string' || !uuid.test(authorization.jobId) ||
       typeof authorization.sourceEventId !== 'string' || !uuid.test(authorization.sourceEventId) ||
-      authorization.purpose !== purpose || !Array.isArray(authorization.effects) || !authorization.effects.includes(effect) ||
+      (authorization.purpose !== purpose && !(authorization.purpose === 'inventory.checkout_admission' &&
+        ['inventory.allocate', 'inventory.admission.skip'].includes(effect))) ||
+      !Array.isArray(authorization.effects) || !authorization.effects.includes(effect) ||
       typeof authorization.authorizeEffect !== 'function' || authorization.brandId !== brandId) {
       throw failure('WORKER_AUTHORIZATION_DENIED', 403);
     }

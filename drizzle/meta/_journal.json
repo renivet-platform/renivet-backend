@@ -281,6 +281,13 @@
       "when": 1794297240000,
       "tag": "0039_ren2_93_allocation_release_dispatch_recovery",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1794297300000,
+      "tag": "0040_ren2_91_checkout_admission_proofs",
+      "breakpoints": true
     }
   ]
 }

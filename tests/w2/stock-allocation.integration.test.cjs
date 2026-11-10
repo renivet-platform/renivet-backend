@@ -2,7 +2,7 @@
 
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { randomUUID } = require('node:crypto');
+const { createHash, randomUUID } = require('node:crypto');
 const { Pool } = require('pg');
 const { InventoryPostgresRepository } = require('../../dist/modules/inventory/inventory.repository.js');
 
@@ -15,6 +15,11 @@ function disposableUrl(value) {
   assert.equal(url.pathname, '/renivet_ci');
   assert.equal(url.username, 'renivet_ci');
   return url;
+}
+function stable(value) {
+  if (Array.isArray(value)) return `[${value.map(stable).join(',')}]`;
+  if (value && typeof value === 'object') return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stable(value[key])}`).join(',')}}`;
+  return JSON.stringify(value);
 }
 function workerAuthorization(brandId, sourceEventId, purpose = 'inventory.allocate', effect = 'inventory.allocate', principalId = 'renivet.synthetic.w3') {
   return {
@@ -42,7 +47,7 @@ test('REN2-90/93 serializes checkout allocation and lifecycle effects exactly on
     created = true;
     const databaseUrl = new URL(baseUrl);
     databaseUrl.pathname = `/${database}`;
-    pool = new Pool({ connectionString: databaseUrl.toString(), max: 100, connectionTimeoutMillis: 15_000 });
+    pool = new Pool({ connectionString: databaseUrl.toString(), max: 64, connectionTimeoutMillis: 15_000 });
     const version = await pool.query('SHOW server_version_num');
     assert.ok(Number(version.rows[0].server_version_num) >= 160000 && Number(version.rows[0].server_version_num) < 170000);
 
@@ -85,7 +90,18 @@ test('REN2-90/93 serializes checkout allocation and lifecycle effects exactly on
     const acceptedEvent = async (checkoutId, key, acceptedSequence = 1, lines = [], eventType = 'checkout.accepted') => (await pool.query(`INSERT INTO platform.outbox_events
       (aggregate_type,aggregate_id,event_type,event_version,event_payload,event_key)
       VALUES('checkout.order',$1,$3,1,$2::jsonb,$4) RETURNING id`,
-    [checkoutId, JSON.stringify({ brandId, acceptedSequence, lines }), eventType, key])).rows[0].id;
+    [checkoutId, JSON.stringify({ brandId, acceptedSequence, lines,
+      requestHash: createHash('sha256').update(stable({ brandId, checkoutId, acceptedSequence, lines })).digest('hex') }), eventType, key])).rows[0].id;
+    const eligibleEvent = async (checkoutId, key, acceptedSequence, eligibilitySequence, line,
+      eventType = 'checkout.allocation_eligible', acceptedType = 'checkout.accepted') => {
+      const lines = Array.isArray(line) ? line : [line];
+      const acceptedEventId = await acceptedEvent(checkoutId, `${key}:accepted`, acceptedSequence, lines, acceptedType);
+      return (await pool.query(`INSERT INTO platform.outbox_events(aggregate_type,aggregate_id,event_type,event_version,event_payload,event_key)
+        VALUES('checkout.order',$1,$3,1,$2::jsonb,$4) RETURNING id`,
+      [checkoutId, JSON.stringify({ brandId, acceptedEventId, acceptedSequence,
+        requestHash: createHash('sha256').update(stable({ brandId, checkoutId, acceptedSequence, lines })).digest('hex'),
+        eligibilitySequence, line: lines.length === 1 ? lines[0] : null }), eventType, key])).rows[0].id;
+    };
 
     const repository = new InventoryPostgresRepository({ pool });
     const userContext = { userId: ownerId, brandId, permission: 'inventory.submit' };
@@ -103,16 +119,16 @@ test('REN2-90/93 serializes checkout allocation and lifecycle effects exactly on
     'a different brand principal cannot allocate this stock');
     const foreignSkuCheckout = randomUUID();
     const foreignSkuLine = randomUUID();
-    const foreignSkuEvent = await acceptedEvent(foreignSkuCheckout, `ren2-90-foreign-sku-${suffix}`, 1,
-      [{ checkoutLineId: foreignSkuLine, variantId: foreignVariantId, locationId, quantity: 1 }]);
+    const foreignSkuEvent = await eligibleEvent(foreignSkuCheckout, `ren2-90-foreign-sku-${suffix}`, 1, 1,
+      { checkoutLineId: foreignSkuLine, variantId: foreignVariantId, locationId, quantity: 1 });
     await assert.rejects(repository.allocateTrusted(workerAuthorization(brandId, foreignSkuEvent), {
       brandId, checkoutId: foreignSkuCheckout, checkoutLineId: foreignSkuLine, acceptedSequence: 1, variantId: foreignVariantId, locationId,
       quantity: 1, idempotencyKey: `foreign-variant-${suffix}`,
     }), (error) => error?.response?.code === 'STOCK_TARGET_NOT_FOUND', 'a guessed foreign SKU is non-disclosing');
     const foreignLocationCheckout = randomUUID();
     const foreignLocationLine = randomUUID();
-    const foreignLocationEvent = await acceptedEvent(foreignLocationCheckout, `ren2-90-foreign-location-${suffix}`, 1,
-      [{ checkoutLineId: foreignLocationLine, variantId, locationId: foreignLocationId, quantity: 1 }]);
+    const foreignLocationEvent = await eligibleEvent(foreignLocationCheckout, `ren2-90-foreign-location-${suffix}`, 1, 1,
+      { checkoutLineId: foreignLocationLine, variantId, locationId: foreignLocationId, quantity: 1 });
     await assert.rejects(repository.allocateTrusted(workerAuthorization(brandId, foreignLocationEvent), {
       brandId, checkoutId: foreignLocationCheckout, checkoutLineId: foreignLocationLine, acceptedSequence: 1, variantId, locationId: foreignLocationId,
       quantity: 1, idempotencyKey: `foreign-location-${suffix}`,
@@ -124,8 +140,8 @@ test('REN2-90/93 serializes checkout allocation and lifecycle effects exactly on
     (error) => error?.code === '23503', 'the database composite pool foreign key rejects a cross-brand location');
     const unverifiedCheckout = randomUUID();
     const unverifiedLine = randomUUID();
-    const unverifiedEvent = await acceptedEvent(unverifiedCheckout, `ren2-90-unverified-${suffix}`, 1,
-      [{ checkoutLineId: unverifiedLine, variantId, locationId, quantity: 1 }], 'checkout.payment_pending');
+    const unverifiedEvent = await eligibleEvent(unverifiedCheckout, `ren2-90-unverified-${suffix}`, 1, 1,
+      { checkoutLineId: unverifiedLine, variantId, locationId, quantity: 1 }, 'checkout.allocation_eligible', 'checkout.payment_pending');
     await assert.rejects(repository.allocateTrusted(workerAuthorization(brandId, unverifiedEvent), {
       brandId, checkoutId: unverifiedCheckout, checkoutLineId: unverifiedLine, acceptedSequence: 1,
       variantId, locationId, quantity: 1, idempotencyKey: `unverified-${suffix}`,
@@ -134,7 +150,7 @@ test('REN2-90/93 serializes checkout allocation and lifecycle effects exactly on
     const multiLineCheckout = randomUUID();
     const firstLine = { checkoutLineId: randomUUID(), variantId, locationId, quantity: 1 };
     const secondLine = { checkoutLineId: randomUUID(), variantId, locationId, quantity: 1 };
-    const multiLineEvent = await acceptedEvent(multiLineCheckout, `ren2-90-multiline-${suffix}`, 1, [firstLine, secondLine]);
+    const multiLineEvent = await eligibleEvent(multiLineCheckout, `ren2-90-multiline-${suffix}`, 1, 1, [firstLine, secondLine]);
     await assert.rejects(repository.allocateTrusted(workerAuthorization(brandId, multiLineEvent), {
       brandId, checkoutId: multiLineCheckout, ...firstLine, acceptedSequence: 1, idempotencyKey: `multiline-${suffix}`,
     }), (error) => error?.response?.code === 'CHECKOUT_MULTI_LINE_POLICY_UNRESOLVED',
@@ -144,19 +160,102 @@ test('REN2-90/93 serializes checkout allocation and lifecycle effects exactly on
       const checkoutId = randomUUID();
       const command = { brandId, checkoutId, checkoutLineId: randomUUID(), acceptedSequence: index + 1,
         variantId, locationId, quantity: 1, idempotencyKey: `race-${suffix}-${index}` };
-      const sourceEventId = await acceptedEvent(checkoutId, `ren2-90-race-${suffix}-${index}`, index + 1,
-        [{ checkoutLineId: command.checkoutLineId, variantId, locationId, quantity: command.quantity }]);
+      const sourceEventId = await eligibleEvent(checkoutId, `ren2-90-race-${suffix}-${index}`, index + 1, index + 1,
+        { checkoutLineId: command.checkoutLineId, variantId, locationId, quantity: command.quantity });
       return { command, authorization: workerAuthorization(brandId, sourceEventId, 'inventory.allocate',
         'inventory.allocate', index === 0 ? randomUUID() : 'renivet.synthetic.w3') };
     }));
-    const results = await Promise.all(requests.map(({ command, authorization }) => repository.allocateTrusted(authorization, command)));
-    const winners = results.filter((result) => result.state === 'ALLOCATED');
-    const rejected = results.filter((result) => result.state === 'PAID_STOCK_UNAVAILABLE');
-    assert.equal(winners.length, 3, '100 competing completions against three units produce exactly three allocations');
+    const firstWave = await Promise.all(requests.map(async ({ command, authorization }) => repository.allocateTrusted(authorization, command)
+      .then((result) => ({ command, authorization, result }), (error) => ({ command, authorization, error }))));
+    const completedFirstWave = firstWave.filter((item) => item.result).map((item) => item.result);
+    const waiting = firstWave.filter((item) => item.error?.response?.code === 'CHECKOUT_ELIGIBLE_HEAD_NOT_READY');
+    assert.ok(waiting.length > 0, 'contending successors wait when they arrive before the current W3 eligible head');
+    assert.equal(firstWave.length, completedFirstWave.length + waiting.length, 'the race yields only committed results or retryable head waits');
+    const tailResults = [];
+    for (const { command, authorization } of waiting.sort((left, right) => left.command.acceptedSequence - right.command.acceptedSequence)) {
+      tailResults.push(await repository.allocateTrusted(authorization, command));
+    }
+    const allResults = [...completedFirstWave, ...tailResults];
+    const winners = allResults.filter((result) => result.state === 'ALLOCATED');
+    const rejected = allResults.filter((result) => result.state === 'PAID_STOCK_UNAVAILABLE');
+    assert.equal(winners.length, 3, '100 ordered completions against three units produce exactly three allocations');
     assert.equal(rejected.length, 97);
     assert.equal(new Set(winners.map((result) => result.allocationId)).size, 3);
 
-    const winningIndex = results.findIndex((result) => result.state === 'ALLOCATED');
+    const lateCheckout = randomUUID();
+    const lateLine = { checkoutLineId: randomUUID(), variantId, locationId, quantity: 1 };
+    const lateEvent = await eligibleEvent(lateCheckout, `ren2-91-late-${suffix}`, 102, 102, lateLine);
+    await assert.rejects(repository.allocateTrusted(workerAuthorization(brandId, lateEvent), {
+      brandId, checkoutId: lateCheckout, ...lateLine, acceptedSequence: 102,
+      idempotencyKey: `late-${suffix}`,
+    }), (error) => error?.response?.code === 'CHECKOUT_ELIGIBLE_HEAD_NOT_READY',
+    'a later W3 eligibility proof cannot overtake the pool head');
+    const headCheckout = randomUUID();
+    const headLine = { checkoutLineId: randomUUID(), variantId, locationId, quantity: 1 };
+    const headEvent = await eligibleEvent(headCheckout, `ren2-91-head-${suffix}`, 101, 101, headLine);
+    assert.equal((await repository.allocateTrusted(workerAuthorization(brandId, headEvent), {
+      brandId, checkoutId: headCheckout, ...headLine, acceptedSequence: 101,
+      idempotencyKey: `head-${suffix}`,
+    })).state, 'PAID_STOCK_UNAVAILABLE');
+    assert.equal((await repository.allocateTrusted(workerAuthorization(brandId, lateEvent), {
+      brandId, checkoutId: lateCheckout, ...lateLine, acceptedSequence: 102,
+      idempotencyKey: `late-${suffix}`,
+    })).state, 'PAID_STOCK_UNAVAILABLE', 'the later proof proceeds only after the W3 head has a durable outcome');
+
+    const skippedCheckout = randomUUID();
+    const skippedLine = { checkoutLineId: randomUUID(), variantId, locationId, quantity: 1 };
+    const skippedAcceptedEventId = await acceptedEvent(skippedCheckout, `ren2-91-skipped-accepted-${suffix}`, 103,
+      [skippedLine]);
+    const skippedRequestHash = createHash('sha256').update(stable({ brandId, checkoutId: skippedCheckout,
+      acceptedSequence: 103, lines: [skippedLine] })).digest('hex');
+    const skippedEventId = (await pool.query(`INSERT INTO platform.outbox_events
+      (aggregate_type,aggregate_id,event_type,event_version,event_payload,event_key)
+      VALUES('checkout.order',$1,'checkout.allocation_skipped',1,$2::jsonb,$3) RETURNING id`,
+    [skippedCheckout, JSON.stringify({ brandId, acceptedEventId: skippedAcceptedEventId,
+      acceptedSequence: 103, eligibilitySequence: 103, requestHash: skippedRequestHash,
+      line: skippedLine, reasonCode: 'PREDECESSOR_CANCELLED' }), `ren2-91-skip-${suffix}`])).rows[0].id;
+    const skipAuthorization = workerAuthorization(brandId, skippedEventId, 'inventory.admission.skip', 'inventory.admission.skip');
+    const skipped = await repository.skipCheckoutAdmission(skipAuthorization, {
+      brandId, checkoutId: skippedCheckout, acceptedSequence: 103, acceptedEventId: skippedAcceptedEventId,
+      variantId, locationId, eligibilitySequence: 103, reasonCode: 'PREDECESSOR_CANCELLED',
+      idempotencyKey: `skip-${suffix}`,
+    });
+    assert.equal(skipped.state, 'SKIPPED');
+    assert.equal((await repository.skipCheckoutAdmission(skipAuthorization, {
+      brandId, checkoutId: skippedCheckout, acceptedSequence: 103, acceptedEventId: skippedAcceptedEventId,
+      variantId, locationId, eligibilitySequence: 103, reasonCode: 'PREDECESSOR_CANCELLED',
+      idempotencyKey: `skip-${suffix}`,
+    })).replayed, true, 'duplicate explicit skip proof is idempotent');
+    const contradictingAllocationEvent = (await pool.query(`INSERT INTO platform.outbox_events
+      (aggregate_type,aggregate_id,event_type,event_version,event_payload,event_key)
+      VALUES('checkout.order',$1,'checkout.allocation_eligible',1,$2::jsonb,$3) RETURNING id`,
+    [skippedCheckout, JSON.stringify({ brandId, acceptedEventId: skippedAcceptedEventId,
+      acceptedSequence: 103, eligibilitySequence: 104, requestHash: skippedRequestHash,
+      line: skippedLine }), `ren2-91-contradictory-${suffix}`])).rows[0].id;
+    await assert.rejects(repository.allocateTrusted(workerAuthorization(brandId, contradictingAllocationEvent), {
+      brandId, checkoutId: skippedCheckout, ...skippedLine, acceptedSequence: 103,
+      idempotencyKey: `contradictory-allocation-${suffix}`,
+    }), (error) => error?.response?.code === 'CHECKOUT_ADMISSION_OUTCOME_ALREADY_RECORDED',
+    'one accepted order cannot be both skipped and allocated under a later pool token');
+    await assert.rejects(repository.skipCheckoutAdmission(workerAuthorization(brandId, skippedEventId,
+      'inventory.admission.skip', 'inventory.admission.skip'), {
+      brandId, checkoutId: randomUUID(), acceptedSequence: 103, acceptedEventId: skippedAcceptedEventId,
+      variantId, locationId, eligibilitySequence: 104, reasonCode: 'UNAPPROVED_TIMEOUT',
+      idempotencyKey: `invalid-skip-${suffix}`,
+    }), (error) => error?.response?.code === 'CHECKOUT_ADMISSION_SKIP_INVALID',
+    'W2 cannot create its own timeout/skip policy');
+    const independentLocation = (await pool.query(`INSERT INTO inventory.stock_locations(brand_id,location_code,name)
+      VALUES($1,$2,'Independent allocator pool') RETURNING id`, [brandId, `I-${suffix}`])).rows[0].id;
+    const independentCheckout = randomUUID();
+    const independentLine = { checkoutLineId: randomUUID(), variantId, locationId: independentLocation, quantity: 1 };
+    const independentEvent = await eligibleEvent(independentCheckout, `ren2-94-independent-pool-${suffix}`, 105, 1,
+      independentLine);
+    assert.equal((await repository.allocateTrusted(workerAuthorization(brandId, independentEvent), {
+      brandId, checkoutId: independentCheckout, ...independentLine, acceptedSequence: 105,
+      idempotencyKey: `independent-${suffix}`,
+    })).state, 'PAID_STOCK_UNAVAILABLE', 'an independent pool starts at its own eligibility sequence and is not blocked by another pool cursor');
+
+    const winningIndex = requests.findIndex((_, index) => index < 3);
     const replay = await repository.allocateTrusted(requests[winningIndex].authorization, requests[winningIndex].command);
     assert.equal(replay.state, 'ALLOCATED');
     assert.equal(replay.allocationId, winners[0].allocationId);
@@ -172,10 +271,10 @@ test('REN2-90/93 serializes checkout allocation and lifecycle effects exactly on
     assert.equal(naturalDuplicate.replayed, true, 'a second delivery key for the accepted line cannot allocate twice');
     const unavailable = await pool.query(`SELECT count(*)::integer AS cases FROM inventory.stock_paid_unavailable_cases
       WHERE brand_id=$1 AND variant_id=$2 AND location_id=$3`, [brandId, variantId, locationId]);
-    assert.equal(unavailable.rows[0].cases, 97, 'each paid checkout that lost the last-unit race leaves a recovery obligation');
+    assert.equal(unavailable.rows[0].cases, 99, 'each paid checkout that lost the last-unit race leaves a recovery obligation');
     const recoveryEvents = await pool.query(`SELECT count(*)::integer AS count FROM platform.outbox_events
       WHERE event_type='inventory.paid_stock_unavailable'`);
-    assert.equal(recoveryEvents.rows[0].count, 97, 'paid-no-stock is durably published without claiming a refund');
+    assert.equal(recoveryEvents.rows[0].count, 100, 'paid-no-stock is durably published without claiming a refund, including the independent pool proof');
     const balance = (await pool.query(`SELECT physical_on_hand,allocated_not_dispatched,safety_buffer,quarantined,other_non_sellable
       FROM inventory.stock_balances WHERE brand_id=$1 AND variant_id=$2 AND location_id=$3`, [brandId, variantId, locationId])).rows[0];
     assert.equal(Number(balance.physical_on_hand), 3);
@@ -198,16 +297,16 @@ test('REN2-90/93 serializes checkout allocation and lifecycle effects exactly on
     await repository.movement(userContext, { variantId, locationId, effectKey: `restock-${suffix}`,
       reason: 'SYNTHETIC_RESTOCK', sourceType: 'TEST', sourceReference: `restock-${suffix}`, deltaPhysical: 2 });
     const lifecycleCheckout = randomUUID();
-    const lifecycleCommand = { brandId, checkoutId: lifecycleCheckout, checkoutLineId: randomUUID(), acceptedSequence: 101,
+    const lifecycleCommand = { brandId, checkoutId: lifecycleCheckout, checkoutLineId: randomUUID(), acceptedSequence: 106,
       variantId, locationId, quantity: 2, idempotencyKey: `lifecycle-allocate-${suffix}` };
-    const lifecycleSourceEvent = await acceptedEvent(lifecycleCheckout, `ren2-93-accepted-${suffix}`, 101,
-      [{ checkoutLineId: lifecycleCommand.checkoutLineId, variantId, locationId, quantity: lifecycleCommand.quantity }]);
+    const lifecycleSourceEvent = await eligibleEvent(lifecycleCheckout, `ren2-93-accepted-${suffix}`, 106, 104,
+      { checkoutLineId: lifecycleCommand.checkoutLineId, variantId, locationId, quantity: lifecycleCommand.quantity });
     const lifecycleAllocation = await repository.allocateTrusted(workerAuthorization(brandId, lifecycleSourceEvent), lifecycleCommand);
     assert.equal(lifecycleAllocation.state, 'ALLOCATED');
     const dispatchEventId = (await pool.query(`INSERT INTO platform.outbox_events(aggregate_type,aggregate_id,event_type,event_version,event_payload,event_key)
       VALUES('checkout.order',$1,'checkout.shipment_confirmed',1,$2::jsonb,$3) RETURNING id`,
     [lifecycleCheckout, JSON.stringify({ brandId }), `ren2-93-dispatch-${suffix}`])).rows[0].id;
-    const wrongDispatchSource = await acceptedEvent(lifecycleCheckout, `ren2-93-wrong-dispatch-source-${suffix}`, 101,
+    const wrongDispatchSource = await acceptedEvent(lifecycleCheckout, `ren2-93-wrong-dispatch-source-${suffix}`, 106,
       [], 'checkout.accepted');
     const dispatchInput = { brandId, allocationId: lifecycleAllocation.allocationId, quantity: 1,
       expectedBalanceVersion: lifecycleAllocation.balanceVersion, idempotencyKey: `dispatch-${suffix}` };
@@ -251,6 +350,7 @@ test('REN2-90/93 serializes checkout allocation and lifecycle effects exactly on
       WHERE brand_id=$1 AND variant_id=$2 AND location_id=$3`, [brandId, variantId, locationId])).rows[0];
     assert.equal(Number(lifecycleBalance.physical_on_hand), 4, 'shipping decreases P only for dispatched units');
     assert.equal(Number(lifecycleBalance.allocated_not_dispatched), 3, 'dispatch releases shipped A and cancellation releases only unshipped A');
+
     await assert.rejects(pool.query(`UPDATE inventory.stock_allocations SET quantity=quantity+1 WHERE id=$1`,
       [lifecycleAllocation.allocationId]), /STOCK_ALLOCATION_IDENTITY_IMMUTABLE/);
     await assert.rejects(pool.query(`UPDATE inventory.stock_allocations SET allocation_state='DISPATCHED' WHERE id=$1`,
