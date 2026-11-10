@@ -267,6 +267,13 @@
       "when": 1794297120000,
       "tag": "0037_ren2_84_allow_pool_genesis_event",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1794297180000,
+      "tag": "0038_ren2_90_trusted_stock_allocations",
+      "breakpoints": true
     }
   ]
 }

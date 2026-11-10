@@ -3,6 +3,7 @@ import { ConflictException, ForbiddenException, Injectable, NotFoundException, U
 import { PoolClient } from 'pg';
 import { IdentityInfrastructure } from '../identity/identity-infrastructure';
 import { BrandAccessContext } from '../access/brand-access.guard';
+import type { WorkerAuthorizationContext } from '../../workers/worker-authorization';
 import { AdjustmentPolicy, needsIndependentApproval, validateBalance } from './inventory-domain';
 
 export interface StockBalance {
@@ -184,6 +185,146 @@ export class InventoryPostgresRepository {
         return { ...result, opened: !prior.rowCount };
       });
     });
+  }
+
+  /**
+   * Apply one internally authorized verified-checkout line to its stock pool.
+   * The context must come from the durable worker authorization port; request
+   * bodies and HTTP callers must never construct this authority themselves.
+   */
+  async allocateTrusted(authorization: WorkerAuthorizationContext, input: {
+    brandId: string; checkoutId: string; checkoutLineId: string; acceptedSequence: number;
+    variantId: string; locationId: string; quantity: number; idempotencyKey: string;
+  }) {
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!authorization || typeof authorization.principalId !== 'string' ||
+      !/^[a-z][a-z0-9._-]{0,127}$/.test(authorization.principalId) ||
+      typeof authorization.jobId !== 'string' || !uuid.test(authorization.jobId) ||
+      typeof authorization.sourceEventId !== 'string' || !uuid.test(authorization.sourceEventId) ||
+      authorization.purpose !== 'inventory.allocate' || !Array.isArray(authorization.effects) ||
+      !authorization.effects.includes('inventory.allocate') || typeof authorization.authorizeEffect !== 'function') {
+      throw failure('WORKER_AUTHORIZATION_DENIED', 403);
+    }
+    if (!input || !uuid.test(input.brandId) ||
+      !uuid.test(input.checkoutId) || !uuid.test(input.checkoutLineId) || !uuid.test(input.variantId) ||
+      !uuid.test(input.locationId) || !Number.isSafeInteger(input.acceptedSequence) || input.acceptedSequence < 1 ||
+      !Number.isSafeInteger(input.quantity) || input.quantity < 1 ||
+      !/^[A-Za-z0-9._:-]{1,120}$/.test(input.idempotencyKey)) throw failure('STOCK_ALLOCATION_REQUEST_INVALID');
+    if (input.brandId !== authorization.brandId) throw failure('WORKER_AUTHORIZATION_DENIED', 403);
+
+    // Effect authorization is checked against the worker's server-resolved brand
+    // before any stock lookup, so a caller cannot probe another tenant's IDs.
+    await authorization.authorizeEffect('inventory.allocate', input.brandId);
+    return this.transaction(async (client) => {
+      const lockKeys = [
+        `inventory.receipt:${input.brandId}:checkout.allocate:${input.idempotencyKey}`,
+        `inventory.allocation:${input.brandId}:${input.checkoutId}:${input.checkoutLineId}:${input.locationId}`,
+      ].sort();
+      for (const lockKey of lockKeys) await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [lockKey]);
+
+      const source = await client.query(`SELECT aggregate_type,event_type,aggregate_id,event_payload->>'brandId' AS brand_id
+        FROM platform.outbox_events WHERE id=$1 FOR SHARE`,
+      [authorization.sourceEventId]);
+      const accepted = source.rows[0];
+      if (!accepted || accepted.aggregate_type !== 'checkout.order' || accepted.event_type !== 'checkout.accepted' ||
+        accepted.aggregate_id !== input.checkoutId || accepted.brand_id !== input.brandId) {
+        throw failure('WORKER_SOURCE_NOT_VERIFIED', 403);
+      }
+
+      const request = { ...input, actor: authorization.principalId,
+        sourceEventId: authorization.sourceEventId };
+      const requestHash = digest(request);
+      const prior = await client.query<{ request_sha256: string; response: Record<string, unknown> }>(
+        `SELECT request_sha256,response FROM inventory.stock_command_receipts
+         WHERE brand_id=$1 AND operation='checkout.allocate' AND idempotency_key=$2 FOR UPDATE`,
+        [input.brandId, input.idempotencyKey]);
+      if (prior.rows[0]) {
+        if (prior.rows[0].request_sha256 !== requestHash) throw failure('IDEMPOTENCY_KEY_REUSED', 409);
+        return { ...prior.rows[0].response, replayed: true };
+      }
+
+      const existing = await client.query(`SELECT id,brand_id,variant_id,location_id,checkout_id,checkout_line_id,
+          accepted_sequence,quantity,allocation_state FROM inventory.stock_allocations
+        WHERE checkout_id=$1 AND checkout_line_id=$2 AND location_id=$3 FOR UPDATE`,
+      [input.checkoutId, input.checkoutLineId, input.locationId]);
+      if (existing.rows[0]) {
+        const allocation = existing.rows[0];
+        if (allocation.brand_id !== input.brandId || allocation.variant_id !== input.variantId ||
+          Number(allocation.accepted_sequence) !== input.acceptedSequence || Number(allocation.quantity) !== input.quantity) {
+          throw failure('CHECKOUT_ALLOCATION_CONFLICT', 409);
+        }
+        const response = { state: allocation.allocation_state, allocationId: allocation.id,
+          acceptedSequence: Number(allocation.accepted_sequence), replayed: true };
+        await this.recordWorkerAllocationReceipt(client, authorization, input, requestHash, response);
+        return response;
+      }
+
+      const target = await client.query(`SELECT 1 FROM catalogue.product_variants v
+        JOIN brands.brands b ON b.id=v.brand_id AND b.onboarding_state='approved'
+        JOIN inventory.stock_locations l ON l.brand_id=v.brand_id AND l.id=$3 AND l.active
+        WHERE v.id=$2 AND v.brand_id=$1`, [input.brandId, input.variantId, input.locationId]);
+      if (!target.rowCount) throw failure('STOCK_TARGET_NOT_FOUND', 404);
+      const locked = await client.query<StockBalance>(`SELECT * FROM inventory.stock_balances
+        WHERE brand_id=$1 AND variant_id=$2 AND location_id=$3 FOR UPDATE`, [input.brandId, input.variantId, input.locationId]);
+      const before = locked.rows[0];
+      let response: Record<string, unknown>;
+      if (!before) {
+        response = { state: 'PAID_STOCK_UNAVAILABLE', allocationId: null,
+          acceptedSequence: input.acceptedSequence, reason: 'NO_STOCK_POOL', replayed: false };
+      } else {
+        const snapshot = balanceView(before);
+        if (snapshot.suspended || snapshot.availableToSell < input.quantity) {
+          response = { state: 'PAID_STOCK_UNAVAILABLE', allocationId: null,
+            acceptedSequence: input.acceptedSequence,
+            reason: snapshot.suspended ? 'STOCK_POOL_SUSPENDED' : 'INSUFFICIENT_AVAILABLE_STOCK', replayed: false };
+        } else {
+          const allocationId = randomUUID();
+          const eventId = randomUUID();
+          const sequence = Number(before.row_version) + 1;
+          const effectKey = `allocation.${digest([input.brandId,input.checkoutId,input.checkoutLineId,input.locationId]).slice(0,48)}`;
+          const after = { ...snapshot, allocatedNotDispatched: snapshot.allocatedNotDispatched + input.quantity,
+            availableToSell: snapshot.availableToSell - input.quantity, version: sequence };
+          const eventHash = digest({ allocationId, ...request, before: snapshot, after });
+          const updated = await client.query<StockBalance>(`UPDATE inventory.stock_balances SET allocated_not_dispatched=$4,
+            row_version=$5,updated_at=now() WHERE brand_id=$1 AND variant_id=$2 AND location_id=$3 AND row_version=$6 RETURNING *`,
+          [input.brandId, input.variantId, input.locationId, after.allocatedNotDispatched, sequence, before.row_version]);
+          if (!updated.rowCount) throw failure('STOCK_VERSION_CONFLICT', 409);
+          await client.query(`INSERT INTO inventory.stock_allocations(id,brand_id,variant_id,location_id,checkout_id,
+            checkout_line_id,accepted_sequence,quantity,allocation_state)
+            VALUES($1,$2,$3,$4,$5,$6,$7,$8,'ALLOCATED')`,
+          [allocationId,input.brandId,input.variantId,input.locationId,input.checkoutId,input.checkoutLineId,
+            input.acceptedSequence,input.quantity]);
+          await client.query(`INSERT INTO inventory.stock_events(id,brand_id,variant_id,location_id,pool_sequence,event_kind,
+            business_effect_key,payload_sha256,delta_physical,delta_quarantined,delta_other_non_sellable,delta_allocated,
+            delta_buffer,actor_user_id,actor_service_principal,source_event_id,before_balance,after_balance,correlation_id)
+            VALUES($1,$2,$3,$4,$5,'COMMITMENT',$6,$7,0,0,0,$8,0,NULL,$9,$10,$11::jsonb,$12::jsonb,$13)`,
+          [eventId,input.brandId,input.variantId,input.locationId,sequence,effectKey,eventHash,input.quantity,
+            authorization.principalId,authorization.sourceEventId,JSON.stringify(snapshot),JSON.stringify(after),randomUUID()]);
+          await client.query(`INSERT INTO inventory.stock_commitment_events(stock_event_id,brand_id,variant_id,location_id,
+            allocation_id,delta_allocated,business_effect_key,reason,balance_version_after)
+            VALUES($1,$2,$3,$4,$5,$6,$7,'CHECKOUT_ACCEPTED',$8)`,
+          [eventId,input.brandId,input.variantId,input.locationId,allocationId,input.quantity,effectKey,sequence]);
+          await client.query(`INSERT INTO platform.outbox_events(aggregate_type,aggregate_id,event_type,event_version,event_payload,event_key)
+            VALUES('inventory.stock_pool',$1,'inventory.stock.changed',1,$2::jsonb,$3)`,
+          [input.variantId,JSON.stringify({ brandId: input.brandId, variantId: input.variantId,
+            locationId: input.locationId, allocationId, eventId, eventKind: 'COMMITMENT', sequence,
+            sourceEventId: authorization.sourceEventId, acceptedSequence: input.acceptedSequence,
+            before: snapshot, after }),`stock.${eventId}`]);
+          response = { state: 'ALLOCATED', allocationId, acceptedSequence: input.acceptedSequence,
+            eventSequence: sequence, balanceVersion: sequence, replayed: false };
+        }
+      }
+      await this.recordWorkerAllocationReceipt(client, authorization, input, requestHash, response);
+      return response;
+    });
+  }
+
+  private async recordWorkerAllocationReceipt(client: PoolClient, authorization: WorkerAuthorizationContext,
+    input: { brandId: string; idempotencyKey: string }, requestHash: string, response: Record<string, unknown>): Promise<void> {
+    await client.query(`INSERT INTO inventory.stock_command_receipts(brand_id,operation,idempotency_key,request_sha256,
+      response,actor_user_id,actor_service_principal,source_event_id)
+      VALUES($1,'checkout.allocate',$2,$3,$4::jsonb,NULL,$5,$6)`,
+    [input.brandId,input.idempotencyKey,requestHash,JSON.stringify(response),authorization.principalId,authorization.sourceEventId]);
   }
 
   async movement(context: BrandAccessContext, input: {
