@@ -282,10 +282,18 @@ export class InventoryPostgresRepository {
         return { ...prior.rows[0].response, replayed: true };
       }
 
-      const proofReplay = await client.query(`SELECT request_sha256,result_payload FROM inventory.checkout_admission_proofs
+      const proofReplay = await client.query(`SELECT request_sha256,result_payload,brand_id,checkout_id,checkout_line_id,
+          variant_id,location_id,accepted_sequence,eligibility_sequence,quantity,accepted_event_id
+        FROM inventory.checkout_admission_proofs
         WHERE eligibility_event_id=$1 FOR UPDATE`, [authorization.sourceEventId]);
       if (proofReplay.rows[0]) {
-        if (proofReplay.rows[0].request_sha256 !== canonicalRequestHash) throw failure('WORKER_SOURCE_NOT_VERIFIED', 403);
+        const proof = proofReplay.rows[0];
+        if (proof.request_sha256 !== canonicalRequestHash || proof.brand_id !== input.brandId || proof.checkout_id !== input.checkoutId ||
+          proof.checkout_line_id !== input.checkoutLineId || proof.variant_id !== input.variantId || proof.location_id !== input.locationId ||
+          Number(proof.accepted_sequence) !== input.acceptedSequence || Number(proof.eligibility_sequence) !== Number(eligibilitySequence) ||
+          Number(proof.quantity) !== input.quantity || proof.accepted_event_id !== verifiedAcceptedEventId) {
+          throw failure('WORKER_SOURCE_NOT_VERIFIED', 403);
+        }
         const response = { ...proofReplay.rows[0].result_payload, replayed: true };
         await this.recordWorkerAllocationReceipt(client, authorization, input, requestHash, response);
         return response;
