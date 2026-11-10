@@ -203,15 +203,15 @@ test('W2 brand-owned catalogue schemas enforce reviewed tables, tenant, uniquene
         VALUES($1,'REN2-50-WH','REN2-50 Warehouse') RETURNING id`, [brand.rows[0].id]);
       await client.query(`INSERT INTO inventory.stock_balances(brand_id,variant_id,location_id)
         VALUES($1,$2,$3)`, [brand.rows[0].id, variant.rows[0].id, location.rows[0].id]);
-      const zeroPool = await client.query(`SELECT physical_on_hand,quarantined,allocated_not_dispatched,pre_commit_allocations,safety_buffer,row_version
+      const zeroPool = await client.query(`SELECT physical_on_hand,quarantined,other_non_sellable,allocated_not_dispatched,safety_buffer,row_version
         FROM inventory.stock_balances WHERE brand_id=$1 AND variant_id=$2 AND location_id=$3`,
       [brand.rows[0].id, variant.rows[0].id, location.rows[0].id]);
-      assert.deepEqual(zeroPool.rows[0], { physical_on_hand: '0', quarantined: '0', allocated_not_dispatched: '0', pre_commit_allocations: '0', safety_buffer: '0', row_version: '1' },
+      assert.deepEqual(zeroPool.rows[0], { physical_on_hand: '0', quarantined: '0', other_non_sellable: '0', allocated_not_dispatched: '0', safety_buffer: '0', row_version: '1' },
         'new brand + SKU + location pools must start empty at genesis version 1');
       await client.query('SAVEPOINT invalid_physical_stock_invariant');
-      await assert.rejects(client.query(`UPDATE inventory.stock_balances SET physical_on_hand=1,quarantined=1,allocated_not_dispatched=1
+      await assert.rejects(client.query(`UPDATE inventory.stock_balances SET physical_on_hand=1,quarantined=1,other_non_sellable=1
         WHERE brand_id=$1 AND variant_id=$2 AND location_id=$3`, [brand.rows[0].id, variant.rows[0].id, location.rows[0].id]),
-      (error) => error.code === '23514', 'physical stock must cover quarantined and committed units');
+      (error) => error.code === '23514', 'physical stock must cover quarantined plus other non-sellable units');
       await client.query('ROLLBACK TO SAVEPOINT invalid_physical_stock_invariant');
       await client.query('RELEASE SAVEPOINT invalid_physical_stock_invariant');
 

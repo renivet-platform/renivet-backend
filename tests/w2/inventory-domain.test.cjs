@@ -5,13 +5,14 @@ const test = require('node:test');
 const { calculateAvailableToSell, validateBalance, needsIndependentApproval } = require('../../dist/modules/inventory/inventory-domain.js');
 
 test('REN2-83 calculates ATS from the five stock buckets and never returns a negative value', () => {
-  assert.equal(calculateAvailableToSell({ physical: 20, quarantine: 1, committed: 4, allocated: 2, buffer: 3 }), 10);
-  assert.equal(calculateAvailableToSell({ physical: 3, quarantine: 0, committed: 3, allocated: 2, buffer: 0 }), 0);
+  assert.equal(calculateAvailableToSell({ physical: 100, quarantine: 5, unsellable: 3, allocatedNotDispatched: 12, buffer: 10 }), 70,
+    'Master A4 deducts allocated-not-dispatched exactly once');
+  assert.equal(calculateAvailableToSell({ physical: 3, quarantine: 0, unsellable: 0, allocatedNotDispatched: 5, buffer: 0 }), 0);
 });
 
 test('REN2-83 rejects negative buckets and physical stock below quarantine plus commitments', () => {
-  assert.throws(() => validateBalance({ physical: 4, quarantine: 2, committed: 3, allocated: 0, buffer: 0 }), { code: 'STOCK_BALANCE_INVALID' });
-  assert.throws(() => validateBalance({ physical: 2, quarantine: -1, committed: 0, allocated: 0, buffer: 0 }), { code: 'STOCK_BALANCE_INVALID' });
+  assert.throws(() => validateBalance({ physical: 4, quarantine: 2, unsellable: 3, allocatedNotDispatched: 0, buffer: 0 }), { code: 'STOCK_BALANCE_INVALID' });
+  assert.throws(() => validateBalance({ physical: 2, quarantine: -1, unsellable: 0, allocatedNotDispatched: 0, buffer: 0 }), { code: 'STOCK_BALANCE_INVALID' });
 });
 
 test('REN2-87 requires independent review for adjustments over either configured threshold', () => {

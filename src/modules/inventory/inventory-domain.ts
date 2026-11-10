@@ -1,22 +1,22 @@
 export interface StockBuckets {
   physical: number;
   quarantine: number;
-  committed: number;
-  allocated: number;
+  unsellable: number;
+  allocatedNotDispatched: number;
   buffer: number;
 }
 
 export function validateBalance(balance: StockBuckets): void {
   const values = Object.values(balance);
   if (values.some((value) => !Number.isSafeInteger(value) || value < 0)
-    || balance.physical < balance.quarantine + balance.committed) {
+    || balance.physical < balance.quarantine + balance.unsellable) {
     throw Object.assign(new Error('Stock balance violates physical accounting rules'), { code: 'STOCK_BALANCE_INVALID' });
   }
 }
 
 export function calculateAvailableToSell(balance: StockBuckets): number {
   validateBalance(balance);
-  return Math.max(0, balance.physical - balance.quarantine - balance.committed - balance.allocated - balance.buffer);
+  return Math.max(0, balance.physical - balance.quarantine - balance.unsellable - balance.allocatedNotDispatched - balance.buffer);
 }
 
 export interface AdjustmentPolicy {
