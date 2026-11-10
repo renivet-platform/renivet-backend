@@ -26,6 +26,8 @@ test('failure details normalize to a safe code without preserving raw exception 
   assert.equal(safeFailureCode(new Error('sensitive raw error body')), 'WORKER_FAILURE');
   assert.equal(safeFailureCode({ code: 'bad input\npassword=x' }), 'WORKER_FAILURE');
   assert.equal(safeFailureCode({ code: 'OTP_123456' }), 'WORKER_FAILURE');
+  assert.equal(safeFailureCode({ response: { code: 'CHECKOUT_ELIGIBLE_HEAD_NOT_READY' } }), 'CHECKOUT_ELIGIBLE_HEAD_NOT_READY');
+  assert.equal(safeFailureCode({ response: { code: 'PAYLOAD_SECRET' } }), 'WORKER_FAILURE');
 });
 
 test('operator recovery fails closed when no authorization policy is configured', async () => {

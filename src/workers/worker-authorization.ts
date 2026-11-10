@@ -108,7 +108,7 @@ export class DatabaseWorkerAuthorizationService implements WorkerAuthorizationPo
     reason ??= this.validatePrincipal(principal, request.consumerId);
     reason ??= this.validatePolicy(request.policy);
     if (!brandId) reason ??= 'SOURCE_NOT_FOUND';
-    if (!['media_asset', 'stock_event', 'catalogue.product', 'imports.import_batch', 'media.zip_import'].includes(request.event.aggregateType)) reason ??= 'UNSUPPORTED_SOURCE';
+    if (!['media_asset', 'stock_event', 'catalogue.product', 'imports.import_batch', 'media.zip_import', 'checkout.order'].includes(request.event.aggregateType)) reason ??= 'UNSUPPORTED_SOURCE';
 
     if (reason || !brandId || !principal) {
       await this.recordDenial(
@@ -226,6 +226,21 @@ export class DatabaseWorkerAuthorizationService implements WorkerAuthorizationPo
   }
 
   private async resolveSourceBrand(event: DurableEvent, transaction: PoolClient): Promise<string | null> {
+    if (event.aggregateType === 'checkout.order') {
+      if (!['checkout.allocation_eligible', 'checkout.allocation_skipped'].includes(event.eventType) ||
+        !event.eventPayload || typeof event.eventPayload !== 'object' ||
+        !('line' in event.eventPayload) || !event.eventPayload.line || typeof event.eventPayload.line !== 'object') return null;
+      const line = event.eventPayload.line as Record<string, unknown>;
+      if (typeof line.variantId !== 'string' || !UUID.test(line.variantId) ||
+        typeof line.locationId !== 'string' || !UUID.test(line.locationId)) return null;
+      const row = await transaction.query<{ brandId: string }>(
+        `SELECT v.brand_id AS "brandId" FROM catalogue.product_variants v
+          JOIN brands.brands b ON b.id=v.brand_id AND b.onboarding_state='approved'
+          JOIN inventory.stock_locations l ON l.brand_id=v.brand_id AND l.id=$2 AND l.active
+         WHERE v.id=$1 FOR SHARE OF v,b,l`, [line.variantId, line.locationId],
+      );
+      return row.rows[0]?.brandId ?? null;
+    }
     if (event.aggregateType === 'media_asset') {
       const row = await transaction.query<{ brandId: string }>(
         'SELECT brand_id AS "brandId" FROM media.media_assets WHERE id = $1 FOR SHARE', [event.aggregateId],

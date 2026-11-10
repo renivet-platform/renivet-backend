@@ -267,6 +267,27 @@
       "when": 1794297120000,
       "tag": "0037_ren2_84_allow_pool_genesis_event",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1794297180000,
+      "tag": "0038_ren2_90_trusted_stock_allocations",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1794297240000,
+      "tag": "0039_ren2_93_allocation_release_dispatch_recovery",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1794297300000,
+      "tag": "0040_ren2_91_checkout_admission_proofs",
+      "breakpoints": true
     }
   ]
 }
