@@ -2,13 +2,19 @@
 
 const assert = require('node:assert/strict');
 const { createHash, randomUUID } = require('node:crypto');
+const { readFileSync } = require('node:fs');
 const { Pool } = require('pg');
 const JSZip = require('jszip');
+const sharp = require('sharp');
 const { DurableWorker } = require('../dist/workers/durable-worker.js');
 const { parseCatalogCsv } = require('../dist/modules/imports/import-csv-parser.js');
 const { ImportPreviewService } = require('../dist/modules/imports/import-preview.service.js');
 const { TaxonomyAdminPostgresRepository } = require('../dist/modules/catalog/taxonomy-admin.repository.js');
-const { ingestImageZip } = require('../dist/modules/media/media-zip-ingestion.js');
+const { ingestImageZip, MAX_MEDIA_ZIP_BYTES, MAX_MEDIA_ZIP_EXPANDED_BYTES } = require('../dist/modules/media/media-zip-ingestion.js');
+const { SharpMediaImageProcessor } = require('../dist/modules/media/sharp-media-image-processor.js');
+
+const APPROVED_CPU_CORES = 4;
+const APPROVED_MEMORY_BYTES = 8 * 1024 * 1024 * 1024;
 
 function assertDisposableUrl(raw) {
   assert.equal(process.env.RENIVET_LOAD_PROFILE, '1', 'set RENIVET_LOAD_PROFILE=1 to opt in to this synthetic profile');
@@ -23,6 +29,90 @@ function assertDisposableUrl(raw) {
 
 function elapsed(start) { return Number(process.hrtime.bigint() - start) / 1e6; }
 
+function readCgroupNumber(path) {
+  try {
+    const value = readFileSync(path, 'utf8').trim();
+    return value === 'max' ? null : Number(value);
+  } catch { return null; }
+}
+
+function readCgroupCpuLimit() {
+  let quotaCores = null;
+  try {
+    const [quota, period] = readFileSync('/sys/fs/cgroup/cpu.max', 'utf8').trim().split(/\s+/).map(Number);
+    quotaCores = quota > 0 && period > 0 ? quota / period : null;
+  } catch {
+    try {
+      const quota = Number(readFileSync('/sys/fs/cgroup/cpu/cpu.cfs_quota_us', 'utf8').trim());
+      const period = Number(readFileSync('/sys/fs/cgroup/cpu/cpu.cfs_period_us', 'utf8').trim());
+      quotaCores = quota > 0 && period > 0 ? quota / period : null;
+    } catch { quotaCores = null; }
+  }
+  let cpuSetCores = null;
+  try {
+    const cpuSet = readFileSync('/sys/fs/cgroup/cpuset.cpus.effective', 'utf8').trim();
+    cpuSetCores = cpuSet.split(',').reduce((total, range) => {
+      const [start, end = start] = range.split('-').map(Number);
+      return total + end - start + 1;
+    }, 0);
+  } catch {
+    try {
+      const cpuSet = readFileSync('/sys/fs/cgroup/cpuset/cpuset.cpus', 'utf8').trim();
+      cpuSetCores = cpuSet.split(',').reduce((total, range) => {
+        const [start, end = start] = range.split('-').map(Number);
+        return total + end - start + 1;
+      }, 0);
+    } catch { cpuSetCores = null; }
+  }
+  return quotaCores === null ? cpuSetCores : cpuSetCores === null ? quotaCores : Math.min(quotaCores, cpuSetCores);
+}
+
+function readCgroupCpuUsageMicros() {
+  try {
+    const usage = readFileSync('/sys/fs/cgroup/cpu.stat', 'utf8').match(/^usage_usec\s+(\d+)$/m);
+    return usage ? Number(usage[1]) : null;
+  } catch { return null; }
+}
+
+function readContainerBudget() {
+  let memoryLimitBytes = readCgroupNumber('/sys/fs/cgroup/memory.max');
+  let memoryPeakBytes = readCgroupNumber('/sys/fs/cgroup/memory.peak');
+  let cpuUsageMicros = readCgroupCpuUsageMicros();
+  if (memoryLimitBytes === null) {
+    const v1Limit = readCgroupNumber('/sys/fs/cgroup/memory/memory.limit_in_bytes');
+    memoryLimitBytes = v1Limit !== null && v1Limit < 1_000_000_000_000_000 ? v1Limit : null;
+  }
+  if (memoryPeakBytes === null) memoryPeakBytes = readCgroupNumber('/sys/fs/cgroup/memory/memory.max_usage_in_bytes');
+  if (cpuUsageMicros === null) {
+    const nanoseconds = readCgroupNumber('/sys/fs/cgroup/cpuacct/cpuacct.usage');
+    cpuUsageMicros = nanoseconds === null ? null : Math.round(nanoseconds / 1000);
+  }
+  return {
+    cpuCores: readCgroupCpuLimit(),
+    memoryLimitBytes,
+    memoryPeakBytes,
+    cpuUsageMicros,
+  };
+}
+
+async function makeSyntheticJpeg(seed) {
+  const width = 192;
+  const height = 192;
+  const pixels = Buffer.allocUnsafe(width * height * 3);
+  let state = seed >>> 0;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      state = (state * 1664525 + 1013904223) >>> 0;
+      const noise = ((state >>> 24) - 128) / 12;
+      const offset = (y * width + x) * 3;
+      pixels[offset] = Math.max(0, Math.min(255, 60 + ((x * 3 + y) % 120) + noise));
+      pixels[offset + 1] = Math.max(0, Math.min(255, 80 + ((y * 2 + x) % 90) + noise));
+      pixels[offset + 2] = Math.max(0, Math.min(255, 100 + ((x + y * 2) % 100) + noise));
+    }
+  }
+  return sharp(pixels, { raw: { width, height, channels: 3 } }).jpeg({ quality: 62 }).toBuffer();
+}
+
 async function main() {
   const sourceUrl = assertDisposableUrl(process.env.RENIVET_TEST_DATABASE_URL);
   const adminUrl = new URL(sourceUrl);
@@ -33,11 +123,18 @@ async function main() {
   let pool;
   const cpuStart = process.cpuUsage();
   const rssStart = process.memoryUsage().rss;
+  const cgroupStart = readContainerBudget();
   let peakRss = rssStart;
   let peakWaiting = 0;
   let rssSampler;
-  const report = { profile: 'REN2-109 disposable synthetic profile', limits: 'No owner-approved resource budget exists; measurements below are local observations, not release thresholds.' };
+  const report = { profile: 'REN2-109 disposable synthetic profile', limits: 'Owner-approved qualification cap: 4 CPU cores and 8 GiB; not a production capacity limit.' };
   try {
+    if (process.env.RENIVET_LOAD_PROFILE_REQUIRE_LIMITS === '1') {
+      assert.ok(cgroupStart.cpuCores > 0 && cgroupStart.cpuCores <= APPROVED_CPU_CORES,
+        'the effective profile CPU limit must be present and no greater than 4 cores');
+      assert.ok(cgroupStart.memoryLimitBytes > 0 && cgroupStart.memoryLimitBytes <= APPROVED_MEMORY_BYTES,
+        'the effective profile memory limit must be present and no greater than 8 GiB');
+    }
     const role = await admin.query('SELECT rolsuper FROM pg_roles WHERE rolname=current_user');
     assert.equal(role.rows[0]?.rolsuper, true, 'the disposable test role must be superuser to create/drop the isolated profile copy');
     await admin.query(`CREATE DATABASE "${databaseName}" TEMPLATE renivet_ci`);
@@ -185,24 +282,42 @@ async function main() {
 
     const imageCount = 12_000;
     const imageZip = new JSZip();
-    const imageBytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]);
+    const imageSamples = await Promise.all(Array.from({ length: 12 }, (_, index) => makeSyntheticJpeg(index + 1)));
+    const imageBytes = imageSamples[0];
     const skuManifest = Object.create(null);
     for (let index = 0; index < imageCount; index += 1) {
       const sku = `IMG${String(index + 1).padStart(5, '0')}`;
       const hex = (index + 1).toString(16).padStart(12, '0');
       skuManifest[sku] = { productId: `00000000-0000-4000-8000-${hex}`, variantId: `00000000-0000-4001-8000-${hex}` };
-      imageZip.file(`${sku}__01.png`, imageBytes);
+      imageZip.file(`${sku}__01.jpg`, imageSamples[index % imageSamples.length]);
     }
     const zipStart = process.hrtime.bigint();
     const zipBytes = await imageZip.generateAsync({ type: 'nodebuffer', compression: 'STORE' });
+    const expandedImageBytes = imageSamples.reduce((total, sample) => total + sample.length, 0) * (imageCount / imageSamples.length);
+    assert.ok(zipBytes.length <= MAX_MEDIA_ZIP_BYTES, 'synthetic image archive must remain within the product ZIP limit');
+    assert.ok(expandedImageBytes <= MAX_MEDIA_ZIP_EXPANDED_BYTES, 'synthetic image payload must remain within the expanded ZIP limit');
     let active = 0;
     let peakActive = 0;
+    let imageDerivativeBytes = 0;
+    let imageDerivatives = 0;
+    const processor = new SharpMediaImageProcessor();
     const imageResult = await ingestImageZip({ bytes: zipBytes, brandId: randomUUID(), batchId: randomUUID(), manifest: skuManifest, concurrency: 3,
       resolveProducts: async (scope, mappings) => Object.fromEntries(Object.entries(mappings).map(([sku, mapping]) => [sku,
         { brandId: scope, productId: mapping.productId, variantId: mapping.variantId, sku }])),
-      processImage: async () => { active += 1; peakActive = Math.max(peakActive, active); await new Promise((resolve) => setTimeout(resolve, 0)); active -= 1; } });
+      processImage: async (image) => {
+        active += 1;
+        peakActive = Math.max(peakActive, active);
+        try {
+          const derivatives = await processor.createDerivatives(image.bytes, image.mimeType, image.brandId, randomUUID());
+          assert.equal(derivatives.length, 2);
+          assert.ok(derivatives.every((item) => item.mimeType === 'image/webp' && item.bytes.length > 0));
+          imageDerivativeBytes += derivatives.reduce((total, item) => total + item.bytes.length, 0);
+          imageDerivatives += derivatives.length;
+        } finally { active -= 1; }
+      } });
     const imageElapsedMs = elapsed(zipStart);
     assert.equal(imageResult.processed, imageCount);
+    assert.equal(imageDerivatives, imageCount * 2);
     assert.ok(peakActive <= 3);
 
     const workerEvents = 100;
@@ -256,6 +371,7 @@ async function main() {
 
     clearInterval(rssSampler);
     rssSampler = undefined;
+    const cgroupEnd = readContainerBudget();
     const maxRssMultiplier = process.platform === 'win32' ? 1 : 1024;
     peakRss = Math.max(peakRss, process.memoryUsage().rss, process.resourceUsage().maxRSS * maxRssMultiplier);
     const cpu = process.cpuUsage(cpuStart);
@@ -267,13 +383,21 @@ async function main() {
     report.parser = { totalMs: Math.round(parseSamples.reduce((a, b) => a + b, 0)), perFileMs: parseSamples.map(Math.round), rowsPerSecond: Math.round(totalRows / (parseSamples.reduce((a, b) => a + b, 0) / 1000)) };
     report.postgres = { rowInsertMs: dbWriteSamples.map(Math.round), previewTransactionMs: previewSamples.map(Math.round), resumedPreviewHashMatches: true,
       concurrentExactRetries: 8, syntheticPoolBackpressurePeakWaiting: peakWaiting, foreignBrandPreviewDenied: true };
-    report.images = { count: imageResult.processed, uncompressedImageBytes: imageCount * imageBytes.length, zipBytes: zipBytes.length,
+    report.images = { count: imageResult.processed, dimensions: '192x192 pixels', distinctSyntheticSamples: imageSamples.length,
+      uncompressedImageBytes: expandedImageBytes, meanImageBytes: Math.round(expandedImageBytes / imageCount), zipBytes: zipBytes.length,
       elapsedMs: Math.round(imageElapsedMs), imagesPerSecond: Math.round(imageCount / (imageElapsedMs / 1000)), configuredConcurrency: 3, observedPeakConcurrency: peakActive,
-      processor: 'synthetic no-op plus 0 ms timer; does not include object storage, malware scanning, DB effects or real image bytes' };
+      processor: 'real Sharp JPEG decode and WebP preview/thumbnail transformations; synthetic images, no ClamAV, object storage or DB effect persistence',
+      derivativesCreated: imageDerivatives, derivativeBytes: imageDerivativeBytes };
     report.worker = { outboxEvents: workerEvents, outboxInsertMs: Math.round(workerOutboxMs), enqueued, enqueueMs: Math.round(enqueueMs),
       competingClaimers: 8, claimBatchLimit: 25, disjointLeasesClaimed: claimedJobs.length, claimMs: Math.round(claimMs),
       processParallelism: 8, observedPeakEffects: peakWorkerEffects, processMs: Math.round(workerProcessMs), succeededJobs };
     report.process = { startRssBytes: rssStart, peakRssBytes: peakRss, peakRssMiB: Number((peakRss / (1024 * 1024)).toFixed(1)), cpuUserMs: Math.round(cpu.user / 1000), cpuSystemMs: Math.round(cpu.system / 1000) };
+    report.resourceBudget = {
+      approvedTestLimit: { cpuCores: APPROVED_CPU_CORES, memoryBytes: APPROVED_MEMORY_BYTES },
+      observedCgroupLimit: { cpuCores: cgroupEnd.cpuCores, memoryBytes: cgroupEnd.memoryLimitBytes, memoryPeakBytes: cgroupEnd.memoryPeakBytes,
+        cpuUsageMicros: cgroupStart.cpuUsageMicros === null || cgroupEnd.cpuUsageMicros === null ? null : cgroupEnd.cpuUsageMicros - cgroupStart.cpuUsageMicros },
+      includes: 'Node load profile and disposable PostgreSQL server ran in the same capped container',
+    };
     report.databaseProfile = 'imports and previews ran against an isolated clone of the disposable PostgreSQL test database; clone dropped after this run';
     console.log(JSON.stringify(report, null, 2));
   } finally {
