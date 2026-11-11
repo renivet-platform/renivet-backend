@@ -36,6 +36,42 @@ jobs:
             --volume "$PWD:/repo:ro" --workdir /repo \
             ghcr.io/gitleaks/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
             git --no-banner --redact=100 --log-opts=--all /repo
+      - name: Prove Gitleaks detects a synthetic credential fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture="$(mktemp -d "$RUNNER_TEMP/gitleaks-negative-fixture.XXXXXX")"
+          report="$RUNNER_TEMP/gitleaks-negative-report-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.json"
+          trap 'rm -rf "$fixture"; rm -f "$report"' EXIT
+          git -C "$fixture" init -q
+          git -C "$fixture" config user.name "Renivet CI fixture"
+          git -C "$fixture" config user.email "renivet-ci@example.invalid"
+          # Generate a random synthetic GitHub-token-shaped value at runtime so
+          # the repository's own history scanner never sees credential material.
+          printf 'github_pat=ghp_%s\n' "$(openssl rand -hex 18)" > "$fixture/credential.txt"
+          git -C "$fixture" add credential.txt
+          git -C "$fixture" -c user.name="Renivet CI fixture" -c user.email="renivet-ci@example.invalid" commit -qm "synthetic secret scanner fixture"
+          status=0
+          docker run --rm --network none --user "$(id -u):$(id -g)" \
+            --volume "$PWD:/repo:ro" --volume "$fixture:/fixture:ro" --volume "$RUNNER_TEMP:/out" \
+            --workdir /fixture \
+            ghcr.io/gitleaks/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
+            git --no-banner --redact=100 \
+              --report-format json --report-path /out/gitleaks-negative-report.json --log-opts=--all /fixture \
+              >/dev/null 2>&1 || status=$?
+          if [ "$status" -ne 1 ] || [ ! -f "$report" ]; then
+            echo "Gitleaks failed to report the synthetic credential fixture"
+            exit 1
+          fi
+          python3 - "$report" <<'PY'
+          import json
+          import pathlib
+          import sys
+          findings = json.loads(pathlib.Path(sys.argv[1]).read_text())
+          if not findings:
+              raise SystemExit("Gitleaks returned no findings for the synthetic credential fixture")
+          print("PASS: Gitleaks detected the synthetic credential fixture; redacted report was not uploaded")
+          PY
 
   iac:
     name: Trivy configuration misconfigurations
