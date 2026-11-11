@@ -30,7 +30,7 @@
 | REN2-101 | f9254ccc57d410d2cb03396e256063374d898f32 | Backend candidate count matches owner-approved 47; 
 pm run api:check PASS; focused 47-operation authorization matrix PASS | Verified |
 | REN2-102 | dedbc94c55240611fe8552c371d1b503bbc7d422 | New serial PostgreSQL 16 acceptance CI group; 9 database suites and 18 guard/CSRF/MFA unit tests PASS | Verified |
-| REN2-103 | Pending | Pending | Not started |
+| REN2-103 | 0b9a0976e5a2c6beab6655af370837a3f1a19f95 | Fresh PostgreSQL 16; 41 migration/replay and checksum checks PASS; staged label/claim backfills and W1 preservation PASS; 6 schema/constraint suites PASS | Verified |
 | REN2-104 | Blocked by REN2-99 | None | Blocked |
 | REN2-105 | Pending | Pending | Not started |
 | REN2-106 | Pending | Pending | Not started |
