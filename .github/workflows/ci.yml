@@ -191,6 +191,21 @@ jobs:
         run: |
           npm run build
           node --test tests/worker-authorization.integration.cjs
+      - name: Verify REN2-102 multi-brand security acceptance serially
+        env:
+          RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
+        run: |
+          npm run build
+          node --test tests/brand-access.integration.test.cjs
+          node --test tests/worker-authorization.integration.cjs
+          node --test tests/media-lifecycle.integration.cjs
+          node --test tests/w2/product-media.integration.test.cjs
+          node --test tests/w2/import-preview.integration.test.cjs
+          node --test tests/w2/media-zip-import.integration.test.cjs
+          node --test tests/inventory-ledger.integration.cjs
+          node --test tests/w2/stock-allocation.integration.test.cjs
+          node --test tests/w2/taxonomy-read.integration.test.cjs
+          node --test tests/brand-access-guard.test.cjs tests/brand-access-global-permission.test.cjs tests/w2/taxonomy-admin-controller.test.cjs tests/w2/beginMediaUpload.test.cjs tests/w2/completeMediaUpload.test.cjs tests/w2/import-preview.controller.test.cjs tests/w2/confirmCatalogImport.test.cjs
       - name: Verify REN2-27/28 session-derived authorization, live query scope, and T-AZ/T-ID denials
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
