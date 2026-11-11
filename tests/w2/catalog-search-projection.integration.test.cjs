@@ -9,6 +9,7 @@ const { CatalogReviewPostgresRepository } = require('../../dist/modules/catalog/
 const { CatalogPublicationPostgresRepository } = require('../../dist/modules/catalog/catalog-publication.repository.js');
 const { createCatalogSearchProjectionHandler } = require('../../dist/modules/catalog/catalog-search-projection.js');
 const { DurableWorker } = require('../../dist/workers/durable-worker.js');
+const { W2OperationalMetricsReader, evaluateW2OperationalAlerts } = require('../../dist/workers/w2-operational-metrics.js');
 const { DatabaseWorkerAuthorizationService } = require('../../dist/workers/worker-authorization.js');
 const { TypesenseProductSearchClient } = require('../../dist/workers/typesense-product-search.js');
 const { snapshotSha256 } = require('../../dist/modules/catalog/catalog-submission.js');
@@ -121,8 +122,19 @@ test('REN2-74 projects current PostgreSQL publication to Typesense, suppresses s
   const publicationContext = (expectedProductVersion, idempotencyKey) => ({ userId: operator, brandId: brand, expectedProductVersion, idempotencyKey });
   const published = await publicationRepo.publish(productId, { approvedRevisionId: revisionId, approvedReviewId: review.decisionId },
     publicationContext(review.rowVersion, `publish-${tag}`));
+  const publishSource = (await pool.query(`SELECT event_id,publication_version FROM catalogue.publication_events
+    WHERE product_id=$1 AND lifecycle_event='PUBLISH'`, [productId])).rows[0];
+  await pool.query(`INSERT INTO catalogue.search_projection_state
+    (product_id,brand_id,publication_version,source_event_id,source_event_publication_version,projection_schema_version,document_state,projected_sha256)
+    VALUES($1,$2,$3,$4,$3,1,'PUBLISHED',$5)`, [productId, brand, publishSource.publication_version, publishSource.event_id,
+    require('node:crypto').createHash('sha256').update(`synthetic-published-${tag}`).digest('hex')]);
   const restricted = await publicationRepo.restrict(productId, { reasonCode: 'SAFETY_RECALL', appealReference: `CASE-${tag}` },
     publicationContext(published.rowVersion, `restrict-${tag}`));
+  const operationalMetrics = await new W2OperationalMetricsReader(pool).readSnapshot();
+  assert.ok(operationalMetrics.search.restrictedPublishedDocuments >= 1, 'a stale published projection for this restricted product is detectable');
+  assert.ok(evaluateW2OperationalAlerts(operationalMetrics, { qcAgeSeconds: 0, importFailureRate: 0,
+    mediaScanAgeSeconds: 0, pendingJobAgeSeconds: 0, searchProjectionAgeSeconds: 0, pendingBacklogSkew: 0 })
+    .some((alert) => alert.signal === 'search.restricted_document_visible'), 'restricted projection emits a privacy/safety alert');
 
   const consumerId = `catalog.search_projection_${tag}`;
   const principalProvider = { authenticate: async () => ({ id: 'ren2-74.synthetic-worker', active: true,
@@ -159,8 +171,8 @@ test('REN2-74 projects current PostgreSQL publication to Typesense, suppresses s
   const deadLetters = await worker.listDeadLetters();
   const deadLetter = deadLetters.find((row) => row.jobId === failedJob.id);
   assert.ok(deadLetter); assert.equal(deadLetter.lastErrorCode, 'EAI_AGAIN');
-  assert.equal(alerts.length, 1); assert.equal(alerts[0].jobId, failedJob.id);
-  assert.ok(logs.some((entry) => entry.event === 'worker.job.failed' && entry.outcome === 'dead_letter' && entry.code === 'EAI_AGAIN'));
+  assert.equal(alerts.length, 1); assert.equal(alerts[0].jobId, failedJob.id); assert.equal(alerts[0].correlationId, failedJob.businessKey);
+  assert.ok(logs.some((entry) => entry.event === 'worker.job.failed' && entry.outcome === 'dead_letter' && entry.code === 'EAI_AGAIN' && entry.correlationId === failedJob.businessKey));
   failSearch = false;
   await worker.recoverDeadLetter(deadLetter.id, operator, 'DEPENDENCY_RESTORED');
   assert.equal((await worker.runOnce(consumerId, `worker-recovery-${tag}`, 10)).processed, 2);

@@ -65,7 +65,7 @@ export type EventHandler = {
 
 export type WorkerLog = (entry: Readonly<Record<string, string | number>>) => void;
 export type WorkerMetrics = (summary: Readonly<WorkerBatchSummary>) => void;
-export type DeadLetterAlert = (details: Readonly<{ jobId: string; jobKind: string; code: string; attemptCount: number; maxAttempts: number }>) => void | Promise<void>;
+export type DeadLetterAlert = (details: Readonly<{ jobId: string; jobKind: string; correlationId: string; code: string; attemptCount: number; maxAttempts: number }>) => void | Promise<void>;
 
 export type RecoveryAuthorizer = (actorId: string, caseId: string) => Promise<boolean>;
 
@@ -280,6 +280,7 @@ export class DurableWorker {
     if (!handler) throw new TypeError('job kind is not registered');
     const client = await this.pool.connect();
     let outcome: 'processed' | 'duplicate' | 'lease_lost' = 'lease_lost';
+    let correlationId = 'UNAVAILABLE';
     let attemptCount = job.attemptCount;
     let maxAttempts = job.maxAttempts;
     try {
@@ -290,6 +291,7 @@ export class DurableWorker {
          FOR UPDATE`, [job.id, job.jobKind, job.leaseToken],
       );
       if (current.rowCount === 1) {
+        correlationId = String(current.rows[0].business_key);
         attemptCount = Number(current.rows[0].attemptCount);
         maxAttempts = Number(current.rows[0].maxAttempts);
         const event = await client.query<DurableEvent>(
@@ -321,15 +323,15 @@ export class DurableWorker {
         if (completed.rowCount === 1) outcome = receipt.rowCount === 1 ? 'processed' : 'duplicate';
       }
       await client.query('COMMIT');
-      if (outcome !== 'lease_lost') this.safeLog({ event: 'worker.job.completed', traceId: job.id, jobId: job.id, jobKind: job.jobKind, outcome, attemptCount, maxAttempts, state: 'succeeded' });
+      if (outcome !== 'lease_lost') this.safeLog({ event: 'worker.job.completed', traceId: job.id, correlationId, jobId: job.id, jobKind: job.jobKind, outcome, attemptCount, maxAttempts, state: 'succeeded' });
       return outcome;
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
       const failure = await this.recordFailure(job, error);
-      this.safeLog({ event: 'worker.job.failed', traceId: job.id, jobId: job.id, jobKind: job.jobKind, code: safeFailureCode(error), outcome: failure, attemptCount, maxAttempts, state: failure });
+      this.safeLog({ event: 'worker.job.failed', traceId: job.id, correlationId, jobId: job.id, jobKind: job.jobKind, code: safeFailureCode(error), outcome: failure, attemptCount, maxAttempts, state: failure });
       if (failure === 'dead_letter') {
-        try { await this.options.onDeadLetter?.({ jobId: job.id, jobKind: job.jobKind, code: safeFailureCode(error), attemptCount, maxAttempts }); }
-        catch { this.safeLog({ event: 'worker.dead_letter.alert_failed', traceId: job.id, jobId: job.id, jobKind: job.jobKind, code: 'ALERT_SINK_UNAVAILABLE' }); }
+        try { await this.options.onDeadLetter?.({ jobId: job.id, jobKind: job.jobKind, correlationId, code: safeFailureCode(error), attemptCount, maxAttempts }); }
+        catch { this.safeLog({ event: 'worker.dead_letter.alert_failed', traceId: job.id, correlationId, jobId: job.id, jobKind: job.jobKind, code: 'ALERT_SINK_UNAVAILABLE' }); }
       }
       return failure;
     } finally {
@@ -423,7 +425,7 @@ export class DurableWorker {
       const job = await client.query(
         `UPDATE platform.durable_jobs SET state = 'pending', scheduled_for = now(), attempt_count = 0,
            max_attempts = $2, last_error_code = NULL, updated_at = now(), row_version = row_version + 1
-         WHERE id = $1 AND state = 'dead_letter' RETURNING id`,
+         WHERE id = $1 AND state = 'dead_letter' RETURNING id, business_key`,
         [item.rows[0].job_id, this.options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS],
       );
       if (job.rowCount !== 1) throw new Error('job is not in a recoverable state');
@@ -436,7 +438,7 @@ export class DurableWorker {
            updated_at = now(), row_version = row_version + 1 WHERE id = $1`, [caseId, actorId],
       );
       await client.query('COMMIT');
-      this.safeLog({ event: 'worker.dead_letter.recovered', traceId: String(item.rows[0].job_id), jobId: String(item.rows[0].job_id), caseId, actorId, reasonCode, state: 'pending' });
+      this.safeLog({ event: 'worker.dead_letter.recovered', traceId: String(item.rows[0].job_id), correlationId: String(job.rows[0].business_key), jobId: String(item.rows[0].job_id), caseId, actorId, reasonCode, state: 'pending' });
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
       throw error;

@@ -93,6 +93,12 @@ jobs:
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
         run: node --test tests/w2-migration-backfill.integration.cjs
+      - name: Verify REN2-105 aggregate operational metrics against PostgreSQL 16
+        env:
+          RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
+        run: |
+          npm run build
+          node --test tests/w2/operational-metrics.integration.test.cjs
       - name: Verify REN2-83..89 stock ledger isolation, concurrency, replay, and rollback
         env:
           RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci

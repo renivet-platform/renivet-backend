@@ -27,6 +27,7 @@ test('REN2-30/31 claims, crash recovery, observability and audited replay are sa
   const effectNames = [];
   const logs = [];
   const metrics = [];
+  const alerts = [];
   const failedOnce = new Set();
   const resolvedPoisonEvents = new Set();
   let recoveryAuthorized = true;
@@ -54,6 +55,7 @@ test('REN2-30/31 claims, crash recovery, observability and audited replay are sa
     random: () => 0,
     log: (entry) => logs.push(entry),
     metrics: (summary) => metrics.push(summary),
+    onDeadLetter: (alert) => alerts.push(alert),
     authorizeRecovery: async () => recoveryAuthorized,
   });
 
@@ -212,7 +214,7 @@ test('REN2-30/31 claims, crash recovery, observability and audited replay are sa
     const poisonJob = await pool.query(`SELECT id FROM platform.durable_jobs WHERE job_kind = $1 AND business_key = $2`, [consumerId, poisonEventId]);
     await pool.query('UPDATE platform.durable_jobs SET max_attempts = 1 WHERE id = $1', [poisonJob.rows[0].id]);
     const poison = (await worker.claim(consumerId, `${prefix}:poison`, 1))[0];
-    const stalePoisonData = { ...poison, attemptCount: 0, maxAttempts: 5 };
+    const stalePoisonData = { ...poison, businessKey: 'private-supplied-correlation', attemptCount: 0, maxAttempts: 5 };
     assert.equal(await worker.process(stalePoisonData), 'dead_letter', 'retry decisions must use the stored final attempt count');
     const visible = await worker.listDeadLetters();
     const recoveryCase = visible.find((item) => item.jobId === poisonJob.rows[0].id);
@@ -255,9 +257,12 @@ test('REN2-30/31 claims, crash recovery, observability and audited replay are sa
 
     const serializedLogs = JSON.stringify(logs);
     assert.doesNotMatch(serializedLogs, /123456|raw sensitive provider response|session token|bank account/i);
-    assert.ok(logs.some((entry) => entry.event === 'worker.job.failed' && entry.code === 'EAI_AGAIN' && entry.traceId && entry.attemptCount === 1));
+    assert.ok(logs.some((entry) => entry.event === 'worker.job.failed' && entry.code === 'EAI_AGAIN' && entry.traceId && entry.correlationId && entry.attemptCount === 1));
     assert.ok(logs.some((entry) => entry.event === 'worker.job.failed' && entry.jobId === poisonJob.rows[0].id && entry.attemptCount === 1 && entry.maxAttempts === 1), 'attempt telemetry comes from durable state, not the supplied claim object');
-    assert.ok(logs.some((entry) => entry.event === 'worker.dead_letter.recovered' && entry.traceId === poisonJob.rows[0].id));
+    assert.ok(logs.some((entry) => entry.event === 'worker.job.failed' && entry.jobId === poisonJob.rows[0].id && entry.correlationId === poisonEventId),
+      'correlation telemetry comes from the persisted outbox link, not the supplied claim object');
+    assert.ok(alerts.some((entry) => entry.jobId === poisonJob.rows[0].id && entry.correlationId === poisonEventId));
+    assert.ok(logs.some((entry) => entry.event === 'worker.dead_letter.recovered' && entry.traceId === poisonJob.rows[0].id && entry.correlationId === poisonEventId));
     assert.doesNotMatch(JSON.stringify(metrics), /123456|raw sensitive provider response|session token|bank account/i);
   } finally {
     // The append-only audit intentionally keeps its synthetic actor, case and job in this disposable DB.

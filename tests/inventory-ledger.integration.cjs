@@ -5,6 +5,7 @@ const test = require('node:test');
 const { randomUUID } = require('node:crypto');
 const { Pool } = require('pg');
 const { InventoryPostgresRepository } = require('../dist/modules/inventory/inventory.repository.js');
+const { W2OperationalMetricsReader } = require('../dist/workers/w2-operational-metrics.js');
 
 function disposableUrl() {
   const value = process.env.RENIVET_TEST_DATABASE_URL;
@@ -411,6 +412,9 @@ test('REN2-83..89 stock ledger serializes 100 concurrent commands, replays idemp
       FROM inventory.stock_commitment_events WHERE brand_id=$1 AND allocation_id=ANY($2::uuid[])`, [fixture.brandId, raceAllocations]);
     assert.deepEqual(raceDetails.rows[0], { allocations: 3, events: 3 }, 'three distinct allocation records must win the 100-command race');
 
+    const metrics = new W2OperationalMetricsReader(pool);
+    const beforeSequenceGap = await metrics.readSnapshot();
+    assert.equal(beforeSequenceGap.inventory.driftedStockPools, 0, 'normal journal-backed balances match their authoritative events');
     const gapSetup = await repository.movement(context, { variantId: fixture.variantId, locationId: fixture.replayLocationId,
       effectKey: 'journal-gap-setup', reason: 'INTEGRATION_RECEIPT', sourceType: 'TEST', sourceReference: 'journal-gap-setup', deltaPhysical: 1 });
     await pool.query(`UPDATE inventory.stock_balances SET row_version=row_version+1 WHERE brand_id=$1 AND variant_id=$2 AND location_id=$3`,
@@ -422,6 +426,9 @@ test('REN2-83..89 stock ledger serializes 100 concurrent commands, replays idemp
     const gapCase = (await repository.listReconciliationCases({ ...context, permission: 'inventory.read' }))
       .find((item) => item.id === gapCount.caseId);
     assert.equal(gapCase.reason_code, 'JOURNAL_SEQUENCE_GAP');
+    const afterSequenceGap = await metrics.readSnapshot();
+    assert.ok(afterSequenceGap.inventory.driftedStockPools > beforeSequenceGap.inventory.driftedStockPools,
+      'a balance version that no longer matches the append-only stock journal is detectable without mutating it');
 
     const denied = await pool.query(`UPDATE brands.brand_memberships SET membership_state='revoked' WHERE brand_id=$1 AND user_id=$2`, [fixture.brandId, fixture.actorId]);
     assert.equal(denied.rowCount, 1);
