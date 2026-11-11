@@ -8,7 +8,7 @@
 
 W2 must reuse the W1 identity, canonical brand, membership, role, permission, audit, and session infrastructure. A requested `brandId` selects the tenant whose access is being requested; it is never evidence of that access. Before enabling any W2 operation, its permission must be deliberately granted through the W1 role/permission model and every data query must enforce the same brand and current permission in SQL. No W2 business API, permission seed, or worker principal is implemented by this issue.
 
-This record reconciles the 45 candidate operations in the Engineering OS W2 v1.5 OpenAPI with the actual backend controls and the v1.5 role proposal. It does not create a new role/grant policy. `Proposed role` below is a functional candidate from v1.5; it is not a current W1 role code or assignment. `UNMAPPED` means no approved role mapping is evidenced and access must remain denied until an owner-approved mapping is implemented.
+This record reconciles the 47 candidate operations in the Engineering OS W2 v1.5 OpenAPI with the actual backend controls and the v1.5 role proposal. It does not create a new role/grant policy. `Proposed role` below is a functional candidate from v1.5; it is not a current W1 role code or assignment. `UNMAPPED` means no approved role mapping is evidenced and access must remain denied until an owner-approved mapping is implemented.
 
 ## Evidence and compatibility checkpoints
 
@@ -25,7 +25,7 @@ This record reconciles the 45 candidate operations in the Engineering OS W2 v1.5
 | Database | Shared `IdentityInfrastructure` owns the PostgreSQL pool. REN2-26 migration is additive and uses canonical W1 schemas. | Keep W2 resources/permissions compatible with this pool/schema and canonical FKs. No migration or shared database change is part of REN2-49. |
 | Workers | Durable worker infrastructure is generic and not registered for W2; it does not establish a tenant principal. Payload brand/user fields are not trusted authorization. | Future worker must use an allowlisted internal principal, trusted persisted target/job entitlement, server-derived brand, scoped database access, idempotency, and immutable audit. This is a design/test requirement, not an implemented W2 capability. |
 
-## Candidate operation-to-permission matrix (45 operations)
+## Candidate operation-to-permission matrix (47 operations)
 
 Guard lane: `brand` means W1 `BrandAccessGuard` plus same-statement scoped repository predicate. `platform-global-admin` means a separate platform-global authorization lane; never infer it from a brand grant or brand path. Candidate role names reproduce the functional v1.5 proposal where possible. Unmapped operations must not be enabled until the role and grant decision is approved.
 
@@ -75,11 +75,14 @@ Guard lane: `brand` means W1 `BrandAccessGuard` plus same-statement scoped repos
 | 42 | POST `/brands/{brandId}/products/{productId}/claims` | `proposeProductClaim` | `catalog.write` | brand | Brand catalog editor (proposed); exact W1 role/grant UNMAPPED |
 | 43 | GET `/brands/{brandId}/products/{productId}/claims` | `listProductClaims` | `catalog.read` | brand | Brand catalog reader (proposed); exact W1 role/grant UNMAPPED |
 | 44 | POST `/admin/brands/{brandId}/claims/{claimId}/decision` | `decideProductClaim` | `catalog.review` | brand (global reviewer grant must be explicit) | Platform reviewer (proposed); exact W1 role/grant UNMAPPED |
+| 45 | POST `/brands/{brandId}/product-imports/uploads` | `beginCatalogImportUpload` | `imports.write` | brand | UNMAPPED; v1.5 candidate role map has no imports permission |
+| 46 | POST `/brands/{brandId}/media/zip-mapping-manifests` | `createMediaZipMappingManifest` | `media.write` | brand | UNMAPPED; v1.5 candidate role map has no approved W1 media permission |
+| 47 | GET `/brands/{brandId}/media/zip-imports/{batchId}` | `getMediaZipImportStatus` | `media.write` | brand | UNMAPPED; v1.5 candidate role map has no approved W1 media permission |
 
 ## Security findings and contracts to carry forward
 
 1. **No W2 runtime access can currently be granted.** The W1 role catalog contains no candidate W2 permissions. Do not enable candidate endpoints until a reviewed role-to-permission migration and assignment policy exist.
-2. **The v1.5 matrix is not a complete mapping for the 44 API permissions.** The matrix above records operation-level names without silently equating them to broader role labels. In particular, `catalog.approve` differs from the proposed `catalog.review`; `pricing.read`, media/import permissions, catalog workflow permissions, and several inventory permissions lack a proposed role mapping. `inventory.write`/`inventory.approve` are role labels, not the API codes `inventory.submit`, `inventory.adjust.propose`, or `inventory.adjust.approve`.
+2. **The v1.5 matrix is not a complete role mapping for the 47 candidate operations.** The matrix above records operation-level names without silently equating them to broader role labels. In particular, `catalog.approve` differs from the proposed `catalog.review`; `pricing.read`, media/import permissions, catalog workflow permissions, and several inventory permissions lack a proposed role mapping. `inventory.write`/`inventory.approve` are role labels, not the API codes `inventory.submit`, `inventory.adjust.propose`, or `inventory.adjust.approve`.
 3. **Admin route naming is not authorization.** Brand-targeted review/approval operations must validate a separately granted reviewer permission for the target brand through the brand guard and scoped SQL. Taxonomy operations have no `brandId` and require a distinct platform-global guard. A brand owner or brand role cannot acquire taxonomy authority.
 4. **Errors and nested resources:** prove foreign-brand detail/list/count/export/bulk/nested IDs disclose no data and are indistinguishable from absent resources. Do not reveal whether an import batch, media object, claim, adjustment, or review exists in another brand.
 5. **Revocation:** after a committed grant expiry/revocation, membership suspension/revocation, or brand ineligibility, the next SQL statement using an old context must return no protected rows/change no rows.
@@ -95,7 +98,7 @@ These are existing W1 controls/evidence, not proof that W2 routes exist. W2 endp
 | Cross-brand get/list/export/update, nested alias and count denial | `tests/brand-access.integration.test.cjs` verifies synthetic scoped SQL query shapes. W2 must repeat against real product, variant, media, import, inventory, review and export repositories; expected foreign rows/counts absent and writes unchanged. |
 | Revoked permission denied on next statement | Same W1 integration suite covers stale context after committed access change. W2 must exercise real handlers/repositories after membership/assignment revocation. |
 | Platform taxonomy write denied to brand role | `tests/platform-permission-guard.test.cjs` denies a brand principal with forged global claims; `tests/brand-access.integration.test.cjs` verifies with PostgreSQL that a brand-scoped grant cannot satisfy the platform guard and that current global W1 permissions pass the global lane. No W2 taxonomy handler exists yet; wire `taxonomy.manage`/`taxonomy.approve` to this guard when those routes are implemented. |
-| Each API maps to known permission | Matrix above maps all 45 candidate operation IDs. `tests/ren2-49-authorization-matrix.test.cjs` checks all 45 rows have unique operation IDs, permission codes, a guard lane, and a role mapping or explicit deny/unmapped status. W1 has no W2 grants; route metadata/repository integration remains pending until W2 handlers exist. |
+| Each API maps to known permission | Matrix above maps all 47 candidate operation IDs. `tests/ren2-49-authorization-matrix.test.cjs` checks all rows have unique operation IDs, permission codes, a guard lane, and a role mapping or explicit deny/unmapped status. W1 has no W2 grants; route metadata/repository integration remains pending until W2 handlers exist. |
 | Worker cannot forge human session or cross-brand target | No W2 worker principal exists. Add worker tests for forged event identity/brand, wrong-brand target, missing entitlement, duplicate delivery, scoped reads/writes, and immutable audit before worker activation. |
 | Error non-disclosure, CSRF, MFA | W1 guard returns generic denial; session CSRF and MFA guards exist but are not automatically applied to future routes. W2 HTTP tests must verify foreign/missing parity, CSRF rejection, privileged MFA denial/allow audit, and no sensitive identifiers in responses/logs. |
 
@@ -104,8 +107,6 @@ Relevant checks: `tests/brand-access-guard.test.cjs`, `tests/platform-permission
 ## Sources
 
 - Engineering OS `docs/02-system-design/w2-catalog-inventory/v1.5/RENIVET_W2_Master_Specification_v1_5_CONSOLIDATED.md` (authorization and worker controls in §A5/A6).
-- Engineering OS `docs/02-system-design/w2-catalog-inventory/v1.5/W2_OpenAPI_v1_5_CANDIDATE.yaml` (45 candidate operations; design contract, not a live API).
+- Engineering OS `docs/02-system-design/w2-catalog-inventory/v1.5/W2_OpenAPI_v1_5_CANDIDATE.yaml` (47 candidate operations; design contract, not a live API).
 - Engineering OS W2 v1.5 SOPs, ERD, QA Closure Matrix, Acceptance Test Cases, Static QA Checks, Activation Gates, and merged W2 tabular execution plan dated 2026-11-03.
 - Backend `docs/superpowers/specs/2026-10-31-ren2-26-brand-access-schema-design.md`, `docs/superpowers/specs/2026-10-31-ren2-27-brand-access-design.md`, `tests/README.md`, and the current source/tests named above.
-
-| 45 | POST `/brands/{brandId}/product-imports/uploads` | `beginCatalogImportUpload` | `imports.write` | brand | UNMAPPED; v1.5 candidate role map has no imports permission |
