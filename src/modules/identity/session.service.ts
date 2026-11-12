@@ -73,7 +73,8 @@ export class SessionService {
       throw new AuthHttpError(503, 'AUTH_SERVICE_UNAVAILABLE', 'Authentication is temporarily unavailable.');
     }
     if (!session) throw new SessionDeniedError();
-    const expiresInSeconds = Math.max(0, Math.ceil((session.expiresAt.getTime() - Date.now()) / 1_000));
+    // Round down so the browser's cookie never outlives the exact server expiry.
+    const expiresInSeconds = Math.max(0, Math.floor((session.expiresAt.getTime() - Date.now()) / 1_000));
     return {
       sessionId: session.sessionId,
       userId: session.userId,
