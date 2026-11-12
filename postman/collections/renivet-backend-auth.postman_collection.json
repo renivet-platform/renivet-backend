@@ -92,7 +92,7 @@
               }
             },
             "url": "{{apiBaseUrl}}/auth/register",
-            "description": "Purpose: create a pending-verification account. Duplicate canonical emails receive the same neutral result and are not overwritten. Linear: REN2-21. Parameters: none. Body: email (valid address), password (15–128 characters). Authentication/permissions: public; none. Responses: 202 accepted; 400 AUTH_INPUT_INVALID; 429 AUTH_RATE_LIMITED; 503 AUTH_SERVICE_UNAVAILABLE; 500 AUTH_INTERNAL_ERROR. Synthetic example only."
+            "description": "Purpose: create a pending-verification account. Duplicate canonical emails receive the same neutral result and are not overwritten. Linear: REN2-21. Parameters: none. Body: email (valid address), password (8–128 characters). Authentication/permissions: public; none. Responses: 202 accepted; 400 AUTH_INPUT_INVALID; 429 AUTH_RATE_LIMITED; 503 AUTH_SERVICE_UNAVAILABLE; 500 AUTH_INTERNAL_ERROR. Synthetic example only."
           },
           "response": [
             {
@@ -171,7 +171,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"invalid-length@example.test\",\n  \"password\": \"too-short\"\n}",
+              "raw": "{\n  \"email\": \"invalid-length@example.test\",\n  \"password\": \"short7\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -205,7 +205,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('invalid passphrase returns a safe 400 envelope', function () { pm.response.to.have.status(400); pm.expect(pm.response.json().code).to.eql('AUTH_INPUT_INVALID'); pm.expect(pm.response.text()).not.to.include('too-short'); });"
+                  "pm.test('invalid passphrase returns a safe 400 envelope', function () { pm.response.to.have.status(400); pm.expect(pm.response.json().code).to.eql('AUTH_INPUT_INVALID'); pm.expect(pm.response.text()).not.to.include('short7'); });"
                 ]
               }
             }
