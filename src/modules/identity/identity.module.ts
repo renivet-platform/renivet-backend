@@ -10,7 +10,8 @@ import { IdentityRepository } from './identity.repository';
 import { PasswordHashService } from './passwords';
 import { OtpController } from './otp.controller';
 import { OtpChallengeService } from './otp-challenge.service';
-import { OTP_DELIVERY, UnavailableOtpDelivery } from './otp-delivery';
+import { OTP_DELIVERY, OtpDeliveryPort } from './otp-delivery';
+import { Fast2SmsOtpDelivery } from './fast2sms-otp-delivery';
 import { SessionService } from './session.service';
 import { MfaController } from './mfa.controller';
 import { MfaRepository } from './mfa.repository';
@@ -32,7 +33,16 @@ import { MfaService } from './mfa.service';
       ),
       inject: [IdentityRepository, ConfigService],
     },
-    { provide: OTP_DELIVERY, useClass: UnavailableOtpDelivery },
+    {
+      provide: OTP_DELIVERY,
+      useFactory: (configuration: ConfigService) => new Fast2SmsOtpDelivery({
+        apiKey: configuration.get<string>('FAST2SMS_API_KEY'),
+        messageId: configuration.get<string>('FAST2SMS_MESSAGE_ID'),
+        senderId: configuration.get<string>('FAST2SMS_SENDER_ID'),
+        entityId: configuration.get<string>('FAST2SMS_DLT_ENTITY_ID'),
+      }),
+      inject: [ConfigService],
+    },
     PasswordHashService,
     {
       provide: AuthRateLimiter,
@@ -64,7 +74,7 @@ import { MfaService } from './mfa.service';
     },
     {
       provide: OtpChallengeService,
-      useFactory: (repository: IdentityRepository, limiter: AuthRateLimiter, delivery: UnavailableOtpDelivery, configuration: ConfigService, passwords: PasswordHashService) =>
+      useFactory: (repository: IdentityRepository, limiter: AuthRateLimiter, delivery: OtpDeliveryPort, configuration: ConfigService, passwords: PasswordHashService) =>
         new OtpChallengeService(repository, limiter, delivery, {
           hmacKey: configuration.get<string>('AUTH_CHALLENGE_HMAC_KEY'),
           ttlSeconds: configuration.get<number>('AUTH_CHALLENGE_TTL_SECONDS') ?? 300,

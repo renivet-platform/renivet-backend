@@ -10,6 +10,8 @@ export interface OtpDeliveryMessage {
 
 export interface OtpDeliveryPort {
   readonly available: boolean;
+  /** Optional channel- and purpose-specific capability for multi-channel providers. */
+  availableFor?(channel: OtpDeliveryMessage['channel'], purpose: OtpDeliveryMessage['purpose']): boolean;
   /** Implementations must stop pending delivery when the supplied abort signal fires. */
   send(message: OtpDeliveryMessage, signal?: AbortSignal): Promise<void>;
 }

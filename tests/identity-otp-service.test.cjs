@@ -157,3 +157,22 @@ test('Redis outage during verification fails closed before PostgreSQL verificati
   await assert.rejects(service.verify({ challengeId: '37a7d0bf-8414-4f75-bd11-311c7a442d84', purpose: 'email_verification', code: '123456' }, '127.0.0.1'), (error) => error instanceof OtpChallengeError && error.status === 503);
   assert.equal(verified, false);
 });
+
+test('channel-specific delivery capability prevents the SMS provider from being used for email', async () => {
+  let lookedUp = false;
+  let sent = false;
+  const { service } = fixture({
+    repository: { findChallengeTarget: async (_channel, _purpose, destination) => { lookedUp = true; return { userId: 'user-1', destination }; } },
+    delivery: {
+      available: true,
+      availableFor: (channel, purpose) => channel === 'phone' && purpose === 'phone_verification',
+      send: async () => { sent = true; },
+    },
+  });
+  await assert.rejects(
+    service.issue({ channel: 'email', purpose: 'email_verification', destination: 'buyer@example.test' }, '127.0.0.1'),
+    (error) => error instanceof OtpChallengeError && error.status === 503,
+  );
+  assert.equal(lookedUp, false);
+  assert.equal(sent, false);
+});
