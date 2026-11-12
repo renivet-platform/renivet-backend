@@ -71,7 +71,8 @@ export class OtpChallengeService {
     if (!destination || !validPurpose(request.channel, request.purpose)) {
       throw new OtpChallengeError(400, 'AUTH_INPUT_INVALID', 'The request could not be processed.');
     }
-    if (!this.options.hmacKey || this.options.hmacKey.length < 32 || !this.delivery.available) throw genericUnavailable();
+    const deliveryAvailable = this.delivery.availableFor?.(request.channel, request.purpose) ?? this.delivery.available;
+    if (!this.options.hmacKey || this.options.hmacKey.length < 32 || !deliveryAvailable) throw genericUnavailable();
     await this.applyLimits('issue', request.channel, request.purpose, destination, ip);
     const issueKey = `${request.channel}:${request.purpose}:${destination}`;
     try {
