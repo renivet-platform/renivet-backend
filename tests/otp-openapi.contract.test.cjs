@@ -23,3 +23,17 @@ test('REN2-22/23 OpenAPI documents challenge verification and purpose-bound pass
     type: 'string', format: 'uuid', example: '37a7d0bf-8414-4f75-bd11-311c7a442d84',
   });
 });
+
+test('REN2-39 phone attachment is authenticated, CSRF protected, and separate from OTP verification', () => {
+  const operation = contract.paths['/api/v1/auth/phone']?.post;
+  assert.ok(operation);
+  assert.equal(operation.operationId, 'setPhoneForVerification');
+  assert.match(operation.description, /active first-party session cookie/);
+  assert.match(operation.description, /session-bound X-CSRF-Token/);
+  assert.match(operation.description, /Phone-number login is not provided/);
+  assert.deepEqual(operation.requestBody.content['application/json'].schema.$ref, '#/components/schemas/SetPhoneForVerificationDto');
+  assert.ok(operation.security?.some((scheme) => Object.hasOwn(scheme, 'renivetSession')));
+  for (const status of ['202', '400', '401', '403', '429', '500', '503']) {
+    assert.ok(operation.responses[status], `phone attachment ${status} response is documented`);
+  }
+});

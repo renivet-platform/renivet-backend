@@ -184,6 +184,26 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
     );
   }
 
+  /** Attach a phone to an active account without treating it as verified. */
+  async setPhoneForVerification(userId: string, phone: string): Promise<boolean | null> {
+    try {
+      const result = await this.requirePool().query<{ verification_required: boolean }>(
+        `UPDATE identity.users
+            SET phone = $2,
+                phone_verified_at = CASE WHEN phone IS DISTINCT FROM $2 THEN NULL ELSE phone_verified_at END,
+                updated_at = clock_timestamp(),
+                row_version = row_version + 1
+          WHERE id = $1 AND state = 'active' AND email_verified_at IS NOT NULL
+          RETURNING phone_verified_at IS NULL AS verification_required`,
+        [userId, phone],
+      );
+      return result.rows[0]?.verification_required ?? null;
+    } catch (error) {
+      if ((error as { code?: string }).code === '23505') return null;
+      throw error;
+    }
+  }
+
   async findChallengeTarget(channel: OtpChannel, purpose: OtpPurpose, destination: string): Promise<{ userId: string; destination: string } | null> {
     const column = channel === 'email' ? 'email' : 'phone';
     const verifiedColumn = channel === 'email' ? 'email_verified_at' : 'phone_verified_at';

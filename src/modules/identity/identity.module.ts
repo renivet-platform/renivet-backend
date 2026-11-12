@@ -4,6 +4,8 @@ import { Reflector } from '@nestjs/core';
 import { MfaGuard } from '../../common/guards/require-mfa';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { PhoneContactController } from './phone-contact.controller';
+import { PhoneContactService } from './phone-contact.service';
 import { AuthRateLimiter, RedisEvalClient } from './rate-limiter';
 import { IdentityInfrastructure } from './identity-infrastructure';
 import { IdentityRepository } from './identity.repository';
@@ -18,10 +20,15 @@ import { MfaRepository } from './mfa.repository';
 import { MfaService } from './mfa.service';
 
 @Module({
-  controllers: [AuthController, OtpController, MfaController],
+  controllers: [AuthController, PhoneContactController, OtpController, MfaController],
   providers: [
     IdentityInfrastructure,
     IdentityRepository,
+    {
+      provide: PhoneContactService,
+      useFactory: (repository: IdentityRepository, limiter: AuthRateLimiter) => new PhoneContactService(repository, limiter),
+      inject: [IdentityRepository, AuthRateLimiter],
+    },
     MfaRepository,
     {
       provide: SessionService,

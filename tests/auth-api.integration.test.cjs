@@ -34,9 +34,25 @@ test('REN2-21 registration and password HTTP acceptance', { skip: enabled ? fals
   process.env.DATABASE_URL = databaseUrl;
   process.env.REDIS_URL = redisUrl;
   process.env.AUTH_RATE_LIMIT_HMAC_KEY = 'synthetic-integration-rate-key-not-a-secret-00000000';
+  process.env.AUTH_CHALLENGE_HMAC_KEY = 'synthetic-integration-challenge-proof-key-not-a-secret-00000000';
   process.env.AUTH_CSRF_HMAC_KEY = 'synthetic-integration-csrf-key-not-a-secret-00000000';
   process.env.AUTH_MFA_ENCRYPTION_KEY = Buffer.alloc(32, 0x44).toString('base64');
   process.env.AUTH_ALLOWED_ORIGINS = 'http://127.0.0.1:3000';
+  const fast2smsKeys = ['FAST2SMS_API_KEY', 'FAST2SMS_MESSAGE_ID', 'FAST2SMS_SENDER_ID', 'FAST2SMS_DLT_ENTITY_ID'];
+  const priorFast2smsValues = Object.fromEntries(fast2smsKeys.map((key) => [key, process.env[key]]));
+  process.env.FAST2SMS_API_KEY = 'synthetic-fast2sms-api-key-never-use-in-production';
+  process.env.FAST2SMS_MESSAGE_ID = '1077206490123456789';
+  process.env.FAST2SMS_SENDER_ID = 'RENIVT';
+  process.env.FAST2SMS_DLT_ENTITY_ID = '1234567890123456789';
+  const originalFetch = global.fetch;
+  const providerRequests = [];
+  global.fetch = async (input, init) => {
+    if (String(input) === 'https://www.fast2sms.com/dev/bulkV2') {
+      providerRequests.push({ url: String(input), ...init, payload: JSON.parse(init.body) });
+      return new Response(JSON.stringify({ return: true, status_code: 200 }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    return originalFetch(input, init);
+  };
 
   const { NestFactory } = require('@nestjs/core');
   const { FastifyAdapter } = require('@nestjs/platform-fastify');
@@ -187,6 +203,47 @@ test('REN2-21 registration and password HTTP acceptance', { skip: enabled ? fals
     const refreshedCookie = activeSession.headers.get('set-cookie');
     assert.match(refreshedCookie, /^__Host-renivet_session=[A-Za-z0-9_-]{43}; Path=\/; Max-Age=(?:[1-9]\d{0,2}|1[0-7]\d{2}|1800); HttpOnly; Secure; SameSite=Lax$/);
     const csrfToken = (await activeSession.json()).csrfToken;
+
+    const phoneNumber = '+919876543210';
+    const phoneCookie = `__Host-renivet_session=${sessionToken}`;
+    const unsafePhoneChange = await fetch(`${base}/auth/phone`, {
+      method: 'POST', headers: { cookie: phoneCookie, 'content-type': 'application/json', origin: 'https://attacker.example.test', 'sec-fetch-site': 'cross-site', 'x-csrf-token': csrfToken },
+      body: JSON.stringify({ phone: phoneNumber }),
+    });
+    assert.equal(unsafePhoneChange.status, 403, 'cross-site phone changes must be rejected');
+    assert.equal((await pool.query('SELECT phone FROM identity.users WHERE id=$1', [userId])).rows[0].phone, null);
+
+    const phoneChange = await fetch(`${base}/auth/phone`, {
+      method: 'POST', headers: { cookie: phoneCookie, 'content-type': 'application/json', origin: 'http://127.0.0.1:3000', 'sec-fetch-site': 'same-origin', 'x-csrf-token': csrfToken },
+      body: JSON.stringify({ phone: phoneNumber }),
+    });
+    assert.equal(phoneChange.status, 202, await phoneChange.clone().text());
+    assert.deepEqual(await phoneChange.json(), { status: 'accepted', verificationRequired: true });
+    const savedPhone = await pool.query('SELECT phone, phone_verified_at FROM identity.users WHERE id=$1', [userId]);
+    assert.equal(savedPhone.rows[0].phone, phoneNumber);
+    assert.equal(savedPhone.rows[0].phone_verified_at, null, 'attached contact remains unverified until OTP succeeds');
+
+    const phoneChallenge = await fetch(`${base}/auth/challenges`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ channel: 'phone', purpose: 'phone_verification', destination: phoneNumber }),
+    });
+    assert.equal(phoneChallenge.status, 202, await phoneChallenge.clone().text());
+    const phoneChallengeBody = await phoneChallenge.json();
+    assert.equal(providerRequests.length, 1, 'eligible phone challenge invokes only the fake Fast2SMS transport');
+    assert.equal(providerRequests[0].url, 'https://www.fast2sms.com/dev/bulkV2');
+    assert.deepEqual(providerRequests[0].payload, {
+      sender_id: 'RENIVT', message: '1077206490123456789', variables_values: `${providerRequests[0].payload.variables_values.split('|')[0]}|5`, route: 'dlt', numbers: '9876543210',
+    });
+    const issuedCode = providerRequests[0].payload.variables_values.split('|')[0];
+    assert.match(issuedCode, /^[0-9]{6}$/);
+    const phoneVerification = await fetch(`${base}/auth/challenges/${phoneChallengeBody.challengeId}/verify`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ purpose: 'phone_verification', code: issuedCode }),
+    });
+    assert.equal(phoneVerification.status, 200, await phoneVerification.clone().text());
+    assert.deepEqual(await phoneVerification.json(), { status: 'verified' });
+    assert.ok((await pool.query('SELECT phone_verified_at FROM identity.users WHERE id=$1', [userId])).rows[0].phone_verified_at);
+
     const crossSiteLogout = await fetch(`${base}/auth/session`, {
       method: 'DELETE', headers: {
         cookie: `__Host-renivet_session=${sessionToken}`, origin: 'https://attacker.example.test',
@@ -308,6 +365,11 @@ test('REN2-21 registration and password HTTP acceptance', { skip: enabled ? fals
     assert.equal(await racingLogin, false, 'login verified before recovery must not create a session after recovery commits');
     assert.equal((await pool.query('SELECT 1 FROM identity.user_sessions WHERE token_hash = $1', [raceTokenHash])).rowCount, 0);
   } finally {
+    global.fetch = originalFetch;
+    for (const key of fast2smsKeys) {
+      if (priorFast2smsValues[key] === undefined) delete process.env[key];
+      else process.env[key] = priorFast2smsValues[key];
+    }
     await app?.close();
     await pool.query('DELETE FROM identity.security_audit_events WHERE actor_user_id IN (SELECT id FROM identity.users WHERE email = ANY($1::text[]))', [[registrationEmail, postmanEmail, verifiedEmail]]).catch(() => {});
     await pool.query('DELETE FROM identity.mfa_recovery_codes WHERE factor_id IN (SELECT factor.id FROM identity.mfa_factors AS factor JOIN identity.users AS account ON account.id = factor.user_id WHERE account.email = ANY($1::text[]))', [[registrationEmail, postmanEmail, verifiedEmail]]).catch(() => {});

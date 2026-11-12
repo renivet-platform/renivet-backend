@@ -18,6 +18,20 @@ test('active opaque session returns identity and deterministic per-session CSRF 
   assert.deepEqual(calls, [createHash('sha256').update(token).digest('hex')]);
 });
 
+test('session cookie lifetime rounds down so it never exceeds the server expiry', async () => {
+  const originalNow = Date.now;
+  Date.now = () => 1_000_000;
+  try {
+    const sessions = new SessionService({
+      findAndTouchSession: async () => ({ userId: 'user-1', expiresAt: new Date(2_800_100) }),
+    }, 'synthetic-csrf-key-with-at-least-thirty-two-bytes');
+    const result = await sessions.authenticate('C'.repeat(43));
+    assert.equal(result.expiresInSeconds, 1_800);
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
 test('expired, revoked, unknown, and rotated token cannot authenticate', async () => {
   const sessions = new SessionService({ findAndTouchSession: async () => null }, 'synthetic-csrf-key-with-at-least-thirty-two-bytes');
   await assert.rejects(sessions.authenticate('A'.repeat(43)), SessionDeniedError);

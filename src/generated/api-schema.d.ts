@@ -84,6 +84,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/phone": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Attach an Indian mobile number to the authenticated account for verification
+         * @description Requires an active first-party session cookie, exact allowlisted Origin, same-origin fetch metadata, and session-bound X-CSRF-Token. It stores the contact as unverified; the separate phone_verification challenge sends and verifies the code. A number already owned by another account is rejected without identifying that account. Phone-number login is not provided.
+         */
+        post: operations["setPhoneForVerification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/challenges": {
         parameters: {
             query?: never;
@@ -790,6 +810,25 @@ export interface components {
             authenticationState: "authenticated";
             user: components["schemas"]["AuthenticatedUserDto"];
         };
+        SetPhoneForVerificationDto: {
+            /**
+             * @description Indian mobile number in E.164 format. This number remains unverified until a separate phone OTP challenge succeeds.
+             * @example +919876543210
+             */
+            phone: string;
+        };
+        PhoneContactAcceptedDto: {
+            /**
+             * @example accepted
+             * @enum {string}
+             */
+            status: "accepted";
+            /**
+             * @description False when the same number is already verified on this account.
+             * @example true
+             */
+            verificationRequired: boolean;
+        };
         OtpIssueRequestDto: {
             /**
              * @example email
@@ -1317,6 +1356,92 @@ export interface operations {
                 };
             };
             /** @description AUTH_SERVICE_UNAVAILABLE. Session store or CSRF configuration is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+        };
+    };
+    setPhoneForVerification: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Session-bound proof returned by GET /auth/session. */
+                "X-CSRF-Token": string;
+                /** @description Must be same-origin. */
+                "Sec-Fetch-Site": string;
+                /** @description Must exactly match one configured AUTH_ALLOWED_ORIGINS origin. */
+                Origin: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetPhoneForVerificationDto"];
+            };
+        };
+        responses: {
+            /** @description The phone number is attached as an unverified contact. */
+            202: {
+                headers: {
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhoneContactAcceptedDto"];
+                };
+            };
+            /** @description AUTH_INPUT_INVALID. The number is malformed, not supported, or cannot be attached. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description AUTHENTICATION_FAILED. The session is missing, expired, revoked, or invalid. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description CSRF_VALIDATION_FAILED. Origin, fetch metadata, or CSRF proof is invalid. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description AUTH_RATE_LIMITED. Phone changes are limited by user and source IP. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description AUTH_INTERNAL_ERROR. Unexpected failure with a safe public response. */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+            /** @description AUTH_SERVICE_UNAVAILABLE. The session, rate-limit store, or identity store is unavailable. */
             503: {
                 headers: {
                     [name: string]: unknown;
