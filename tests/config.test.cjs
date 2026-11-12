@@ -9,6 +9,19 @@ test('development defaults bind to loopback without requiring service credential
   assert.equal(config.HOST, '127.0.0.1');
   assert.equal(config.DATABASE_URL, undefined);
   assert.equal(validateEnvironment({ AUTH_RATE_LIMIT_HMAC_KEY: 'local-only-set-a-random-32-byte-value' }).AUTH_RATE_LIMIT_HMAC_KEY, 'local-only-set-a-random-32-byte-value');
+  assert.equal(config.SMTP_PORT, 587);
+  assert.equal(config.SMTP_HOST, undefined);
+});
+
+test('SMTP configuration is optional, bounded, and rejects unsafe host and secure-mode values', () => {
+  const config = validateEnvironment({ SMTP_HOST: 'smtp.example.test', SMTP_PORT: '465', SMTP_SECURE: 'true' });
+  assert.equal(config.SMTP_HOST, 'smtp.example.test');
+  assert.equal(config.SMTP_PORT, 465);
+  assert.equal(config.SMTP_SECURE, true);
+  assert.equal(validateEnvironment({ SMTP_HOST: '', SMTP_PORT: '', SMTP_SECURE: '' }).SMTP_HOST, undefined);
+  assert.throws(() => validateEnvironment({ SMTP_HOST: 'smtp.example.test\r\nBcc: attacker@example.test' }), /SMTP_HOST/);
+  assert.throws(() => validateEnvironment({ SMTP_PORT: '65536' }), /SMTP_PORT/);
+  assert.throws(() => validateEnvironment({ SMTP_SECURE: 'sometimes' }), /SMTP_SECURE/);
 });
 
 test('reject invalid NODE_ENV, ports, hosts and URLs with field-only errors', () => {

@@ -29,7 +29,7 @@ export class OtpController {
   @ApiOperation({
     operationId: 'createOtpChallenge',
     summary: 'Request an email or phone verification or recovery challenge',
-    description: 'Public operation with no authentication or permission requirement. Creates a short-lived one-use challenge for an eligible contact and purpose. Password recovery is available only to an active account with verified email and an active password credential; unknown and ineligible contacts receive a neutral accepted response. Recovery proof is purpose-bound and is required to replace the password. Delivery is unavailable by default until a provider has separately passed owner review. Verification: Linear REN2-22; password recovery: REN2-23; candidate routes remain subject to D04 owner approval.',
+    description: 'Public operation with no authentication or permission requirement. Creates a short-lived one-use challenge for an eligible contact and purpose. Password recovery is available only to an active account with verified email and an active password credential; unknown and ineligible contacts receive a neutral accepted response. Recovery proof is purpose-bound and is required to replace the password. Email requires complete SMTP configuration; phone requires complete Fast2SMS DLT configuration. Missing provider configuration sends no message. Verification: Linear REN2-22; password recovery: REN2-23; candidate routes remain subject to D04 owner approval.',
   })
   @ApiBody({ type: OtpIssueRequestDto })
   @ApiAcceptedResponse({ description: 'Neutral accepted result; does not reveal contact registration or delivery state.', type: OtpAcceptedDto })

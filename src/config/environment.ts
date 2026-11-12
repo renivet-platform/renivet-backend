@@ -19,6 +19,13 @@ function optionalString(input: Record<string, unknown>, name: string): string | 
   return value.trim();
 }
 
+function optionalConfigString(input: Record<string, unknown>, name: string): string | undefined {
+  const value = input[name];
+  if (value === undefined || value === '') return undefined;
+  if (typeof value !== 'string') error(name, 'must be a string');
+  return value.trim() || undefined;
+}
+
 function parseUrl(
   input: Record<string, unknown>,
   name: string,
@@ -59,6 +66,14 @@ function positiveInteger(
   return Number(value);
 }
 
+function optionalBoolean(input: Record<string, unknown>, name: string): boolean | undefined {
+  const value = optionalConfigString(input, name);
+  if (value === undefined) return undefined;
+  if (value.toLowerCase() === 'true') return true;
+  if (value.toLowerCase() === 'false') return false;
+  return error(name, 'must be true or false');
+}
+
 export function validateEnvironment(input: Record<string, unknown>): Record<string, unknown> {
   const envName = optionalString(input, 'NODE_ENV') ?? 'development';
   if (!environments.includes(envName as Environment)) {
@@ -84,6 +99,18 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
   const authChallengeKey = optionalString(input, 'AUTH_CHALLENGE_HMAC_KEY');
   const authCsrfKey = optionalString(input, 'AUTH_CSRF_HMAC_KEY');
   const authMfaEncryptionKey = optionalString(input, 'AUTH_MFA_ENCRYPTION_KEY');
+  const smtpHost = optionalConfigString(input, 'SMTP_HOST');
+  if (smtpHost && (smtpHost.length > 253 || !/^[A-Za-z0-9.-]+$/.test(smtpHost) || smtpHost.startsWith('.') || smtpHost.endsWith('.'))) {
+    error('SMTP_HOST', 'must be a DNS hostname or IPv4 address');
+  }
+  const smtpUsername = optionalConfigString(input, 'SMTP_USERNAME');
+  const smtpPassword = optionalConfigString(input, 'SMTP_PASSWORD');
+  const smtpFrom = optionalConfigString(input, 'SMTP_FROM');
+  const smtpPortValue = optionalConfigString(input, 'SMTP_PORT');
+  const smtpPort = smtpPortValue === undefined ? 587 : Number(smtpPortValue);
+  if (smtpPortValue !== undefined && (!/^\d+$/.test(smtpPortValue) || smtpPort < 1 || smtpPort > 65_535)) {
+    error('SMTP_PORT', 'must be an integer between 1 and 65535');
+  }
   const allowedOriginsRaw = optionalString(input, 'AUTH_ALLOWED_ORIGINS');
   const allowedOrigins = (allowedOriginsRaw ?? '').split(',').map((origin) => origin.trim()).filter(Boolean);
   for (const origin of allowedOrigins) {
@@ -154,6 +181,12 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
     AUTH_CHALLENGE_HMAC_KEY: authChallengeKey,
     AUTH_CSRF_HMAC_KEY: authCsrfKey,
     AUTH_MFA_ENCRYPTION_KEY: authMfaEncryptionKey,
+    SMTP_HOST: smtpHost,
+    SMTP_PORT: smtpPort,
+    SMTP_SECURE: optionalBoolean(input, 'SMTP_SECURE'),
+    SMTP_USERNAME: smtpUsername,
+    SMTP_PASSWORD: smtpPassword,
+    SMTP_FROM: smtpFrom,
     AUTH_ALLOWED_ORIGINS: allowedOrigins,
     AUTH_RATE_LIMIT_WINDOW_SECONDS: positiveInteger(input, 'AUTH_RATE_LIMIT_WINDOW_SECONDS', 900, 86_400),
     AUTH_REGISTER_ACCOUNT_LIMIT: positiveInteger(input, 'AUTH_REGISTER_ACCOUNT_LIMIT', 5, 10_000),
