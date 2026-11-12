@@ -208,14 +208,16 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
     const column = channel === 'email' ? 'email' : 'phone';
     const verifiedColumn = channel === 'email' ? 'email_verified_at' : 'phone_verified_at';
     const recovery = purpose === 'password_recovery';
+    const login = purpose === 'phone_login';
     const result = await this.requirePool().query<{ id: string; destination: string }>(
       `SELECT id, ${column} AS destination
          FROM identity.users
         WHERE ${channel === 'email' ? 'lower(btrim(email))' : 'phone'} = $1
-          AND ${verifiedColumn} IS ${recovery ? 'NOT ' : ''}NULL
-          AND ($2::boolean = false OR (state = 'active' AND EXISTS (SELECT 1 FROM identity.user_credentials c WHERE c.user_id = identity.users.id AND c.disabled_at IS NULL)))
+          AND ${verifiedColumn} IS ${(recovery || login) ? 'NOT ' : ''}NULL
+          AND ($2::boolean = false OR state = 'active')
+          AND ($3::boolean = false OR EXISTS (SELECT 1 FROM identity.user_credentials c WHERE c.user_id = identity.users.id AND c.disabled_at IS NULL))
         LIMIT 1`,
-      [destination, recovery],
+      [destination, recovery || login, recovery],
     );
     return result.rows[0] ? { userId: result.rows[0].id, destination: result.rows[0].destination } : null;
   }
@@ -236,12 +238,14 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
       const contactColumn = channel === 'email' ? 'email' : 'phone';
       const verifiedColumn = channel === 'email' ? 'email_verified_at' : 'phone_verified_at';
       const recovery = input.kind === 'email:password_recovery';
+      const login = input.kind === 'phone:phone_login';
       const current = await client.query(
         `SELECT id FROM identity.users
-          WHERE id = $1 AND ${contactColumn} = $2 AND ${verifiedColumn} IS ${recovery ? 'NOT ' : ''}NULL
-            AND ($3::boolean = false OR (state = 'active' AND EXISTS (SELECT 1 FROM identity.user_credentials c WHERE c.user_id = identity.users.id AND c.disabled_at IS NULL)))
+          WHERE id = $1 AND ${contactColumn} = $2 AND ${verifiedColumn} IS ${(recovery || login) ? 'NOT ' : ''}NULL
+            AND ($3::boolean = false OR state = 'active')
+            AND ($4::boolean = false OR EXISTS (SELECT 1 FROM identity.user_credentials c WHERE c.user_id = identity.users.id AND c.disabled_at IS NULL))
           FOR UPDATE`,
-        [input.userId, input.destination, recovery],
+        [input.userId, input.destination, recovery || login, recovery],
       );
       if (!current.rowCount) { await client.query('ROLLBACK'); return false; }
       await client.query(
@@ -272,7 +276,7 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
     );
   }
 
-  async verify(input: { id: string; purpose: OtpPurpose; code: string; hmacKey: string; maxAttempts: number; passwordHash?: string }): Promise<'verified' | 'denied'> {
+  async verify(input: { id: string; purpose: OtpPurpose; code: string; hmacKey: string; maxAttempts: number; passwordHash?: string; sessionTokenHash?: string; sessionExpiresAt?: Date; absoluteExpiresAt?: Date; ipHash?: string }): Promise<'verified' | { status: 'authenticated'; userId: string } | 'denied'> {
     const client = await this.requirePool().connect();
     try {
       await client.query('BEGIN');
@@ -301,10 +305,12 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
       );
       const owner = ownerResult.rows[0];
       if (!owner) { await client.query('ROLLBACK'); return 'denied'; }
-      const channel: OtpChannel = input.purpose === 'phone_verification' ? 'phone' : 'email';
+      const channel: OtpChannel = input.purpose === 'phone_verification' || input.purpose === 'phone_login' ? 'phone' : 'email';
       const expectedKind = `${channel}:${input.purpose}`;
       const destination = channel === 'email' ? owner.email : owner.phone;
-      const eligible = input.purpose === 'password_recovery'
+      const eligible = input.purpose === 'phone_login'
+        ? owner.phone_verified_at !== null && owner.state === 'active'
+        : input.purpose === 'password_recovery'
         ? owner.email_verified_at !== null && owner.state === 'active' && Boolean(input.passwordHash)
         : !(channel === 'email' ? owner.email_verified_at : owner.phone_verified_at);
       if (challenge.kind !== expectedKind || !destination || !eligible) {
@@ -328,7 +334,18 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
         );
         await client.query('COMMIT'); return 'denied';
       }
-      if (input.purpose === 'password_recovery') {
+      if (input.purpose === 'phone_login') {
+        if (!input.sessionTokenHash || !input.sessionExpiresAt || !input.absoluteExpiresAt || !input.ipHash) { await client.query('ROLLBACK'); return 'denied'; }
+        const session = await client.query(
+          `INSERT INTO identity.user_sessions (user_id, token_hash, expires_at, ip_hash, absolute_expires_at)
+           SELECT id, $2, $3, $4, $5 FROM identity.users
+            WHERE id = $1 AND state = 'active' AND phone_verified_at IS NOT NULL
+           RETURNING id`,
+          [challenge.user_id, input.sessionTokenHash, input.sessionExpiresAt, input.ipHash, input.absoluteExpiresAt],
+        );
+        if (session.rowCount !== 1) { await client.query('ROLLBACK'); return 'denied'; }
+        await client.query(`UPDATE identity.users SET last_login_at=clock_timestamp(), updated_at=clock_timestamp(), row_version=row_version+1 WHERE id=$1`, [challenge.user_id]);
+      } else if (input.purpose === 'password_recovery') {
         const credentialUpdate = await client.query(
           `UPDATE identity.user_credentials
               SET password_hash = $2,
@@ -362,7 +379,7 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
         [input.id],
       );
       await client.query('COMMIT');
-      return 'verified';
+      return input.purpose === 'phone_login' ? { status: 'authenticated', userId: challenge.user_id } : 'verified';
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
       throw error;

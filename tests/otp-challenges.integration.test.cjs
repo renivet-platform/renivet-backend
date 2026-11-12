@@ -163,6 +163,46 @@ test('REN2-22/23 OTP verification and account recovery HTTP/PostgreSQL/Postman a
     const phoneState = await pool.query('SELECT phone_verified_at FROM identity.users WHERE id=$1', [phoneSeed.rows[0].id]);
     assert.ok(phoneState.rows[0].phone_verified_at);
 
+    const sendsBeforeInactiveLogin = sent.length;
+    const inactiveLoginChallenge = await fetch(`${base}/auth/challenges`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ channel: 'phone', purpose: 'phone_login', destination: phone }),
+    });
+    assert.equal(inactiveLoginChallenge.status, 202);
+    const inactiveLogin = await inactiveLoginChallenge.json();
+    assert.equal(sent.length, sendsBeforeInactiveLogin, 'non-active accounts receive no phone-login SMS');
+    const inactiveVerification = await fetch(`${base}/auth/challenges/${inactiveLogin.challengeId}/verify`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ purpose: 'phone_login', code: '123456' }),
+    });
+    assert.equal(inactiveVerification.status, 401, 'a verified number on a non-active account cannot sign in');
+
+    await pool.query("UPDATE identity.users SET state='active' WHERE id=$1", [phoneSeed.rows[0].id]);
+    const loginIssueResponse = await fetch(`${base}/auth/challenges`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ channel: 'phone', purpose: 'phone_login', destination: phone }),
+    });
+    const loginChallenge = await loginIssueResponse.json();
+    assert.equal(loginIssueResponse.status, 202);
+    assert.equal(sent.at(-1).purpose, 'phone_login', 'login sends only a purpose-bound login SMS');
+    const loginResponse = await fetch(`${base}/auth/challenges/${loginChallenge.challengeId}/verify`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ purpose: 'phone_login', code: '123456' }),
+    });
+    assert.equal(loginResponse.status, 200);
+    assert.deepEqual(await loginResponse.json(), { authenticationState: 'authenticated', user: { id: phoneSeed.rows[0].id } });
+    const loginCookie = loginResponse.headers.get('set-cookie');
+    assert.match(loginCookie, /^__Host-renivet_session=[A-Za-z0-9_-]{43}; Path=\/; Max-Age=1800; HttpOnly; Secure; SameSite=Lax$/);
+    const rawSession = loginCookie.match(/__Host-renivet_session=([^;]+)/)[1];
+    const sessionHash = require('node:crypto').createHash('sha256').update(rawSession).digest('hex');
+    const sessionRow = await pool.query('SELECT user_id FROM identity.user_sessions WHERE token_hash=$1', [sessionHash]);
+    assert.equal(sessionRow.rows[0].user_id, phoneSeed.rows[0].id, 'only the session digest is persisted for the phone-login account');
+    const replayResponse = await fetch(`${base}/auth/challenges/${loginChallenge.challengeId}/verify`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ purpose: 'phone_login', code: '123456' }),
+    });
+    assert.equal(replayResponse.status, 401, 'the login OTP cannot be replayed');
+
     async function issue(email) {
       const response = await fetch(`${base}/auth/challenges`, {
         method: 'POST', headers: { 'content-type': 'application/json' },

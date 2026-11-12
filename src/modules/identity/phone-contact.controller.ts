@@ -44,7 +44,7 @@ export class PhoneContactController {
   @ApiOperation({
     operationId: 'setPhoneForVerification',
     summary: 'Attach an Indian mobile number to the authenticated account for verification',
-    description: 'Requires an active first-party session cookie, exact allowlisted Origin, same-origin fetch metadata, and session-bound X-CSRF-Token. It stores the contact as unverified; the separate phone_verification challenge sends and verifies the code. A number already owned by another account is rejected without identifying that account. Phone-number login is not provided.',
+    description: 'Requires an active first-party session cookie, exact allowlisted Origin, same-origin fetch metadata, and session-bound X-CSRF-Token. It stores the contact as unverified; the separate phone_verification challenge sends and verifies the code. A number already owned by another account is rejected without identifying that account. Phone login uses a distinct phone_login challenge and requires an already verified number.',
   })
   @ApiBody({ type: SetPhoneForVerificationDto })
   @ApiAcceptedResponse({ description: 'The phone number is attached as an unverified contact.', type: PhoneContactAcceptedDto, headers: { 'Cache-Control': { schema: { type: 'string', example: 'no-store' } } } })

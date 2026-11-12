@@ -66,6 +66,25 @@ test('email and phone normalization is strict and channel-purpose pairs cannot c
   await assert.rejects(service.issue({ channel: 'phone', purpose: 'phone_verification', destination: '4155550100' }, '127.0.0.1'), (error) => error instanceof OtpChallengeError && error.status === 400);
 });
 
+test('phone login issues a separate purpose-bound code and returns session material only after successful verification', async () => {
+  const { service, calls } = fixture({
+    options: { codeGenerator: () => '123456' },
+    repository: { verify: async (input) => { calls.push(['verified-input', input]); return { status: 'authenticated', userId: 'user-1' }; } },
+  });
+  const issued = await service.issue({ channel: 'phone', purpose: 'phone_login', destination: '+919876543210' }, '198.51.100.4');
+  assert.equal(issued.status, 'accepted');
+  assert.equal(calls.find(([kind]) => kind === 'send')[1].purpose, 'phone_login');
+  const signedIn = await service.verify({ challengeId: issued.challengeId, purpose: 'phone_login', code: '123456' }, '198.51.100.4');
+  assert.equal(signedIn.status, 'authenticated');
+  assert.equal(signedIn.userId, 'user-1');
+  assert.match(signedIn.sessionToken, /^[A-Za-z0-9_-]{43}$/);
+  const proof = calls.find(([kind]) => kind === 'verified-input')[1];
+  assert.match(proof.sessionTokenHash, /^[a-f0-9]{64}$/);
+  assert.equal(proof.ipHash.length, 64);
+  assert.ok(proof.sessionExpiresAt instanceof Date);
+  assert.ok(proof.absoluteExpiresAt instanceof Date);
+});
+
 test('provider outage invalidates the persisted challenge and preserves neutral accepted response', async () => {
   const { service, calls } = fixture({ delivery: { available: true, send: async () => { throw new Error('provider secret'); } } });
   const result = await service.issue({ channel: 'email', purpose: 'email_verification', destination: 'buyer@example.test' }, '127.0.0.1');

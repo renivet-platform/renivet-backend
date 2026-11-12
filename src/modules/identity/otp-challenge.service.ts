@@ -1,17 +1,17 @@
-import { createHmac, randomInt, randomUUID } from 'node:crypto';
+import { createHash, createHmac, randomBytes, randomInt, randomUUID } from 'node:crypto';
 import { AuthHttpError, normalizeEmail } from './auth.service';
 import { AuthLockContentionError, AuthRateLimitExceededError, AuthRateLimiter } from './rate-limiter';
 import { OtpDeliveryPort } from './otp-delivery';
 import { PasswordHashService, isPasswordAllowed } from './passwords';
 
 export type OtpChannel = 'email' | 'phone';
-export type OtpPurpose = 'email_verification' | 'phone_verification' | 'password_recovery';
+export type OtpPurpose = 'email_verification' | 'phone_verification' | 'phone_login' | 'password_recovery';
 
 export interface OtpChallengeRepositoryPort {
   findChallengeTarget(channel: OtpChannel, purpose: OtpPurpose, destination: string): Promise<{ userId: string; destination: string } | null>;
   issue(input: { id: string; userId: string; kind: string; codeHash: string; expiresAt: Date; destination: string; purpose: OtpPurpose }): Promise<boolean>;
   invalidate(id: string): Promise<void>;
-  verify(input: { id: string; purpose: OtpPurpose; code: string; hmacKey: string; maxAttempts: number; passwordHash?: string }): Promise<'verified' | 'denied'>;
+  verify(input: { id: string; purpose: OtpPurpose; code: string; hmacKey: string; maxAttempts: number; passwordHash?: string; sessionTokenHash?: string; sessionExpiresAt?: Date; absoluteExpiresAt?: Date; ipHash?: string }): Promise<'verified' | { status: 'authenticated'; userId: string } | 'denied'>;
 }
 
 export interface OtpChallengeOptions {
@@ -26,6 +26,8 @@ export interface OtpChallengeOptions {
   verifyIpLimit?: number;
   codeGenerator?: () => string;
   deliveryTimeoutMilliseconds?: number;
+  sessionTtlSeconds?: number;
+  absoluteSessionTtlSeconds?: number;
 }
 
 export class OtpChallengeError extends AuthHttpError {
@@ -38,7 +40,7 @@ export class OtpChallengeError extends AuthHttpError {
 const genericUnavailable = () => new OtpChallengeError(503, 'AUTH_SERVICE_UNAVAILABLE', 'Authentication is temporarily unavailable.');
 const genericDenied = () => new OtpChallengeError(401, 'AUTHENTICATION_FAILED', 'The challenge could not be verified.');
 const validPurpose = (channel: OtpChannel, purpose: OtpPurpose): boolean =>
-  (channel === 'email' && ['email_verification', 'password_recovery'].includes(purpose)) || (channel === 'phone' && purpose === 'phone_verification');
+  (channel === 'email' && ['email_verification', 'password_recovery'].includes(purpose)) || (channel === 'phone' && ['phone_verification', 'phone_login'].includes(purpose));
 
 export function makeOtpProof(key: string, input: {
   challengeId: string; userId: string; channel: OtpChannel; purpose: OtpPurpose; destination: string; code: string;
@@ -107,7 +109,7 @@ export class OtpChallengeService {
     }
   }
 
-  async verify(request: { challengeId: string; purpose: OtpPurpose; code: string; newPassword?: string }, ip: string): Promise<{ status: 'verified' }> {
+  async verify(request: { challengeId: string; purpose: OtpPurpose; code: string; newPassword?: string }, ip: string): Promise<{ status: 'verified' } | { status: 'authenticated'; userId: string; sessionToken: string; expiresInSeconds: number }> {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(request.challengeId) || !/^[0-9]{6}$/.test(request.code)) {
       throw genericDenied();
     }
@@ -125,10 +127,22 @@ export class OtpChallengeService {
       if (request.purpose === 'password_recovery') {
         try { passwordHash = await this.passwords!.hash(request.newPassword!); } catch { throw genericUnavailable(); }
       }
+      const sessionToken = request.purpose === 'phone_login' ? randomBytes(32).toString('base64url') : undefined;
+      const absoluteTtl = this.options.absoluteSessionTtlSeconds ?? 604_800;
+      const expiresInSeconds = Math.min(this.options.sessionTtlSeconds ?? 1_800, absoluteTtl);
+      const now = Date.now();
       const result = await this.limiter.withLock('otp-verify', request.challengeId, 10_000, async () => {
         // Repository computes the proof only after loading its canonical user/contact binding.
-        return this.repository.verify({ id: request.challengeId, purpose: request.purpose, code: request.code, hmacKey: this.options.hmacKey!, maxAttempts: this.options.maxAttempts, passwordHash });
+        return this.repository.verify({ id: request.challengeId, purpose: request.purpose, code: request.code, hmacKey: this.options.hmacKey!, maxAttempts: this.options.maxAttempts, passwordHash,
+          sessionTokenHash: sessionToken ? createHash('sha256').update(sessionToken).digest('hex') : undefined,
+          sessionExpiresAt: sessionToken ? new Date(now + expiresInSeconds * 1000) : undefined,
+          absoluteExpiresAt: sessionToken ? new Date(now + absoluteTtl * 1000) : undefined,
+          ipHash: sessionToken ? createHmac('sha256', this.options.hmacKey!).update(ip).digest('hex') : undefined });
       });
+      if (request.purpose === 'phone_login') {
+        if (typeof result !== 'object' || !sessionToken) throw genericDenied();
+        return { status: 'authenticated', userId: result.userId, sessionToken, expiresInSeconds };
+      }
       if (result !== 'verified') throw genericDenied();
       return { status: 'verified' };
     } catch (error) {

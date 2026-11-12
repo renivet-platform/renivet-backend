@@ -419,7 +419,7 @@
               }
             },
             "url": "{{apiBaseUrl}}/auth/phone",
-            "description": "Attach the signed-in account owner?s synthetic Indian mobile number as an unverified contact. This operation requires the active session and session-bound CSRF proof; it does not send an SMS. The separate phone_verification challenge operation sends the OTP. Phone login is not added. Linear: REN2-39."
+            "description": "Attach the signed-in account owner's synthetic Indian mobile number as an unverified contact. This operation requires the active session and session-bound CSRF proof; it does not send an SMS. The separate phone_verification challenge sends its OTP. Phone sign-in uses the distinct phone_login challenge purpose and requires a verified number. Linear: REN2-39 plus W1 phone OTP login."
           },
           "response": [
             {

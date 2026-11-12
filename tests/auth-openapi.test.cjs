@@ -71,3 +71,16 @@ test('REN2-24 OpenAPI describes the implemented MFA lifecycle, security requirem
   assert.ok(confirmation.responses['401']);
   assert.ok(stepUp.responses['401']);
 });
+
+test('phone login is documented as a distinct OTP purpose that sets the first-party session cookie', () => {
+  const issue = spec.paths['/api/v1/auth/challenges']?.post;
+  const verify = spec.paths['/api/v1/auth/challenges/{challengeId}/verify']?.post;
+  assert.ok(issue && verify);
+  const issueSchema = spec.components.schemas[issue.requestBody.content['application/json'].schema.$ref.split('/').at(-1)];
+  const verifySchema = spec.components.schemas[verify.requestBody.content['application/json'].schema.$ref.split('/').at(-1)];
+  assert.ok(issueSchema.properties.purpose.enum.includes('phone_login'));
+  assert.ok(verifySchema.properties.purpose.enum.includes('phone_login'));
+  assert.equal(verify.responses['200'].headers['Set-Cookie'].schema.type, 'string');
+  assert.match(issue.description, /already verified phone/i);
+  assert.match(verify.description, /atomically consumes the challenge and creates a first-party session/i);
+});
