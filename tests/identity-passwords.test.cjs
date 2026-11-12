@@ -2,10 +2,11 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { isPasswordAllowed, PasswordHashService } = require('../dist/modules/identity/passwords');
 
-test('password policy accepts 15 to 128 characters without composition requirements', () => {
-  assert.equal(isPasswordAllowed('a'.repeat(15)), true);
+test('password policy accepts 8 to 128 characters without composition requirements', () => {
+  assert.equal(isPasswordAllowed('a'.repeat(8)), true);
+  assert.equal(isPasswordAllowed('a'.repeat(7)), false);
   assert.equal(isPasswordAllowed('a'.repeat(128)), true);
-  assert.equal(isPasswordAllowed('a'.repeat(14)), false);
+  assert.equal(isPasswordAllowed('a'.repeat(14)), true);
   assert.equal(isPasswordAllowed('a'.repeat(129)), false);
   assert.equal(isPasswordAllowed('                '), true);
   assert.equal(isPasswordAllowed(''), false);

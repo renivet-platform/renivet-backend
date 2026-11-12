@@ -28,7 +28,7 @@ export class AuthCredentialsDto {
     type: 'string',
     minLength: PASSWORD_MIN_LENGTH,
     maxLength: PASSWORD_MAX_LENGTH,
-    description: 'A 15–128 character passphrase. No composition rule is imposed.',
+    description: 'An 8–128 character passphrase. No composition rule is imposed.',
     example: 'synthetic example passphrase only',
   })
   @IsString()

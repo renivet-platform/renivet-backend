@@ -64,7 +64,7 @@ test('REN2-21 registration and password HTTP acceptance', { skip: enabled ? fals
   const registrationEmail = `${namespace}@example.test`;
   const postmanEmail = `postman-${namespace}@example.test`;
   const verifiedEmail = `verified-${namespace}@example.test`;
-  const registerPassword = 'synthetic registration passphrase';
+  const registerPassword = 'pass1234';
   const verifiedPassword = 'synthetic verified passphrase';
   const portServer = require('node:net').createServer();
   portServer.listen(0, '127.0.0.1');

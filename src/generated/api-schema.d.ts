@@ -765,7 +765,7 @@ export interface components {
              */
             email: string;
             /**
-             * @description A 15–128 character passphrase. No composition rule is imposed.
+             * @description An 8–128 character passphrase. No composition rule is imposed.
              * @example synthetic example passphrase only
              */
             password: string;
@@ -793,7 +793,7 @@ export interface components {
              */
             email: string;
             /**
-             * @description A 15–128 character passphrase. No composition rule is imposed.
+             * @description An 8–128 character passphrase. No composition rule is imposed.
              * @example synthetic example passphrase only
              */
             password: string;
@@ -891,7 +891,7 @@ export interface components {
              */
             code: string;
             /**
-             * @description Required only for password_recovery; accepted as a passphrase and stored only as an Argon2id hash.
+             * @description Required only for password_recovery; accepted as an 8–128 character passphrase and stored only as an Argon2id hash.
              * @example synthetic replacement passphrase
              */
             newPassword?: string;
@@ -1152,7 +1152,7 @@ export interface operations {
                     "application/json": components["schemas"]["RegistrationAcceptedDto"];
                 };
             };
-            /** @description AUTH_INPUT_INVALID. Invalid email, unsupported fields, or password outside the 15 to 128 character policy. */
+            /** @description AUTH_INPUT_INVALID. Invalid email, unsupported fields, or password outside the 8 to 128 character policy. */
             400: {
                 headers: {
                     [name: string]: unknown;

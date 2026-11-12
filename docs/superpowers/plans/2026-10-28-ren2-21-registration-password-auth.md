@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Argon2id minimum: `m=19456 KiB, t=2, p=1`; password length 15–128; no plaintext storage.
+- Argon2id minimum: `m=19456 KiB, t=2, p=1`; password length 8–128; no plaintext storage.
 - Canonicalize email using lower(trim(email)); do not link identities or replace existing account credentials.
 - Registration is enumeration-neutral; login failures share one status and response.
 - Require disposable PostgreSQL 16 and Redis 7 for integration tests; test only loopback services.

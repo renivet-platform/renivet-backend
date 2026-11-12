@@ -72,7 +72,7 @@ test('REN2-22/23 OTP verification and account recovery HTTP/PostgreSQL/Postman a
     const recoveryUserId = recoverySeed.rows[0].id;
     userIds.push(recoveryUserId);
     const oldPassword = 'synthetic old recovery passphrase';
-    const newPassword = 'synthetic replacement passphrase';
+    const newPassword = 'reset123';
     const oldPasswordHash = await new PasswordHashService().hash(oldPassword);
     await pool.query(`INSERT INTO identity.user_credentials (user_id, password_hash, credential_version) VALUES ($1, $2, 1)`, [recoveryUserId, oldPasswordHash]);
     const existingRecoverySession = 'R'.repeat(43);
