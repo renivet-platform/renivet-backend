@@ -4,13 +4,9 @@ const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
 const { spawn } = require('node:child_process');
 const { once } = require('node:events');
-const { mkdtemp, rm } = require('node:fs/promises');
-const { tmpdir } = require('node:os');
-const { join } = require('node:path');
 const argon2 = require('argon2');
 const Redis = require('ioredis');
 const { Pool } = require('pg');
-const { createUnauthenticatedLocalCollection } = require('./helpers/local-postman-collection.cjs');
 
 const databaseUrl = process.env.RENIVET_TEST_DATABASE_URL;
 const redisUrl = process.env.RENIVET_TEST_REDIS_URL;
@@ -70,7 +66,6 @@ test('REN2-21 registration and password HTTP acceptance', { skip: enabled ? fals
   const verifiedEmail = `verified-${namespace}@example.test`;
   const registerPassword = 'pass1234';
   const verifiedPassword = 'synthetic verified passphrase';
-  let postmanTempDir;
   const portServer = require('node:net').createServer();
   portServer.listen(0, '127.0.0.1');
   await once(portServer, 'listening');
@@ -279,13 +274,8 @@ test('REN2-21 registration and password HTTP acceptance', { skip: enabled ? fals
     }
     postmanEnvironment.NO_PROXY = 'localhost,127.0.0.1,::1';
     postmanEnvironment.no_proxy = postmanEnvironment.NO_PROXY;
-    postmanTempDir = await mkdtemp(join(tmpdir(), 'renivet-auth-postman-'));
-    const postmanCollectionPath = createUnauthenticatedLocalCollection(
-      join(__dirname, '..', 'postman', 'collections', 'renivet-backend-auth.postman_collection.json'),
-      join(postmanTempDir, 'auth.postman_collection.json'),
-    );
     const postmanArguments = [
-      'collection', 'run', postmanCollectionPath,
+      'run', 'postman/collections/renivet-backend-auth.postman_collection.json',
       '--env-var', `apiBaseUrl=${base}`,
       '--env-var', `syntheticEmail=${postmanEmail}`,
       '--env-var', 'syntheticPassword=synthetic Postman registration passphrase',
@@ -295,12 +285,11 @@ test('REN2-21 registration and password HTTP acceptance', { skip: enabled ? fals
       '--env-var', `unknownEmail=unknown-${namespace}@example.test`,
       '--env-var', 'allowedOrigin=http://127.0.0.1:3000',
       '--reporters', 'cli',
-      '--report-events=false',
       '--timeout-request', '10000',
       '--timeout', '45000',
     ];
     const postmanRun = await new Promise((resolve, reject) => {
-      const cli = spawn('postman', postmanArguments, {
+      const cli = spawn('newman', postmanArguments, {
         env: postmanEnvironment,
         windowsHide: true,
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -322,7 +311,7 @@ test('REN2-21 registration and password HTTP acceptance', { skip: enabled ? fals
         resolve({ code, stdout, stderr });
       });
     });
-    assert.equal(postmanRun.code, 0, `Postman CLI collection failed:\n${postmanRun.stdout}\n${postmanRun.stderr}`);
+    assert.equal(postmanRun.code, 0, `Newman collection failed:\n${postmanRun.stdout}\n${postmanRun.stderr}`);
     assert.match(postmanRun.stdout, /assertions/i);
 
     const rateLimitEmail = `rate-limit-${namespace}@example.test`;
@@ -375,7 +364,6 @@ test('REN2-21 registration and password HTTP acceptance', { skip: enabled ? fals
     assert.equal(await racingLogin, false, 'login verified before recovery must not create a session after recovery commits');
     assert.equal((await pool.query('SELECT 1 FROM identity.user_sessions WHERE token_hash = $1', [raceTokenHash])).rowCount, 0);
   } finally {
-    if (postmanTempDir) await rm(postmanTempDir, { recursive: true, force: true });
     global.fetch = originalFetch;
     for (const key of fast2smsKeys) {
       if (priorFast2smsValues[key] === undefined) delete process.env[key];

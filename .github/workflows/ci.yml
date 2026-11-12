@@ -218,8 +218,8 @@ jobs:
           RENIVET_TEST_SERVICES_DISPOSABLE: '1'
         run: |
           npm run build
-          npm install --global postman-cli@1.80.0 --no-audit --no-fund
-          postman --version
+          npm install --global newman@6.2.1 --no-audit --no-fund
+          newman --version
           node --test tests/auth-api.integration.test.cjs
       - name: Verify REN2-22 OTP and REN2-23 account recovery/Postman collection
         env:

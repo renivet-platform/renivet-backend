@@ -115,26 +115,26 @@ test('REN2-22/23 OTP verification and account recovery HTTP/PostgreSQL/Postman a
     postmanEnvironment.NO_PROXY = 'localhost,127.0.0.1,::1';
     postmanEnvironment.no_proxy = postmanEnvironment.NO_PROXY;
     const cliArgs = [
-      'collection', 'run', 'postman/collections/renivet-backend-otp.postman_collection.json',
+      'run', 'postman/collections/renivet-backend-otp.postman_collection.json',
       '--env-var', `apiBaseUrl=${base}`,
       '--env-var', `otpDestination=${emails[0]}`,
       '--env-var', 'otpCode=123456',
       '--env-var', `recoveryEmail=${recoveryEmail}`,
       '--env-var', `recoveryPassword=${newPassword}`,
       '--env-var', `unknownRecoveryEmail=unknown-recovery-${token}@example.test`,
-      '--reporters', 'cli', '--report-events=false', '--timeout-request', '10000', '--timeout', '45000',
+      '--reporters', 'cli', '--timeout-request', '10000', '--timeout', '45000',
     ];
     const postmanRun = await new Promise((resolve, reject) => {
-      const cli = spawn('postman', cliArgs, { env: postmanEnvironment, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+      const cli = spawn('newman', cliArgs, { env: postmanEnvironment, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
       let stdout = '';
       let stderr = '';
       cli.stdout.setEncoding('utf8').on('data', (chunk) => { stdout += chunk; });
       cli.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk; });
-      const timer = setTimeout(() => { cli.kill(); reject(new Error(`Postman CLI timed out.\n${stdout}\n${stderr}`)); }, 45_000);
-      cli.once('error', (error) => { clearTimeout(timer); reject(new Error(`Postman CLI could not start: ${error.message}`)); });
+      const timer = setTimeout(() => { cli.kill(); reject(new Error(`Newman timed out.\n${stdout}\n${stderr}`)); }, 45_000);
+      cli.once('error', (error) => { clearTimeout(timer); reject(new Error(`Newman could not start: ${error.message}`)); });
       cli.once('close', (code) => { clearTimeout(timer); resolve({ code, stdout, stderr }); });
     });
-    assert.equal(postmanRun.code, 0, `OTP Postman collection failed:\n${postmanRun.stdout}\n${postmanRun.stderr}`);
+    assert.equal(postmanRun.code, 0, `OTP Newman collection failed:\n${postmanRun.stdout}\n${postmanRun.stderr}`);
     assert.match(postmanRun.stdout, /assertions/i);
     const postmanUser = await pool.query('SELECT email_verified_at, state FROM identity.users WHERE id=$1', [userIds[0]]);
     assert.ok(postmanUser.rows[0].email_verified_at);
