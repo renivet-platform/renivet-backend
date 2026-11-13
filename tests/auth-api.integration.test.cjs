@@ -292,6 +292,7 @@ test('REN2-21 registration and password HTTP acceptance', { skip: enabled ? fals
       const cli = spawn('newman', postmanArguments, {
         env: postmanEnvironment,
         windowsHide: true,
+        shell: process.platform === 'win32',
         stdio: ['ignore', 'pipe', 'pipe'],
       });
       let stdout = '';

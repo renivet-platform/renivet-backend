@@ -81,6 +81,13 @@ test('REN2-22/23 OTP verification and account recovery HTTP/PostgreSQL/Postman a
     const phone = `+1415${token.replace(/\D/g, '').padEnd(10, '0').slice(0, 10)}`;
     const phoneSeed = await pool.query("INSERT INTO identity.users (phone,state) VALUES ($1,'pending_verification') RETURNING id", [phone]);
     userIds.push(phoneSeed.rows[0].id);
+    const inactivePhone = `+1416${token.replace(/\D/g, '').padEnd(10, '0').slice(0, 10)}`;
+    assert.notEqual(inactivePhone, phone, 'inactive and active phone-login cases must use separate rate-limit identities');
+    const inactivePhoneSeed = await pool.query(
+      "INSERT INTO identity.users (phone,state,phone_verified_at) VALUES ($1,'pending_verification',now()) RETURNING id",
+      [inactivePhone],
+    );
+    userIds.push(inactivePhoneSeed.rows[0].id);
 
     app = await NestFactory.create(AppModule, new FastifyAdapter(), { logger: false });
     app.setGlobalPrefix('api/v1');
@@ -125,7 +132,7 @@ test('REN2-22/23 OTP verification and account recovery HTTP/PostgreSQL/Postman a
       '--reporters', 'cli', '--timeout-request', '10000', '--timeout', '45000',
     ];
     const postmanRun = await new Promise((resolve, reject) => {
-      const cli = spawn('newman', cliArgs, { env: postmanEnvironment, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+      const cli = spawn('newman', cliArgs, { env: postmanEnvironment, windowsHide: true, shell: process.platform === 'win32', stdio: ['ignore', 'pipe', 'pipe'] });
       let stdout = '';
       let stderr = '';
       cli.stdout.setEncoding('utf8').on('data', (chunk) => { stdout += chunk; });
@@ -166,7 +173,7 @@ test('REN2-22/23 OTP verification and account recovery HTTP/PostgreSQL/Postman a
     const sendsBeforeInactiveLogin = sent.length;
     const inactiveLoginChallenge = await fetch(`${base}/auth/challenges`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ channel: 'phone', purpose: 'phone_login', destination: phone }),
+      body: JSON.stringify({ channel: 'phone', purpose: 'phone_login', destination: inactivePhone }),
     });
     assert.equal(inactiveLoginChallenge.status, 202);
     const inactiveLogin = await inactiveLoginChallenge.json();

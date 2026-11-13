@@ -13,6 +13,8 @@ test('CI runs local Postman collections with Newman without Postman account auth
   assert.match(workflow, /npm install --global newman@6\.2\.1/);
   assert.match(authIntegration, /spawn\('newman'/);
   assert.match(otpIntegration, /spawn\('newman'/);
+  assert.match(authIntegration, /shell: process\.platform === 'win32'/);
+  assert.match(otpIntegration, /shell: process\.platform === 'win32'/);
   assert.doesNotMatch(authIntegration, /spawn\('postman'/);
   assert.doesNotMatch(otpIntegration, /spawn\('postman'/);
 
