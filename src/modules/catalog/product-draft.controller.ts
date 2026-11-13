@@ -149,7 +149,7 @@ export class ProductDraftController {
   @ApiExtension('x-renivet-implementation-wave', 'W2')
   @ApiOperation({ operationId: 'updateProductVariant', summary: 'Update a draft product variant', description: 'Compare-and-swaps permitted variant fields with If-Match. SKU is immutable through this API. Linear: REN2-62.' })
   @ApiHeader({ name: 'Idempotency-Key', required: true, schema: { type: 'string', minLength: 1, maxLength: 120 } })
-  @ApiHeader({ name: 'If-Match', required: true, schema: { type: 'string', example: '"1"' } })
+  @ApiHeader({ name: 'If-Match', required: true, schema: { type: 'string', example: '"1"' }, description: 'Quoted parent product rowVersion.' })
   @ApiBody({ schema: { type: 'object', minProperties: 1, additionalProperties: false, properties: {
     options: { type: 'object', additionalProperties: { type: 'string' } }, weightG: { type: 'integer', minimum: 0 },
     gtin: { type: ['string','null'] }, reasonCode: { type: 'string' },
@@ -183,7 +183,7 @@ export class ProductDraftController {
   @ApiExtension('x-renivet-implementation-wave', 'W2')
   @ApiOperation({ operationId: 'deactivateProductVariant', summary: 'Soft-deactivate a SKU variant', description: 'Deactivates an unreferenced draft SKU without deleting or recycling its normalized SKU or option signature. Linear: REN2-62.' })
   @ApiHeader({ name: 'Idempotency-Key', required: true, schema: { type: 'string', minLength: 1, maxLength: 120 } })
-  @ApiHeader({ name: 'If-Match', required: true, schema: { type: 'string', example: '"1"' } })
+  @ApiHeader({ name: 'If-Match', required: true, schema: { type: 'string', example: '"1"' }, description: 'Quoted parent product rowVersion.' })
   @ApiBody({ schema: { type: 'object', required: ['reasonCode'], properties: {
     reasonCode: { type: 'string' }, expectedVariantVersion: { type: 'integer', minimum: 1 },
   } } })

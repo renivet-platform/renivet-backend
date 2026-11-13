@@ -3816,6 +3816,7 @@
           {
             "name": "If-Match",
             "in": "header",
+            "description": "Quoted parent product rowVersion.",
             "required": true,
             "schema": {
               "type": "string",
@@ -4157,6 +4158,7 @@
           {
             "name": "If-Match",
             "in": "header",
+            "description": "Quoted parent product rowVersion.",
             "required": true,
             "schema": {
               "type": "string",

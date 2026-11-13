@@ -200,7 +200,6 @@ export class ProductDraftService {
     try {
       const normalized = normalizeVariantDeactivate(input);
       const expectedVersion = parseVariantIfMatch(ifMatch);
-      if (normalized.expectedVariantVersion !== undefined && normalized.expectedVariantVersion !== expectedVersion) throw productError('PRODUCT_IF_MATCH_INVALID');
       return await this.repository.deactivateVariant(productId, variantId, normalized, expectedVersion, context);
     }
     catch (error) { throw mapProductError(error); }
