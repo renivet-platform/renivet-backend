@@ -64,7 +64,7 @@ test('REN2-21 registration and password HTTP acceptance', { skip: enabled ? fals
   const registrationEmail = `${namespace}@example.test`;
   const postmanEmail = `postman-${namespace}@example.test`;
   const verifiedEmail = `verified-${namespace}@example.test`;
-  const registerPassword = 'synthetic registration passphrase';
+  const registerPassword = 'pass1234';
   const verifiedPassword = 'synthetic verified passphrase';
   const portServer = require('node:net').createServer();
   portServer.listen(0, '127.0.0.1');
@@ -275,7 +275,7 @@ test('REN2-21 registration and password HTTP acceptance', { skip: enabled ? fals
     postmanEnvironment.NO_PROXY = 'localhost,127.0.0.1,::1';
     postmanEnvironment.no_proxy = postmanEnvironment.NO_PROXY;
     const postmanArguments = [
-      'collection', 'run', 'postman/collections/renivet-backend-auth.postman_collection.json',
+      'run', 'postman/collections/renivet-backend-auth.postman_collection.json',
       '--env-var', `apiBaseUrl=${base}`,
       '--env-var', `syntheticEmail=${postmanEmail}`,
       '--env-var', 'syntheticPassword=synthetic Postman registration passphrase',
@@ -285,14 +285,14 @@ test('REN2-21 registration and password HTTP acceptance', { skip: enabled ? fals
       '--env-var', `unknownEmail=unknown-${namespace}@example.test`,
       '--env-var', 'allowedOrigin=http://127.0.0.1:3000',
       '--reporters', 'cli',
-      '--report-events=false',
       '--timeout-request', '10000',
       '--timeout', '45000',
     ];
     const postmanRun = await new Promise((resolve, reject) => {
-      const cli = spawn('postman', postmanArguments, {
+      const cli = spawn('newman', postmanArguments, {
         env: postmanEnvironment,
         windowsHide: true,
+        shell: process.platform === 'win32',
         stdio: ['ignore', 'pipe', 'pipe'],
       });
       let stdout = '';
@@ -312,7 +312,7 @@ test('REN2-21 registration and password HTTP acceptance', { skip: enabled ? fals
         resolve({ code, stdout, stderr });
       });
     });
-    assert.equal(postmanRun.code, 0, `Postman CLI collection failed:\n${postmanRun.stdout}\n${postmanRun.stderr}`);
+    assert.equal(postmanRun.code, 0, `Newman collection failed:\n${postmanRun.stdout}\n${postmanRun.stderr}`);
     assert.match(postmanRun.stdout, /assertions/i);
 
     const rateLimitEmail = `rate-limit-${namespace}@example.test`;

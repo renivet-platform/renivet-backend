@@ -26,7 +26,7 @@ function validConfiguration(config: Fast2SmsOtpConfiguration): boolean {
   );
 }
 
-/** Sends Renivet-generated phone-verification codes through Fast2SMS DLT SMS. */
+/** Sends Renivet-generated, purpose-bound phone OTPs through Fast2SMS DLT SMS. */
 export class Fast2SmsOtpDelivery implements OtpDeliveryPort {
   private readonly apiKey?: string;
   private readonly messageId?: string;
@@ -49,7 +49,7 @@ export class Fast2SmsOtpDelivery implements OtpDeliveryPort {
   }
 
   availableFor(channel: OtpDeliveryMessage['channel'], purpose: OtpDeliveryMessage['purpose']): boolean {
-    return this.isConfigured && channel === 'phone' && purpose === 'phone_verification';
+    return this.isConfigured && channel === 'phone' && (purpose === 'phone_verification' || purpose === 'phone_login');
   }
 
   async send(message: OtpDeliveryMessage, signal?: AbortSignal): Promise<void> {

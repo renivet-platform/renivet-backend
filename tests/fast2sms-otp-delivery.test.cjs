@@ -57,6 +57,12 @@ test('complete configuration sends Renivet OTP and expiry through the approved D
   });
 });
 
+test('Fast2SMS explicitly allows login OTPs and keeps verification-purpose isolation', async () => {
+  const delivery = new Fast2SmsOtpDelivery(completeConfig, async () => successResponse());
+  assert.equal(delivery.availableFor('phone', 'phone_login'), true);
+  assert.equal(delivery.availableFor('email', 'phone_login'), false);
+});
+
 test('provider rejection maps to generic error without exposing API key, OTP, or destination', async () => {
   const delivery = new Fast2SmsOtpDelivery(completeConfig, async () => ({
     ok: true, status: 200, json: async () => ({ return: false, message: 'private provider error' }),

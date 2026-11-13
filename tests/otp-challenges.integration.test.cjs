@@ -72,7 +72,7 @@ test('REN2-22/23 OTP verification and account recovery HTTP/PostgreSQL/Postman a
     const recoveryUserId = recoverySeed.rows[0].id;
     userIds.push(recoveryUserId);
     const oldPassword = 'synthetic old recovery passphrase';
-    const newPassword = 'synthetic replacement passphrase';
+    const newPassword = 'reset123';
     const oldPasswordHash = await new PasswordHashService().hash(oldPassword);
     await pool.query(`INSERT INTO identity.user_credentials (user_id, password_hash, credential_version) VALUES ($1, $2, 1)`, [recoveryUserId, oldPasswordHash]);
     const existingRecoverySession = 'R'.repeat(43);
@@ -81,6 +81,13 @@ test('REN2-22/23 OTP verification and account recovery HTTP/PostgreSQL/Postman a
     const phone = `+1415${token.replace(/\D/g, '').padEnd(10, '0').slice(0, 10)}`;
     const phoneSeed = await pool.query("INSERT INTO identity.users (phone,state) VALUES ($1,'pending_verification') RETURNING id", [phone]);
     userIds.push(phoneSeed.rows[0].id);
+    const inactivePhone = `+1416${token.replace(/\D/g, '').padEnd(10, '0').slice(0, 10)}`;
+    assert.notEqual(inactivePhone, phone, 'inactive and active phone-login cases must use separate rate-limit identities');
+    const inactivePhoneSeed = await pool.query(
+      "INSERT INTO identity.users (phone,state,phone_verified_at) VALUES ($1,'pending_verification',now()) RETURNING id",
+      [inactivePhone],
+    );
+    userIds.push(inactivePhoneSeed.rows[0].id);
 
     app = await NestFactory.create(AppModule, new FastifyAdapter(), { logger: false });
     app.setGlobalPrefix('api/v1');
@@ -115,26 +122,26 @@ test('REN2-22/23 OTP verification and account recovery HTTP/PostgreSQL/Postman a
     postmanEnvironment.NO_PROXY = 'localhost,127.0.0.1,::1';
     postmanEnvironment.no_proxy = postmanEnvironment.NO_PROXY;
     const cliArgs = [
-      'collection', 'run', 'postman/collections/renivet-backend-otp.postman_collection.json',
+      'run', 'postman/collections/renivet-backend-otp.postman_collection.json',
       '--env-var', `apiBaseUrl=${base}`,
       '--env-var', `otpDestination=${emails[0]}`,
       '--env-var', 'otpCode=123456',
       '--env-var', `recoveryEmail=${recoveryEmail}`,
       '--env-var', `recoveryPassword=${newPassword}`,
       '--env-var', `unknownRecoveryEmail=unknown-recovery-${token}@example.test`,
-      '--reporters', 'cli', '--report-events=false', '--timeout-request', '10000', '--timeout', '45000',
+      '--reporters', 'cli', '--timeout-request', '10000', '--timeout', '45000',
     ];
     const postmanRun = await new Promise((resolve, reject) => {
-      const cli = spawn('postman', cliArgs, { env: postmanEnvironment, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+      const cli = spawn('newman', cliArgs, { env: postmanEnvironment, windowsHide: true, shell: process.platform === 'win32', stdio: ['ignore', 'pipe', 'pipe'] });
       let stdout = '';
       let stderr = '';
       cli.stdout.setEncoding('utf8').on('data', (chunk) => { stdout += chunk; });
       cli.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk; });
-      const timer = setTimeout(() => { cli.kill(); reject(new Error(`Postman CLI timed out.\n${stdout}\n${stderr}`)); }, 45_000);
-      cli.once('error', (error) => { clearTimeout(timer); reject(new Error(`Postman CLI could not start: ${error.message}`)); });
+      const timer = setTimeout(() => { cli.kill(); reject(new Error(`Newman timed out.\n${stdout}\n${stderr}`)); }, 45_000);
+      cli.once('error', (error) => { clearTimeout(timer); reject(new Error(`Newman could not start: ${error.message}`)); });
       cli.once('close', (code) => { clearTimeout(timer); resolve({ code, stdout, stderr }); });
     });
-    assert.equal(postmanRun.code, 0, `OTP Postman collection failed:\n${postmanRun.stdout}\n${postmanRun.stderr}`);
+    assert.equal(postmanRun.code, 0, `OTP Newman collection failed:\n${postmanRun.stdout}\n${postmanRun.stderr}`);
     assert.match(postmanRun.stdout, /assertions/i);
     const postmanUser = await pool.query('SELECT email_verified_at, state FROM identity.users WHERE id=$1', [userIds[0]]);
     assert.ok(postmanUser.rows[0].email_verified_at);
@@ -162,6 +169,46 @@ test('REN2-22/23 OTP verification and account recovery HTTP/PostgreSQL/Postman a
     assert.equal(phoneVerified.status, 200);
     const phoneState = await pool.query('SELECT phone_verified_at FROM identity.users WHERE id=$1', [phoneSeed.rows[0].id]);
     assert.ok(phoneState.rows[0].phone_verified_at);
+
+    const sendsBeforeInactiveLogin = sent.length;
+    const inactiveLoginChallenge = await fetch(`${base}/auth/challenges`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ channel: 'phone', purpose: 'phone_login', destination: inactivePhone }),
+    });
+    assert.equal(inactiveLoginChallenge.status, 202);
+    const inactiveLogin = await inactiveLoginChallenge.json();
+    assert.equal(sent.length, sendsBeforeInactiveLogin, 'non-active accounts receive no phone-login SMS');
+    const inactiveVerification = await fetch(`${base}/auth/challenges/${inactiveLogin.challengeId}/verify`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ purpose: 'phone_login', code: '123456' }),
+    });
+    assert.equal(inactiveVerification.status, 401, 'a verified number on a non-active account cannot sign in');
+
+    await pool.query("UPDATE identity.users SET state='active' WHERE id=$1", [phoneSeed.rows[0].id]);
+    const loginIssueResponse = await fetch(`${base}/auth/challenges`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ channel: 'phone', purpose: 'phone_login', destination: phone }),
+    });
+    const loginChallenge = await loginIssueResponse.json();
+    assert.equal(loginIssueResponse.status, 202);
+    assert.equal(sent.at(-1).purpose, 'phone_login', 'login sends only a purpose-bound login SMS');
+    const loginResponse = await fetch(`${base}/auth/challenges/${loginChallenge.challengeId}/verify`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ purpose: 'phone_login', code: '123456' }),
+    });
+    assert.equal(loginResponse.status, 200);
+    assert.deepEqual(await loginResponse.json(), { authenticationState: 'authenticated', user: { id: phoneSeed.rows[0].id } });
+    const loginCookie = loginResponse.headers.get('set-cookie');
+    assert.match(loginCookie, /^__Host-renivet_session=[A-Za-z0-9_-]{43}; Path=\/; Max-Age=1800; HttpOnly; Secure; SameSite=Lax$/);
+    const rawSession = loginCookie.match(/__Host-renivet_session=([^;]+)/)[1];
+    const sessionHash = require('node:crypto').createHash('sha256').update(rawSession).digest('hex');
+    const sessionRow = await pool.query('SELECT user_id FROM identity.user_sessions WHERE token_hash=$1', [sessionHash]);
+    assert.equal(sessionRow.rows[0].user_id, phoneSeed.rows[0].id, 'only the session digest is persisted for the phone-login account');
+    const replayResponse = await fetch(`${base}/auth/challenges/${loginChallenge.challengeId}/verify`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ purpose: 'phone_login', code: '123456' }),
+    });
+    assert.equal(replayResponse.status, 401, 'the login OTP cannot be replayed');
 
     async function issue(email) {
       const response = await fetch(`${base}/auth/challenges`, {

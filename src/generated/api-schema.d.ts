@@ -95,7 +95,7 @@ export interface paths {
         put?: never;
         /**
          * Attach an Indian mobile number to the authenticated account for verification
-         * @description Requires an active first-party session cookie, exact allowlisted Origin, same-origin fetch metadata, and session-bound X-CSRF-Token. It stores the contact as unverified; the separate phone_verification challenge sends and verifies the code. A number already owned by another account is rejected without identifying that account. Phone-number login is not provided.
+         * @description Requires an active first-party session cookie, exact allowlisted Origin, same-origin fetch metadata, and session-bound X-CSRF-Token. It stores the contact as unverified; the separate phone_verification challenge sends and verifies the code. A number already owned by another account is rejected without identifying that account. Phone login uses a distinct phone_login challenge and requires an already verified number.
          */
         post: operations["setPhoneForVerification"];
         delete?: never;
@@ -114,8 +114,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Request an email or phone verification or recovery challenge
-         * @description Public operation with no authentication or permission requirement. Creates a short-lived one-use challenge for an eligible contact and purpose. Password recovery is available only to an active account with verified email and an active password credential; unknown and ineligible contacts receive a neutral accepted response. Recovery proof is purpose-bound and is required to replace the password. Email requires complete SMTP configuration; phone requires complete Fast2SMS DLT configuration. Missing provider configuration sends no message. Verification: Linear REN2-22; password recovery: REN2-23; candidate routes remain subject to D04 owner approval.
+         * Request an email or phone verification, phone-login, or recovery challenge
+         * @description Public operation with no authentication or permission requirement. Creates a short-lived one-use challenge for an eligible contact and purpose. phone_login is available only for active accounts with an already verified phone. Password recovery is available only to an active account with verified email and an active password credential; unknown and ineligible contacts receive a neutral accepted response. Email requires complete SMTP configuration; phone requires complete Fast2SMS DLT configuration. Missing provider configuration sends no message. Verification: Linear REN2-22; recovery: REN2-23.
          */
         post: operations["createOtpChallenge"];
         delete?: never;
@@ -134,8 +134,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Verify a one-use challenge or reset a password through recovery
-         * @description Public operation with no authentication or permission requirement. A successful verification proof marks only the bound contact as verified and issues no session. A password_recovery proof additionally requires a newPassword, atomically replaces the active Argon2id password credential, increments its version, and revokes every existing session. Invalid, expired, wrong-purpose, exhausted, or replayed proofs share one generic denial. Linear: REN2-22 verification and REN2-23 password recovery; candidate route remains subject to D04 owner approval.
+         * Verify a one-use challenge, sign in by phone, or reset a password through recovery
+         * @description Public operation with no authentication or permission requirement. email_verification and phone_verification mark the bound contact verified and issue no session. phone_login requires a purpose-bound code for an already verified phone on an active account, then atomically consumes the challenge and creates a first-party session. password_recovery requires a newPassword, atomically replaces the active Argon2id password credential, increments its version, and revokes every existing session. Invalid, expired, wrong-purpose, exhausted, or replayed proofs share one generic denial. Verification: Linear REN2-22; recovery: REN2-23.
          */
         post: operations["verifyOtpChallenge"];
         delete?: never;
@@ -765,7 +765,7 @@ export interface components {
              */
             email: string;
             /**
-             * @description A 15–128 character passphrase. No composition rule is imposed.
+             * @description An 8–128 character passphrase. No composition rule is imposed.
              * @example synthetic example passphrase only
              */
             password: string;
@@ -793,7 +793,7 @@ export interface components {
              */
             email: string;
             /**
-             * @description A 15–128 character passphrase. No composition rule is imposed.
+             * @description An 8–128 character passphrase. No composition rule is imposed.
              * @example synthetic example passphrase only
              */
             password: string;
@@ -829,6 +829,26 @@ export interface components {
              */
             verificationRequired: boolean;
         };
+        OtpVerifiedDto: {
+            /**
+             * @example verified
+             * @enum {string}
+             */
+            status: "verified";
+        };
+        OtpAuthenticatedDto: {
+            /**
+             * @example authenticated
+             * @enum {string}
+             */
+            authenticationState: "authenticated";
+            /**
+             * @example {
+             *       "id": "7d785d72-ea2c-44bb-9d82-87b272112b32"
+             *     }
+             */
+            user: Record<string, never>;
+        };
         OtpIssueRequestDto: {
             /**
              * @example email
@@ -839,7 +859,7 @@ export interface components {
              * @example email_verification
              * @enum {string}
              */
-            purpose: "email_verification" | "phone_verification" | "password_recovery";
+            purpose: "email_verification" | "phone_verification" | "phone_login" | "password_recovery";
             /**
              * @description Email address or E.164 phone number. The requested channel and purpose must match.
              * @example buyer@example.test
@@ -864,24 +884,17 @@ export interface components {
              * @example email_verification
              * @enum {string}
              */
-            purpose: "email_verification" | "phone_verification" | "password_recovery";
+            purpose: "email_verification" | "phone_verification" | "phone_login" | "password_recovery";
             /**
              * @description Six-digit synthetic example. Real codes are delivered out of band.
              * @example 123456
              */
             code: string;
             /**
-             * @description Required only for password_recovery; accepted as a passphrase and stored only as an Argon2id hash.
+             * @description Required only for password_recovery; accepted as an 8–128 character passphrase and stored only as an Argon2id hash.
              * @example synthetic replacement passphrase
              */
             newPassword?: string;
-        };
-        OtpVerifiedDto: {
-            /**
-             * @example verified
-             * @enum {string}
-             */
-            status: "verified";
         };
         MfaStatusResponseDto: {
             /**
@@ -1139,7 +1152,7 @@ export interface operations {
                     "application/json": components["schemas"]["RegistrationAcceptedDto"];
                 };
             };
-            /** @description AUTH_INPUT_INVALID. Invalid email, unsupported fields, or password outside the 15 to 128 character policy. */
+            /** @description AUTH_INPUT_INVALID. Invalid email, unsupported fields, or password outside the 8 to 128 character policy. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -1528,13 +1541,15 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The challenge is consumed and its bound contact is verified. */
+            /** @description The challenge is consumed. Phone login additionally issues a secure session cookie. */
             200: {
                 headers: {
+                    "Set-Cookie"?: string;
+                    "Cache-Control"?: string;
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OtpVerifiedDto"];
+                    "application/json": components["schemas"]["OtpVerifiedDto"] | components["schemas"]["OtpAuthenticatedDto"];
                 };
             };
             /** @description AUTH_INPUT_INVALID. Malformed request. */

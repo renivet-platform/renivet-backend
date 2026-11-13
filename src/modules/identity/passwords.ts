@@ -1,6 +1,6 @@
 import * as argon2 from 'argon2';
 
-export const PASSWORD_MIN_LENGTH = 15;
+export const PASSWORD_MIN_LENGTH = 8;
 export const PASSWORD_MAX_LENGTH = 128;
 
 const ARGON2ID_OPTIONS: argon2.HashOptions = {

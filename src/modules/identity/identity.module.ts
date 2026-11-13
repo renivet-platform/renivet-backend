@@ -103,6 +103,8 @@ import { MfaService } from './mfa.service';
           issueIpLimit: configuration.get<number>('AUTH_CHALLENGE_IP_LIMIT') ?? 30,
           identityLimit: configuration.get<number>('AUTH_CHALLENGE_IDENTITY_LIMIT') ?? 5,
           verifyIpLimit: configuration.get<number>('AUTH_CHALLENGE_VERIFY_IP_LIMIT') ?? 60,
+          sessionTtlSeconds: configuration.get<number>('AUTH_SESSION_IDLE_TTL_SECONDS') ?? configuration.get<number>('AUTH_SESSION_TTL_SECONDS') ?? 1_800,
+          absoluteSessionTtlSeconds: configuration.get<number>('AUTH_SESSION_ABSOLUTE_TTL_SECONDS') ?? 604_800,
         }, passwords),
       inject: [IdentityRepository, AuthRateLimiter, OTP_DELIVERY, ConfigService, PasswordHashService],
     },

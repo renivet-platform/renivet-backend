@@ -68,7 +68,7 @@ export class AuthController {
   })
   @ApiBody({ type: RegisterRequestDto })
   @ApiAcceptedResponse({ description: 'Generic accepted result; does not reveal whether the email is already registered.', type: RegistrationAcceptedDto })
-  @ApiBadRequestResponse({ description: 'AUTH_INPUT_INVALID. Invalid email, unsupported fields, or password outside the 15 to 128 character policy.', type: AuthErrorDto })
+  @ApiBadRequestResponse({ description: 'AUTH_INPUT_INVALID. Invalid email, unsupported fields, or password outside the 8 to 128 character policy.', type: AuthErrorDto })
   @ApiTooManyRequestsResponse({ description: 'AUTH_RATE_LIMITED. Registration limit exceeded.', type: AuthErrorDto, headers: { 'Retry-After': { description: 'Seconds before retrying.', schema: { type: 'integer', example: 900 } } } })
   @ApiServiceUnavailableResponse({ description: 'AUTH_SERVICE_UNAVAILABLE. PostgreSQL or Redis is unavailable; registration fails closed.', type: AuthErrorDto })
   @ApiInternalServerErrorResponse({ description: 'AUTH_INTERNAL_ERROR. Unexpected failure with a safe public message.', type: AuthErrorDto })

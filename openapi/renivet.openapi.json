@@ -42,7 +42,7 @@
             }
           },
           "400": {
-            "description": "AUTH_INPUT_INVALID. Invalid email, unsupported fields, or password outside the 15 to 128 character policy.",
+            "description": "AUTH_INPUT_INVALID. Invalid email, unsupported fields, or password outside the 8 to 128 character policy.",
             "content": {
               "application/json": {
                 "schema": {
@@ -386,7 +386,7 @@
     },
     "/api/v1/auth/phone": {
       "post": {
-        "description": "Requires an active first-party session cookie, exact allowlisted Origin, same-origin fetch metadata, and session-bound X-CSRF-Token. It stores the contact as unverified; the separate phone_verification challenge sends and verifies the code. A number already owned by another account is rejected without identifying that account. Phone-number login is not provided.",
+        "description": "Requires an active first-party session cookie, exact allowlisted Origin, same-origin fetch metadata, and session-bound X-CSRF-Token. It stores the contact as unverified; the separate phone_verification challenge sends and verifies the code. A number already owned by another account is rejected without identifying that account. Phone login uses a distinct phone_login challenge and requires an already verified number.",
         "operationId": "setPhoneForVerification",
         "parameters": [
           {
@@ -520,7 +520,7 @@
     },
     "/api/v1/auth/challenges": {
       "post": {
-        "description": "Public operation with no authentication or permission requirement. Creates a short-lived one-use challenge for an eligible contact and purpose. Password recovery is available only to an active account with verified email and an active password credential; unknown and ineligible contacts receive a neutral accepted response. Recovery proof is purpose-bound and is required to replace the password. Email requires complete SMTP configuration; phone requires complete Fast2SMS DLT configuration. Missing provider configuration sends no message. Verification: Linear REN2-22; password recovery: REN2-23; candidate routes remain subject to D04 owner approval.",
+        "description": "Public operation with no authentication or permission requirement. Creates a short-lived one-use challenge for an eligible contact and purpose. phone_login is available only for active accounts with an already verified phone. Password recovery is available only to an active account with verified email and an active password credential; unknown and ineligible contacts receive a neutral accepted response. Email requires complete SMTP configuration; phone requires complete Fast2SMS DLT configuration. Missing provider configuration sends no message. Verification: Linear REN2-22; recovery: REN2-23.",
         "operationId": "createOtpChallenge",
         "parameters": [],
         "requestBody": {
@@ -585,7 +585,7 @@
             }
           }
         },
-        "summary": "Request an email or phone verification or recovery challenge",
+        "summary": "Request an email or phone verification, phone-login, or recovery challenge",
         "tags": [
           "Otp"
         ]
@@ -593,7 +593,7 @@
     },
     "/api/v1/auth/challenges/{challengeId}/verify": {
       "post": {
-        "description": "Public operation with no authentication or permission requirement. A successful verification proof marks only the bound contact as verified and issues no session. A password_recovery proof additionally requires a newPassword, atomically replaces the active Argon2id password credential, increments its version, and revokes every existing session. Invalid, expired, wrong-purpose, exhausted, or replayed proofs share one generic denial. Linear: REN2-22 verification and REN2-23 password recovery; candidate route remains subject to D04 owner approval.",
+        "description": "Public operation with no authentication or permission requirement. email_verification and phone_verification mark the bound contact verified and issue no session. phone_login requires a purpose-bound code for an already verified phone on an active account, then atomically consumes the challenge and creates a first-party session. password_recovery requires a newPassword, atomically replaces the active Argon2id password credential, increments its version, and revokes every existing session. Invalid, expired, wrong-purpose, exhausted, or replayed proofs share one generic denial. Verification: Linear REN2-22; recovery: REN2-23.",
         "operationId": "verifyOtpChallenge",
         "parameters": [
           {
@@ -620,11 +620,32 @@
         },
         "responses": {
           "200": {
-            "description": "The challenge is consumed and its bound contact is verified.",
+            "description": "The challenge is consumed. Phone login additionally issues a secure session cookie.",
+            "headers": {
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string",
+                  "example": "__Host-renivet_session=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA; Path=/; Max-Age=1800; HttpOnly; Secure; SameSite=Lax"
+                }
+              },
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "example": "no-store"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/OtpVerifiedDto"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/OtpVerifiedDto"
+                    },
+                    {
+                      "$ref": "#/components/schemas/OtpAuthenticatedDto"
+                    }
+                  ]
                 }
               }
             }
@@ -680,7 +701,7 @@
             }
           }
         },
-        "summary": "Verify a one-use challenge or reset a password through recovery",
+        "summary": "Verify a one-use challenge, sign in by phone, or reset a password through recovery",
         "tags": [
           "Otp"
         ]
@@ -10521,9 +10542,9 @@
           },
           "password": {
             "type": "string",
-            "minLength": 15,
+            "minLength": 8,
             "maxLength": 128,
-            "description": "A 15–128 character passphrase. No composition rule is imposed.",
+            "description": "An 8–128 character passphrase. No composition rule is imposed.",
             "example": "synthetic example passphrase only"
           }
         },
@@ -10591,9 +10612,9 @@
           },
           "password": {
             "type": "string",
-            "minLength": 15,
+            "minLength": 8,
             "maxLength": 128,
-            "description": "A 15–128 character passphrase. No composition rule is imposed.",
+            "description": "An 8–128 character passphrase. No composition rule is imposed.",
             "example": "synthetic example passphrase only"
           }
         },
@@ -10668,6 +10689,43 @@
           "verificationRequired"
         ]
       },
+      "OtpVerifiedDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "verified"
+            ],
+            "example": "verified"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "OtpAuthenticatedDto": {
+        "type": "object",
+        "properties": {
+          "authenticationState": {
+            "type": "string",
+            "enum": [
+              "authenticated"
+            ],
+            "example": "authenticated"
+          },
+          "user": {
+            "type": "object",
+            "example": {
+              "id": "7d785d72-ea2c-44bb-9d82-87b272112b32"
+            }
+          }
+        },
+        "required": [
+          "authenticationState",
+          "user"
+        ]
+      },
       "OtpIssueRequestDto": {
         "type": "object",
         "properties": {
@@ -10684,6 +10742,7 @@
             "enum": [
               "email_verification",
               "phone_verification",
+              "phone_login",
               "password_recovery"
             ],
             "example": "email_verification"
@@ -10730,6 +10789,7 @@
             "enum": [
               "email_verification",
               "phone_verification",
+              "phone_login",
               "password_recovery"
             ],
             "example": "email_verification"
@@ -10742,30 +10802,15 @@
           },
           "newPassword": {
             "type": "string",
-            "minLength": 15,
+            "minLength": 8,
             "maxLength": 128,
             "example": "synthetic replacement passphrase",
-            "description": "Required only for password_recovery; accepted as a passphrase and stored only as an Argon2id hash."
+            "description": "Required only for password_recovery; accepted as an 8–128 character passphrase and stored only as an Argon2id hash."
           }
         },
         "required": [
           "purpose",
           "code"
-        ]
-      },
-      "OtpVerifiedDto": {
-        "type": "object",
-        "properties": {
-          "status": {
-            "type": "string",
-            "enum": [
-              "verified"
-            ],
-            "example": "verified"
-          }
-        },
-        "required": [
-          "status"
         ]
       },
       "MfaStatusResponseDto": {

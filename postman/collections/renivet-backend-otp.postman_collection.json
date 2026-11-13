@@ -363,7 +363,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"purpose\": \"password_recovery\",\n  \"code\": \"{{otpCode}}\",\n  \"newPassword\": \"too-short\"\n}",
+              "raw": "{\n  \"purpose\": \"password_recovery\",\n  \"code\": \"{{otpCode}}\",\n  \"newPassword\": \"short7\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
