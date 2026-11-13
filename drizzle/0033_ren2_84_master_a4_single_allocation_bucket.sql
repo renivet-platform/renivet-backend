@@ -11,7 +11,7 @@ ALTER TABLE inventory.stock_events
 
 ALTER TABLE inventory.stock_balances
   DROP CONSTRAINT stock_balances_physical_covers_quarantine_and_commitments,
-  DROP CONSTRAINT stock_balances_physical_covers_all_non_sellable_and_commitments,
+  DROP CONSTRAINT IF EXISTS stock_balances_physical_covers_all_non_sellable_and_commitments,
   DROP COLUMN pre_commit_allocations;
 --> statement-breakpoint
 
