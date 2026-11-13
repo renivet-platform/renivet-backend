@@ -14,7 +14,7 @@ import { OtpController } from './otp.controller';
 import { OtpChallengeService } from './otp-challenge.service';
 import { CompositeOtpDelivery, OTP_DELIVERY, OtpDeliveryPort } from './otp-delivery';
 import { Fast2SmsOtpDelivery } from './fast2sms-otp-delivery';
-import { SmtpOtpDelivery } from './smtp-otp-delivery';
+import { createEmailOtpDelivery } from './email-otp-delivery';
 import { SessionService } from './session.service';
 import { MfaController } from './mfa.controller';
 import { MfaRepository } from './mfa.repository';
@@ -43,22 +43,30 @@ import { MfaService } from './mfa.service';
     },
     {
       provide: OTP_DELIVERY,
-      useFactory: (configuration: ConfigService) => new CompositeOtpDelivery([
-        new SmtpOtpDelivery({
-          host: configuration.get<string>('SMTP_HOST'),
-          port: configuration.get<number>('SMTP_PORT'),
-          secure: configuration.get<boolean>('SMTP_SECURE'),
-          username: configuration.get<string>('SMTP_USERNAME'),
-          password: configuration.get<string>('SMTP_PASSWORD'),
-          from: configuration.get<string>('SMTP_FROM'),
-        }),
-        new Fast2SmsOtpDelivery({
-          apiKey: configuration.get<string>('FAST2SMS_API_KEY'),
-          messageId: configuration.get<string>('FAST2SMS_MESSAGE_ID'),
-          senderId: configuration.get<string>('FAST2SMS_SENDER_ID'),
-          entityId: configuration.get<string>('FAST2SMS_DLT_ENTITY_ID'),
-        }),
-      ]),
+      useFactory: (configuration: ConfigService) => {
+        const emailDelivery = createEmailOtpDelivery({
+          provider: configuration.get<string>('EMAIL_OTP_PROVIDER'),
+          smtpHost: configuration.get<string>('SMTP_HOST'),
+          smtpPort: configuration.get<number>('SMTP_PORT'),
+          smtpSecure: configuration.get<boolean>('SMTP_SECURE'),
+          smtpUsername: configuration.get<string>('SMTP_USERNAME'),
+          smtpPassword: configuration.get<string>('SMTP_PASSWORD'),
+          smtpFrom: configuration.get<string>('SMTP_FROM'),
+          resendApiKey: configuration.get<string>('RESEND_API_KEY'),
+          resendFrom: configuration.get<string>('RESEND_FROM'),
+          resendEmailVerificationTemplateId: configuration.get<string>('RESEND_EMAIL_VERIFICATION_TEMPLATE_ID'),
+          resendPasswordRecoveryTemplateId: configuration.get<string>('RESEND_PASSWORD_RECOVERY_TEMPLATE_ID'),
+        });
+        return new CompositeOtpDelivery([
+          emailDelivery,
+          new Fast2SmsOtpDelivery({
+            apiKey: configuration.get<string>('FAST2SMS_API_KEY'),
+            messageId: configuration.get<string>('FAST2SMS_MESSAGE_ID'),
+            senderId: configuration.get<string>('FAST2SMS_SENDER_ID'),
+            entityId: configuration.get<string>('FAST2SMS_DLT_ENTITY_ID'),
+          }),
+        ]);
+      },
       inject: [ConfigService],
     },
     PasswordHashService,

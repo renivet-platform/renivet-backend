@@ -11,6 +11,21 @@ test('development defaults bind to loopback without requiring service credential
   assert.equal(validateEnvironment({ AUTH_RATE_LIMIT_HMAC_KEY: 'local-only-set-a-random-32-byte-value' }).AUTH_RATE_LIMIT_HMAC_KEY, 'local-only-set-a-random-32-byte-value');
   assert.equal(config.SMTP_PORT, 587);
   assert.equal(config.SMTP_HOST, undefined);
+  assert.equal(config.EMAIL_OTP_PROVIDER, 'smtp');
+});
+
+test('email OTP provider can be switched to Resend and rejects unknown values', () => {
+  const config = validateEnvironment({
+    EMAIL_OTP_PROVIDER: 'resend',
+    RESEND_API_KEY: 're_test_secret',
+    RESEND_FROM: 'Renivet <account@example.test>',
+    RESEND_EMAIL_VERIFICATION_TEMPLATE_ID: 'email-verification',
+    RESEND_PASSWORD_RECOVERY_TEMPLATE_ID: 'reset_password',
+  });
+  assert.equal(config.EMAIL_OTP_PROVIDER, 'resend');
+  assert.equal(config.RESEND_EMAIL_VERIFICATION_TEMPLATE_ID, 'email-verification');
+  assert.throws(() => validateEnvironment({ EMAIL_OTP_PROVIDER: 'unknown' }), /EMAIL_OTP_PROVIDER/);
+  assert.throws(() => validateEnvironment({ EMAIL_OTP_PROVIDER: 'resend\r\nSMTP_PASSWORD=leak' }), /EMAIL_OTP_PROVIDER/);
 });
 
 test('SMTP configuration is optional, bounded, and rejects unsafe host and secure-mode values', () => {
