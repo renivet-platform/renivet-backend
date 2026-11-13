@@ -5589,11 +5589,9 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                "idempotency-key": string;
-                "if-match": string;
+                "Idempotency-Key": string;
                 /** @description Current mapping version; use 0 for the first revision. */
                 "If-Match": string;
-                "Idempotency-Key": string;
             };
             path: {
                 batchId: string;
@@ -5887,11 +5885,9 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                "idempotency-key": string;
-                "if-match": string;
+                "Idempotency-Key": string;
                 /** @description The immutable preview revision being confirmed. */
                 "If-Match": string;
-                "Idempotency-Key": string;
             };
             path: {
                 batchId: string;
@@ -6180,11 +6176,9 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                "idempotency-key": string;
-                "if-match": string;
+                "Idempotency-Key": string;
                 /** @description The exact current immutable preview revision. */
                 "If-Match": string;
-                "Idempotency-Key": string;
             };
             path: {
                 batchId: string;
