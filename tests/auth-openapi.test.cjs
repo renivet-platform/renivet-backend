@@ -26,6 +26,7 @@ test('REN2-23 OpenAPI documents authenticated session inspection and CSRF-protec
   assert.ok(session?.get);
   assert.ok(session?.delete);
   assert.equal(session.get.operationId, 'getCurrentSession');
+  assert.deepEqual(session.get.responses['200'].content['application/json'].schema.example.account, { signInMethod: 'phone', phoneVerified: true });
   assert.equal(session.delete.operationId, 'logoutCurrentSession');
   assert.ok(session.get.security?.some((entry) => entry.renivetSession));
   assert.ok(session.delete.security?.some((entry) => entry.renivetSession));
