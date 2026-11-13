@@ -85,6 +85,29 @@ test('phone login issues a separate purpose-bound code and returns session mater
   assert.ok(proof.absoluteExpiresAt instanceof Date);
 });
 
+test('phone registration prepares a pending identity, sends a registration-only code, and authenticates only after verification', async () => {
+  const { service, calls } = fixture({
+    options: { codeGenerator: () => '654321' },
+    repository: {
+      findChallengeTarget: async () => { throw new Error('registration must not resolve an existing account'); },
+      preparePhoneRegistration: async (destination) => ({ userId: 'pending-user', destination }),
+      verify: async (input) => { calls.push(['verified-registration-input', input]); return { status: 'authenticated', userId: 'pending-user' }; },
+    },
+    delivery: { available: true, availableFor: (channel, purpose) => channel === 'phone' && purpose === 'phone_registration', send: async (message) => calls.push(['send', message]) },
+  });
+  const issued = await service.issue({ channel: 'phone', purpose: 'phone_registration', destination: '+919876543210' }, '198.51.100.4');
+  assert.equal(issued.status, 'accepted');
+  assert.equal(calls.find(([kind]) => kind === 'issue')[1].kind, 'phone:phone_registration');
+  assert.equal(calls.find(([kind]) => kind === 'send')[1].purpose, 'phone_registration');
+  const signedIn = await service.verify({ challengeId: issued.challengeId, purpose: 'phone_registration', code: '654321' }, '198.51.100.4');
+  assert.equal(signedIn.status, 'authenticated');
+  assert.equal(signedIn.userId, 'pending-user');
+  assert.match(signedIn.sessionToken, /^[A-Za-z0-9_-]{43}$/);
+  const proof = calls.find(([kind]) => kind === 'verified-registration-input')[1];
+  assert.match(proof.sessionTokenHash, /^[a-f0-9]{64}$/);
+  assert.ok(proof.sessionExpiresAt instanceof Date);
+});
+
 test('provider outage invalidates the persisted challenge and preserves neutral accepted response', async () => {
   const { service, calls } = fixture({ delivery: { available: true, send: async () => { throw new Error('provider secret'); } } });
   const result = await service.issue({ channel: 'email', purpose: 'email_verification', destination: 'buyer@example.test' }, '127.0.0.1');
