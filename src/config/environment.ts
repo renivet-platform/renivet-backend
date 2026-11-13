@@ -106,6 +106,14 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
   const smtpUsername = optionalConfigString(input, 'SMTP_USERNAME');
   const smtpPassword = optionalConfigString(input, 'SMTP_PASSWORD');
   const smtpFrom = optionalConfigString(input, 'SMTP_FROM');
+  const emailOtpProvider = optionalConfigString(input, 'EMAIL_OTP_PROVIDER') ?? 'smtp';
+  if (emailOtpProvider !== 'smtp' && emailOtpProvider !== 'resend') {
+    error('EMAIL_OTP_PROVIDER', 'must be smtp or resend');
+  }
+  const resendApiKey = optionalConfigString(input, 'RESEND_API_KEY');
+  const resendFrom = optionalConfigString(input, 'RESEND_FROM');
+  const resendEmailVerificationTemplateId = optionalConfigString(input, 'RESEND_EMAIL_VERIFICATION_TEMPLATE_ID');
+  const resendPasswordRecoveryTemplateId = optionalConfigString(input, 'RESEND_PASSWORD_RECOVERY_TEMPLATE_ID');
   const smtpPortValue = optionalConfigString(input, 'SMTP_PORT');
   const smtpPort = smtpPortValue === undefined ? 587 : Number(smtpPortValue);
   if (smtpPortValue !== undefined && (!/^\d+$/.test(smtpPortValue) || smtpPort < 1 || smtpPort > 65_535)) {
@@ -187,6 +195,11 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
     SMTP_USERNAME: smtpUsername,
     SMTP_PASSWORD: smtpPassword,
     SMTP_FROM: smtpFrom,
+    EMAIL_OTP_PROVIDER: emailOtpProvider,
+    RESEND_API_KEY: resendApiKey,
+    RESEND_FROM: resendFrom,
+    RESEND_EMAIL_VERIFICATION_TEMPLATE_ID: resendEmailVerificationTemplateId,
+    RESEND_PASSWORD_RECOVERY_TEMPLATE_ID: resendPasswordRecoveryTemplateId,
     AUTH_ALLOWED_ORIGINS: allowedOrigins,
     AUTH_RATE_LIMIT_WINDOW_SECONDS: positiveInteger(input, 'AUTH_RATE_LIMIT_WINDOW_SECONDS', 900, 86_400),
     AUTH_REGISTER_ACCOUNT_LIMIT: positiveInteger(input, 'AUTH_REGISTER_ACCOUNT_LIMIT', 5, 10_000),
