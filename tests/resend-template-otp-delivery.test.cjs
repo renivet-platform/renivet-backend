@@ -36,7 +36,8 @@ test('Resend template delivery sends the published purpose template and preserve
   assert.deepEqual(JSON.parse(request.options.body), {
     from: 'Renivet <account@renivet.com>',
     to: ['customer@example.test'],
-    template: { id: 'email-verification', variables: { OTP_CODE: '004281', EXPIRY_MINUTES: 6 } },
+    subject: 'Verify your Renivet email',
+    template: { id: 'email-verification', variables: { OTP_CODE: '004281', EXPIRY_MINUTES: '6' } },
   });
 });
 
@@ -50,6 +51,7 @@ test('password recovery uses its own published template alias', async () => {
   await delivery.send(message({ purpose: 'password_recovery' }));
 
   assert.equal(payload.template.id, 'reset_password');
+  assert.equal(payload.subject, 'Reset your Renivet password');
 });
 
 test('Resend delivery is limited to configured email verification and password recovery', () => {

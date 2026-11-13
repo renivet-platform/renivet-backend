@@ -103,11 +103,15 @@ export class ResendTemplateOtpDelivery implements OtpDeliveryPort {
         body: JSON.stringify({
           from: this.from,
           to: [message.destination],
+          subject: message.purpose === 'email_verification'
+            ? 'Verify your Renivet email'
+            : 'Reset your Renivet password',
           template: {
             id: templateId,
             variables: {
               OTP_CODE: message.code,
-              EXPIRY_MINUTES: Math.ceil(message.expiresInSeconds / 60),
+              // Resend hosted-template variables must all be strings.
+              EXPIRY_MINUTES: String(Math.ceil(message.expiresInSeconds / 60)),
             },
           },
         }),
