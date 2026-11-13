@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { randomUUID } = require('node:crypto');
+const { randomInt, randomUUID } = require('node:crypto');
 const { spawn } = require('node:child_process');
 const { once } = require('node:events');
 const argon2 = require('argon2');
@@ -64,8 +64,9 @@ test('REN2-21 registration and password HTTP acceptance', { skip: enabled ? fals
   const registrationEmail = `${namespace}@example.test`;
   const postmanEmail = `postman-${namespace}@example.test`;
   const verifiedEmail = `verified-${namespace}@example.test`;
+  const registrationPhone = `+91${randomInt(6_000_000_000, 10_000_000_000)}`;
   const registerPassword = 'pass1234';
-  const verifiedPassword = 'synthetic verified passphrase';
+  const verifiedPassword = 'verified-password-1234';
   const portServer = require('node:net').createServer();
   portServer.listen(0, '127.0.0.1');
   await once(portServer, 'listening');
@@ -244,6 +245,61 @@ test('REN2-21 registration and password HTTP acceptance', { skip: enabled ? fals
     assert.deepEqual(await phoneVerification.json(), { status: 'verified' });
     assert.ok((await pool.query('SELECT phone_verified_at FROM identity.users WHERE id=$1', [userId])).rows[0].phone_verified_at);
 
+    const phoneRegistrationChallenge = await fetch(`${base}/auth/challenges`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ channel: 'phone', purpose: 'phone_registration', destination: registrationPhone }),
+    });
+    assert.equal(phoneRegistrationChallenge.status, 202, await phoneRegistrationChallenge.clone().text());
+    const phoneRegistrationChallengeBody = await phoneRegistrationChallenge.json();
+    assert.equal(providerRequests.length, 2, 'phone-only registration sends one SMS through the fake provider');
+    assert.equal(providerRequests[1].payload.numbers, registrationPhone.slice(3));
+    const pendingPhoneAccount = await pool.query('SELECT id, state, email, phone_verified_at FROM identity.users WHERE phone = $1', [registrationPhone]);
+    assert.equal(pendingPhoneAccount.rowCount, 1);
+    assert.equal(pendingPhoneAccount.rows[0].state, 'pending_verification');
+    assert.equal(pendingPhoneAccount.rows[0].email, null);
+    assert.equal(pendingPhoneAccount.rows[0].phone_verified_at, null);
+    assert.equal((await pool.query('SELECT 1 FROM identity.user_credentials WHERE user_id = $1', [pendingPhoneAccount.rows[0].id])).rowCount, 0, 'phone-only registration creates no password credential');
+    const registrationCode = providerRequests[1].payload.variables_values.split('|')[0];
+    const wrongRegistrationCode = await fetch(`${base}/auth/challenges/${phoneRegistrationChallengeBody.challengeId}/verify`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ purpose: 'phone_registration', code: registrationCode === '000000' ? '000001' : '000000' }),
+    });
+    assert.equal(wrongRegistrationCode.status, 401);
+    assert.equal((await pool.query('SELECT state, phone_verified_at FROM identity.users WHERE id = $1', [pendingPhoneAccount.rows[0].id])).rows[0].state, 'pending_verification', 'wrong code does not activate account');
+    const [registrationVerifyOne, registrationVerifyTwo] = await Promise.all([1, 2].map(() => fetch(`${base}/auth/challenges/${phoneRegistrationChallengeBody.challengeId}/verify`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ purpose: 'phone_registration', code: registrationCode }),
+    })));
+    assert.equal([registrationVerifyOne.status, registrationVerifyTwo.status].filter((status) => status === 200).length, 1, 'concurrent registration challenge authenticates exactly once');
+    assert.ok([registrationVerifyOne.status, registrationVerifyTwo.status].every((status) => status === 200 || status === 401 || status === 429), 'the losing concurrent registration receives only a denial or rate limit');
+    const successfulRegistration = registrationVerifyOne.status === 200 ? registrationVerifyOne : registrationVerifyTwo;
+    assert.deepEqual(await successfulRegistration.json(), { authenticationState: 'authenticated', user: { id: pendingPhoneAccount.rows[0].id } });
+    const registrationCookie = successfulRegistration.headers.get('set-cookie');
+    assert.match(registrationCookie, /^__Host-renivet_session=[A-Za-z0-9_-]{43}; Path=\/; Max-Age=1800; HttpOnly; Secure; SameSite=Lax$/);
+    const phoneAccountAfterRegistration = await pool.query('SELECT state, phone_verified_at FROM identity.users WHERE id=$1', [pendingPhoneAccount.rows[0].id]);
+    assert.equal(phoneAccountAfterRegistration.rows[0].state, 'active');
+    assert.ok(phoneAccountAfterRegistration.rows[0].phone_verified_at);
+    const registrationSessionToken = registrationCookie.split(';', 1)[0].split('=', 2)[1];
+    assert.equal((await fetch(`${base}/auth/session`, { headers: { cookie: `__Host-renivet_session=${registrationSessionToken}` } })).status, 200, 'new phone account session is valid immediately');
+    const replayRegistration = await fetch(`${base}/auth/challenges/${phoneRegistrationChallengeBody.challengeId}/verify`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ purpose: 'phone_registration', code: registrationCode }),
+    });
+    assert.equal(replayRegistration.status, 401, 'a consumed registration code cannot be replayed');
+
+    const existingPhoneRegistration = await fetch(`${base}/auth/challenges`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ channel: 'phone', purpose: 'phone_registration', destination: phoneNumber }),
+    });
+    assert.equal(existingPhoneRegistration.status, 202, 'existing phone receives the same accepted response');
+    const existingPhoneChallenge = await existingPhoneRegistration.json();
+    assert.equal(providerRequests.length, 2, 'existing account phone receives no registration SMS');
+    const deniedExistingPhone = await fetch(`${base}/auth/challenges/${existingPhoneChallenge.challengeId}/verify`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ purpose: 'phone_registration', code: registrationCode }),
+    });
+    assert.equal(deniedExistingPhone.status, 401, 'existing account phone cannot be taken over through registration');
+
     const crossSiteLogout = await fetch(`${base}/auth/session`, {
       method: 'DELETE', headers: {
         cookie: `__Host-renivet_session=${sessionToken}`, origin: 'https://attacker.example.test',
@@ -278,7 +334,7 @@ test('REN2-21 registration and password HTTP acceptance', { skip: enabled ? fals
       'run', 'postman/collections/renivet-backend-auth.postman_collection.json',
       '--env-var', `apiBaseUrl=${base}`,
       '--env-var', `syntheticEmail=${postmanEmail}`,
-      '--env-var', 'syntheticPassword=synthetic Postman registration passphrase',
+      '--env-var', 'syntheticPassword=synthetic-postman-passphrase',
       '--env-var', `verifiedEmail=${verifiedEmail}`,
       '--env-var', `verifiedPassword=${verifiedPassword}`,
       '--env-var', `wrongPassword=${registerPassword}`,
@@ -377,6 +433,9 @@ test('REN2-21 registration and password HTTP acceptance', { skip: enabled ? fals
     await pool.query('DELETE FROM identity.user_sessions WHERE user_id IN (SELECT id FROM identity.users WHERE email = ANY($1::text[]))', [[registrationEmail, postmanEmail, verifiedEmail]]).catch(() => {});
     await pool.query('DELETE FROM identity.user_credentials WHERE user_id IN (SELECT id FROM identity.users WHERE email = ANY($1::text[]))', [[registrationEmail, postmanEmail, verifiedEmail]]).catch(() => {});
     await pool.query('DELETE FROM identity.users WHERE email = ANY($1::text[])', [[registrationEmail, postmanEmail, verifiedEmail]]).catch(() => {});
+    await pool.query(`DELETE FROM identity.auth_challenges WHERE user_id IN (SELECT id FROM identity.users WHERE phone = $1)`, [registrationPhone]).catch(() => {});
+    await pool.query(`DELETE FROM identity.user_sessions WHERE user_id IN (SELECT id FROM identity.users WHERE phone = $1)`, [registrationPhone]).catch(() => {});
+    await pool.query('DELETE FROM identity.users WHERE phone = $1', [registrationPhone]).catch(() => {});
     await pool.end();
     await redis.quit().catch(() => redis.disconnect());
   }

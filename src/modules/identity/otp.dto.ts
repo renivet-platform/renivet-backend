@@ -14,8 +14,8 @@ export class OtpIssueRequestDto {
   @IsIn(['email', 'phone'])
   channel!: OtpChannel;
 
-  @ApiProperty({ enum: ['email_verification', 'phone_verification', 'phone_login', 'password_recovery'], example: 'email_verification' })
-  @IsIn(['email_verification', 'phone_verification', 'phone_login', 'password_recovery'])
+  @ApiProperty({ enum: ['email_verification', 'phone_verification', 'phone_login', 'phone_registration', 'password_recovery'], example: 'email_verification' })
+  @IsIn(['email_verification', 'phone_verification', 'phone_login', 'phone_registration', 'password_recovery'])
   purpose!: OtpPurpose;
 
   @ApiProperty({ example: 'buyer@example.test', description: 'Email address or E.164 phone number. The requested channel and purpose must match.' })
@@ -26,8 +26,8 @@ export class OtpIssueRequestDto {
 }
 
 export class OtpVerifyRequestDto {
-  @ApiProperty({ enum: ['email_verification', 'phone_verification', 'phone_login', 'password_recovery'], example: 'email_verification' })
-  @IsIn(['email_verification', 'phone_verification', 'phone_login', 'password_recovery'])
+  @ApiProperty({ enum: ['email_verification', 'phone_verification', 'phone_login', 'phone_registration', 'password_recovery'], example: 'email_verification' })
+  @IsIn(['email_verification', 'phone_verification', 'phone_login', 'phone_registration', 'password_recovery'])
   purpose!: OtpPurpose;
 
   @ApiProperty({ pattern: '^[0-9]{6}$', example: '123456', description: 'Six-digit synthetic example. Real codes are delivered out of band.' })

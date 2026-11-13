@@ -3,7 +3,7 @@ export const OTP_DELIVERY = Symbol('OTP_DELIVERY');
 export interface OtpDeliveryMessage {
   channel: 'email' | 'phone';
   destination: string;
-  purpose: 'email_verification' | 'phone_verification' | 'phone_login' | 'password_recovery';
+  purpose: 'email_verification' | 'phone_verification' | 'phone_login' | 'phone_registration' | 'password_recovery';
   code: string;
   expiresInSeconds: number;
 }

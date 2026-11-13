@@ -5,10 +5,11 @@ import { OtpDeliveryPort } from './otp-delivery';
 import { PasswordHashService, isPasswordAllowed } from './passwords';
 
 export type OtpChannel = 'email' | 'phone';
-export type OtpPurpose = 'email_verification' | 'phone_verification' | 'phone_login' | 'password_recovery';
+export type OtpPurpose = 'email_verification' | 'phone_verification' | 'phone_login' | 'phone_registration' | 'password_recovery';
 
 export interface OtpChallengeRepositoryPort {
   findChallengeTarget(channel: OtpChannel, purpose: OtpPurpose, destination: string): Promise<{ userId: string; destination: string } | null>;
+  preparePhoneRegistration(destination: string): Promise<{ userId: string; destination: string } | null>;
   issue(input: { id: string; userId: string; kind: string; codeHash: string; expiresAt: Date; destination: string; purpose: OtpPurpose }): Promise<boolean>;
   invalidate(id: string): Promise<void>;
   verify(input: { id: string; purpose: OtpPurpose; code: string; hmacKey: string; maxAttempts: number; passwordHash?: string; sessionTokenHash?: string; sessionExpiresAt?: Date; absoluteExpiresAt?: Date; ipHash?: string }): Promise<'verified' | { status: 'authenticated'; userId: string } | 'denied'>;
@@ -40,7 +41,7 @@ export class OtpChallengeError extends AuthHttpError {
 const genericUnavailable = () => new OtpChallengeError(503, 'AUTH_SERVICE_UNAVAILABLE', 'Authentication is temporarily unavailable.');
 const genericDenied = () => new OtpChallengeError(401, 'AUTHENTICATION_FAILED', 'The challenge could not be verified.');
 const validPurpose = (channel: OtpChannel, purpose: OtpPurpose): boolean =>
-  (channel === 'email' && ['email_verification', 'password_recovery'].includes(purpose)) || (channel === 'phone' && ['phone_verification', 'phone_login'].includes(purpose));
+  (channel === 'email' && ['email_verification', 'password_recovery'].includes(purpose)) || (channel === 'phone' && ['phone_verification', 'phone_login', 'phone_registration'].includes(purpose));
 
 export function makeOtpProof(key: string, input: {
   challengeId: string; userId: string; channel: OtpChannel; purpose: OtpPurpose; destination: string; code: string;
@@ -80,7 +81,11 @@ export class OtpChallengeService {
     try {
       return await this.limiter.withLock('otp-issue', issueKey, 15_000, async () => {
         let identity: { userId: string; destination: string } | null;
-        try { identity = await this.repository.findChallengeTarget(request.channel, request.purpose, destination); }
+        try {
+          identity = request.purpose === 'phone_registration'
+            ? await this.repository.preparePhoneRegistration(destination)
+            : await this.repository.findChallengeTarget(request.channel, request.purpose, destination);
+        }
         catch { throw genericUnavailable(); }
         if (!identity) return { status: 'accepted', challengeId: randomUUID() };
         const challengeId = randomUUID();
@@ -127,7 +132,8 @@ export class OtpChallengeService {
       if (request.purpose === 'password_recovery') {
         try { passwordHash = await this.passwords!.hash(request.newPassword!); } catch { throw genericUnavailable(); }
       }
-      const sessionToken = request.purpose === 'phone_login' ? randomBytes(32).toString('base64url') : undefined;
+      const createsSession = request.purpose === 'phone_login' || request.purpose === 'phone_registration';
+      const sessionToken = createsSession ? randomBytes(32).toString('base64url') : undefined;
       const absoluteTtl = this.options.absoluteSessionTtlSeconds ?? 604_800;
       const expiresInSeconds = Math.min(this.options.sessionTtlSeconds ?? 1_800, absoluteTtl);
       const now = Date.now();
@@ -139,7 +145,7 @@ export class OtpChallengeService {
           absoluteExpiresAt: sessionToken ? new Date(now + absoluteTtl * 1000) : undefined,
           ipHash: sessionToken ? createHmac('sha256', this.options.hmacKey!).update(ip).digest('hex') : undefined });
       });
-      if (request.purpose === 'phone_login') {
+      if (createsSession) {
         if (typeof result !== 'object' || !sessionToken) throw genericDenied();
         return { status: 'authenticated', userId: result.userId, sessionToken, expiresInSeconds };
       }

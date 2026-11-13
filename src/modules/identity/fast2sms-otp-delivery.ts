@@ -49,7 +49,7 @@ export class Fast2SmsOtpDelivery implements OtpDeliveryPort {
   }
 
   availableFor(channel: OtpDeliveryMessage['channel'], purpose: OtpDeliveryMessage['purpose']): boolean {
-    return this.isConfigured && channel === 'phone' && (purpose === 'phone_verification' || purpose === 'phone_login');
+    return this.isConfigured && channel === 'phone' && (purpose === 'phone_verification' || purpose === 'phone_login' || purpose === 'phone_registration');
   }
 
   async send(message: OtpDeliveryMessage, signal?: AbortSignal): Promise<void> {

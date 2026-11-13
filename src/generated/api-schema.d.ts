@@ -114,8 +114,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Request an email or phone verification, phone-login, or recovery challenge
-         * @description Public operation with no authentication or permission requirement. Creates a short-lived one-use challenge for an eligible contact and purpose. phone_login is available only for active accounts with an already verified phone. Password recovery is available only to an active account with verified email and an active password credential; unknown and ineligible contacts receive a neutral accepted response. Email requires complete SMTP configuration; phone requires complete Fast2SMS DLT configuration. Missing provider configuration sends no message. Verification: Linear REN2-22; recovery: REN2-23.
+         * Request a verification, phone registration/sign-in, or recovery challenge
+         * @description Public operation with no authentication or permission requirement. Creates a short-lived one-use challenge for an eligible contact and purpose. phone_registration creates a pending, passwordless phone account and activates it plus creates a first-party session only after correct verification. Existing/ineligible phone numbers receive a neutral accepted response and no usable registration challenge. phone_login is available only for active accounts with an already verified phone. Password recovery is available only to an active account with verified email and an active password credential. Email requires complete SMTP configuration; phone requires complete Fast2SMS DLT configuration. Missing provider configuration sends no message. Verification: REN2-22 and REN2-23; phone-only registration: REN2-110.
          */
         post: operations["createOtpChallenge"];
         delete?: never;
@@ -134,8 +134,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Verify a one-use challenge, sign in by phone, or reset a password through recovery
-         * @description Public operation with no authentication or permission requirement. email_verification and phone_verification mark the bound contact verified and issue no session. phone_login requires a purpose-bound code for an already verified phone on an active account, then atomically consumes the challenge and creates a first-party session. password_recovery requires a newPassword, atomically replaces the active Argon2id password credential, increments its version, and revokes every existing session. Invalid, expired, wrong-purpose, exhausted, or replayed proofs share one generic denial. Verification: Linear REN2-22; recovery: REN2-23.
+         * Verify a one-use challenge, register/sign in by phone, or reset a password
+         * @description Public operation with no authentication or permission requirement. email_verification and phone_verification mark the bound contact verified and issue no session. phone_registration atomically activates its passwordless pending account, marks the phone verified, consumes the challenge and creates a first-party session. phone_login requires a purpose-bound code for an already verified phone on an active account; it atomically consumes the challenge and creates a first-party session. password_recovery requires a newPassword, atomically replaces the active Argon2id password credential, increments its version, and revokes every existing session. Invalid, expired, wrong-purpose, exhausted, or replayed proofs share one generic denial. Verification: REN2-22 and REN2-23; phone-only registration: REN2-110.
          */
         post: operations["verifyOtpChallenge"];
         delete?: never;
@@ -859,7 +859,7 @@ export interface components {
              * @example email_verification
              * @enum {string}
              */
-            purpose: "email_verification" | "phone_verification" | "phone_login" | "password_recovery";
+            purpose: "email_verification" | "phone_verification" | "phone_login" | "phone_registration" | "password_recovery";
             /**
              * @description Email address or E.164 phone number. The requested channel and purpose must match.
              * @example buyer@example.test
@@ -884,7 +884,7 @@ export interface components {
              * @example email_verification
              * @enum {string}
              */
-            purpose: "email_verification" | "phone_verification" | "phone_login" | "password_recovery";
+            purpose: "email_verification" | "phone_verification" | "phone_login" | "phone_registration" | "password_recovery";
             /**
              * @description Six-digit synthetic example. Real codes are delivered out of band.
              * @example 123456
@@ -1541,7 +1541,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The challenge is consumed. Phone login additionally issues a secure session cookie. */
+            /** @description The challenge is consumed. Successful phone login and phone registration issue a secure first-party session cookie. */
             200: {
                 headers: {
                     "Set-Cookie"?: string;
@@ -5589,9 +5589,11 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                "Idempotency-Key": string;
+                "idempotency-key": string;
+                "if-match": string;
                 /** @description Current mapping version; use 0 for the first revision. */
                 "If-Match": string;
+                "Idempotency-Key": string;
             };
             path: {
                 batchId: string;
@@ -5885,9 +5887,11 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                "Idempotency-Key": string;
+                "idempotency-key": string;
+                "if-match": string;
                 /** @description The immutable preview revision being confirmed. */
                 "If-Match": string;
+                "Idempotency-Key": string;
             };
             path: {
                 batchId: string;
@@ -6176,9 +6180,11 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                "Idempotency-Key": string;
+                "idempotency-key": string;
+                "if-match": string;
                 /** @description The exact current immutable preview revision. */
                 "If-Match": string;
+                "Idempotency-Key": string;
             };
             path: {
                 batchId: string;

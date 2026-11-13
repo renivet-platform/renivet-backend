@@ -43,6 +43,47 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
     }
   }
 
+  async preparePhoneRegistration(destination: string): Promise<{ userId: string; destination: string } | null> {
+    const client = await this.requirePool().connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`phone-registration:${destination}`]);
+      const existing = await client.query<{ id: string; state: string; email: string | null; phone_verified_at: Date | null; has_active_credential: boolean }>(
+        `SELECT u.id, u.state, u.email, u.phone_verified_at,
+                EXISTS (SELECT 1 FROM identity.user_credentials c WHERE c.user_id = u.id AND c.disabled_at IS NULL) AS has_active_credential
+           FROM identity.users u
+          WHERE u.phone = $1
+          FOR UPDATE`,
+        [destination],
+      );
+      if (existing.rowCount) {
+        const account = existing.rows[0];
+        await client.query('COMMIT');
+        return account.state === 'pending_verification' && account.email === null && account.phone_verified_at === null && !account.has_active_credential
+          ? { userId: account.id, destination }
+          : null;
+      }
+      const inserted = await client.query<{ id: string }>(
+        `INSERT INTO identity.users (phone, state)
+         VALUES ($1, 'pending_verification')
+         ON CONFLICT DO NOTHING
+         RETURNING id`,
+        [destination],
+      );
+      if (inserted.rowCount !== 1) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      await client.query('COMMIT');
+      return { userId: inserted.rows[0].id, destination };
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async findPasswordCredential(email: string): Promise<PasswordCredentialRecord | null> {
     const result = await this.requirePool().query<{
       user_id: string;
@@ -297,19 +338,22 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
       const ownerResult = await client.query<{
         email: string | null; phone: string | null;
         email_verified_at: Date | null; phone_verified_at: Date | null;
-        state: string;
+        state: string; has_active_credential: boolean;
       }>(
-        `SELECT email, phone, email_verified_at, phone_verified_at, state
-           FROM identity.users WHERE id=$1 FOR UPDATE`,
+        `SELECT u.email, u.phone, u.email_verified_at, u.phone_verified_at, u.state,
+                EXISTS (SELECT 1 FROM identity.user_credentials c WHERE c.user_id = u.id AND c.disabled_at IS NULL) AS has_active_credential
+           FROM identity.users u WHERE u.id=$1 FOR UPDATE OF u`,
         [challenge.user_id],
       );
       const owner = ownerResult.rows[0];
       if (!owner) { await client.query('ROLLBACK'); return 'denied'; }
-      const channel: OtpChannel = input.purpose === 'phone_verification' || input.purpose === 'phone_login' ? 'phone' : 'email';
+      const channel: OtpChannel = input.purpose === 'phone_verification' || input.purpose === 'phone_login' || input.purpose === 'phone_registration' ? 'phone' : 'email';
       const expectedKind = `${channel}:${input.purpose}`;
       const destination = channel === 'email' ? owner.email : owner.phone;
       const eligible = input.purpose === 'phone_login'
         ? owner.phone_verified_at !== null && owner.state === 'active'
+        : input.purpose === 'phone_registration'
+        ? owner.phone_verified_at === null && owner.state === 'pending_verification' && owner.email === null && !owner.has_active_credential
         : input.purpose === 'password_recovery'
         ? owner.email_verified_at !== null && owner.state === 'active' && Boolean(input.passwordHash)
         : !(channel === 'email' ? owner.email_verified_at : owner.phone_verified_at);
@@ -334,8 +378,20 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
         );
         await client.query('COMMIT'); return 'denied';
       }
-      if (input.purpose === 'phone_login') {
+      if (input.purpose === 'phone_login' || input.purpose === 'phone_registration') {
         if (!input.sessionTokenHash || !input.sessionExpiresAt || !input.absoluteExpiresAt || !input.ipHash) { await client.query('ROLLBACK'); return 'denied'; }
+        if (input.purpose === 'phone_registration') {
+          const activated = await client.query(
+            `UPDATE identity.users
+                SET phone_verified_at = clock_timestamp(), state = 'active', updated_at = clock_timestamp(), row_version = row_version + 1
+              WHERE id = $1 AND state = 'pending_verification' AND phone = $2
+                AND phone_verified_at IS NULL AND email IS NULL
+                AND NOT EXISTS (SELECT 1 FROM identity.user_credentials c WHERE c.user_id = identity.users.id AND c.disabled_at IS NULL)
+              RETURNING id`,
+            [challenge.user_id, destination],
+          );
+          if (activated.rowCount !== 1) { await client.query('ROLLBACK'); return 'denied'; }
+        }
         const session = await client.query(
           `INSERT INTO identity.user_sessions (user_id, token_hash, expires_at, ip_hash, absolute_expires_at)
            SELECT id, $2, $3, $4, $5 FROM identity.users
@@ -379,7 +435,7 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
         [input.id],
       );
       await client.query('COMMIT');
-      return input.purpose === 'phone_login' ? { status: 'authenticated', userId: challenge.user_id } : 'verified';
+      return input.purpose === 'phone_login' || input.purpose === 'phone_registration' ? { status: 'authenticated', userId: challenge.user_id } : 'verified';
     } catch (error) {
       await client.query('ROLLBACK').catch(() => undefined);
       throw error;
