@@ -69,7 +69,7 @@ export interface paths {
         };
         /**
          * Inspect the authenticated first-party session
-         * @description Requires a valid opaque session cookie. Returns a minimal user identity and a session-bound CSRF token for same-origin mutations. Idle expiry is extended up to the seven-day absolute limit. Linear: REN2-23.
+         * @description Requires a valid opaque session cookie. Returns a minimal user identity, safe sign-in/contact verification state, and a session-bound CSRF token for same-origin mutations. Idle expiry is extended up to the seven-day absolute limit. Linear: REN2-23.
          */
         get: operations["getCurrentSession"];
         put?: never;
@@ -1274,7 +1274,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Active identity and session-bound CSRF token; refreshes the session cookie to its server-calculated idle expiry, capped by its absolute expiry. */
+            /** @description Active identity and safe account state; refreshes the session cookie to its server-calculated idle expiry, capped by its absolute expiry. */
             200: {
                 headers: {
                     /** @description Sensitive session response must not be cached. */

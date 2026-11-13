@@ -203,7 +203,9 @@ test('REN2-21 registration and password HTTP acceptance', { skip: enabled ? fals
     assert.equal(activeSession.status, 200);
     const refreshedCookie = activeSession.headers.get('set-cookie');
     assert.match(refreshedCookie, /^__Host-renivet_session=[A-Za-z0-9_-]{43}; Path=\/; Max-Age=(?:[1-9]\d{0,2}|1[0-7]\d{2}|1800); HttpOnly; Secure; SameSite=Lax$/);
-    const csrfToken = (await activeSession.json()).csrfToken;
+    const activeSessionBody = await activeSession.json();
+    assert.deepEqual(activeSessionBody.account, { signInMethod: 'email_password', phoneVerified: false });
+    const csrfToken = activeSessionBody.csrfToken;
 
     const phoneNumber = '+919876543210';
     const phoneCookie = `__Host-renivet_session=${sessionToken}`;
@@ -280,7 +282,9 @@ test('REN2-21 registration and password HTTP acceptance', { skip: enabled ? fals
     assert.equal(phoneAccountAfterRegistration.rows[0].state, 'active');
     assert.ok(phoneAccountAfterRegistration.rows[0].phone_verified_at);
     const registrationSessionToken = registrationCookie.split(';', 1)[0].split('=', 2)[1];
-    assert.equal((await fetch(`${base}/auth/session`, { headers: { cookie: `__Host-renivet_session=${registrationSessionToken}` } })).status, 200, 'new phone account session is valid immediately');
+    const phoneAccountSession = await fetch(`${base}/auth/session`, { headers: { cookie: `__Host-renivet_session=${registrationSessionToken}` } });
+    assert.equal(phoneAccountSession.status, 200, 'new phone account session is valid immediately');
+    assert.deepEqual((await phoneAccountSession.json()).account, { signInMethod: 'phone', phoneVerified: true }, 'session exposes only the phone sign-in type and verified state, never the phone value');
     const replayRegistration = await fetch(`${base}/auth/challenges/${phoneRegistrationChallengeBody.challengeId}/verify`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ purpose: 'phone_registration', code: registrationCode }),

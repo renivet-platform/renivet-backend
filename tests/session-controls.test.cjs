@@ -8,11 +8,12 @@ test('active opaque session returns identity and deterministic per-session CSRF 
   const token = 'A'.repeat(43);
   const calls = [];
   const sessions = new SessionService({
-    findAndTouchSession: async (digest) => { calls.push(digest); return { userId: 'user-1', expiresAt: new Date(Date.now() + 1_800_000) }; },
+    findAndTouchSession: async (digest) => { calls.push(digest); return { userId: 'user-1', expiresAt: new Date(Date.now() + 1_800_000), signInMethod: 'phone', phoneVerified: true }; },
     revokeSession: async (digest) => { calls.push(digest); return true; },
   }, 'synthetic-csrf-key-with-at-least-thirty-two-bytes');
   const result = await sessions.authenticate(token);
   assert.equal(result.userId, 'user-1');
+  assert.deepEqual(result.account, { signInMethod: 'phone', phoneVerified: true });
   assert.ok(result.expiresInSeconds > 0 && result.expiresInSeconds <= 1_800);
   assert.equal(result.csrfToken, createHmac('sha256', 'synthetic-csrf-key-with-at-least-thirty-two-bytes').update(`renivet-csrf-v1\0${token}`).digest('base64url'));
   assert.deepEqual(calls, [createHash('sha256').update(token).digest('hex')]);
@@ -23,7 +24,7 @@ test('session cookie lifetime rounds down so it never exceeds the server expiry'
   Date.now = () => 1_000_000;
   try {
     const sessions = new SessionService({
-      findAndTouchSession: async () => ({ userId: 'user-1', expiresAt: new Date(2_800_100) }),
+      findAndTouchSession: async () => ({ userId: 'user-1', expiresAt: new Date(2_800_100), signInMethod: 'email_password', phoneVerified: false }),
     }, 'synthetic-csrf-key-with-at-least-thirty-two-bytes');
     const result = await sessions.authenticate('C'.repeat(43));
     assert.equal(result.expiresInSeconds, 1_800);

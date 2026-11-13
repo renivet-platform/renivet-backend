@@ -185,16 +185,32 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
     }
   }
 
-  async findAndTouchSession(tokenHash: string, idleTtlSeconds: number): Promise<{ sessionId: string; userId: string; expiresAt: Date; mfaVerifiedAt: Date | null } | null> {
-    const result = await this.requirePool().query<{ id: string; user_id: string; expires_at: Date; mfa_verified_at: Date | null }>(
-      `UPDATE identity.user_sessions AS session
-          SET expires_at = LEAST(clock_timestamp() + ($2::integer * interval '1 second'), absolute_expires_at),
-              updated_at = clock_timestamp(), row_version = row_version + 1
-        WHERE token_hash = $1 AND revoked_at IS NULL
-          AND expires_at > clock_timestamp()
-          AND absolute_expires_at > clock_timestamp()
-          AND EXISTS (SELECT 1 FROM identity.users AS account WHERE account.id = session.user_id AND account.state = 'active')
-        RETURNING id, user_id, expires_at, mfa_verified_at`,
+  async findAndTouchSession(tokenHash: string, idleTtlSeconds: number): Promise<{
+    sessionId: string; userId: string; expiresAt: Date; mfaVerifiedAt: Date | null;
+    signInMethod: 'phone' | 'email_password'; phoneVerified: boolean;
+  } | null> {
+    const result = await this.requirePool().query<{
+      id: string; user_id: string; expires_at: Date; mfa_verified_at: Date | null;
+      is_phone_only: boolean; phone_verified: boolean;
+    }>(
+      `WITH refreshed AS (
+         UPDATE identity.user_sessions AS session
+            SET expires_at = LEAST(clock_timestamp() + ($2::integer * interval '1 second'), absolute_expires_at),
+                updated_at = clock_timestamp(), row_version = row_version + 1
+          WHERE token_hash = $1 AND revoked_at IS NULL
+            AND expires_at > clock_timestamp()
+            AND absolute_expires_at > clock_timestamp()
+            AND EXISTS (SELECT 1 FROM identity.users AS active_account WHERE active_account.id = session.user_id AND active_account.state = 'active')
+          RETURNING id, user_id, expires_at, mfa_verified_at
+       )
+       SELECT refreshed.id, refreshed.user_id, refreshed.expires_at, refreshed.mfa_verified_at,
+              (account.email IS NULL AND account.phone_verified_at IS NOT NULL AND NOT EXISTS (
+                SELECT 1 FROM identity.user_credentials AS credential
+                 WHERE credential.user_id = account.id AND credential.disabled_at IS NULL
+              )) AS is_phone_only,
+              (account.phone_verified_at IS NOT NULL) AS phone_verified
+         FROM refreshed
+         JOIN identity.users AS account ON account.id = refreshed.user_id`,
       [tokenHash, idleTtlSeconds],
     );
     return result.rows[0] ? {
@@ -202,6 +218,8 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
       userId: result.rows[0].user_id,
       expiresAt: result.rows[0].expires_at,
       mfaVerifiedAt: result.rows[0].mfa_verified_at,
+      signInMethod: result.rows[0].is_phone_only ? 'phone' : 'email_password',
+      phoneVerified: result.rows[0].phone_verified,
     } : null;
   }
 

@@ -208,12 +208,12 @@
     },
     "/api/v1/auth/session": {
       "get": {
-        "description": "Requires a valid opaque session cookie. Returns a minimal user identity and a session-bound CSRF token for same-origin mutations. Idle expiry is extended up to the seven-day absolute limit. Linear: REN2-23.",
+        "description": "Requires a valid opaque session cookie. Returns a minimal user identity, safe sign-in/contact verification state, and a session-bound CSRF token for same-origin mutations. Idle expiry is extended up to the seven-day absolute limit. Linear: REN2-23.",
         "operationId": "getCurrentSession",
         "parameters": [],
         "responses": {
           "200": {
-            "description": "Active identity and session-bound CSRF token; refreshes the session cookie to its server-calculated idle expiry, capped by its absolute expiry.",
+            "description": "Active identity and safe account state; refreshes the session cookie to its server-calculated idle expiry, capped by its absolute expiry.",
             "headers": {
               "Cache-Control": {
                 "description": "Sensitive session response must not be cached.",
@@ -237,6 +237,10 @@
                     "authenticationState": "authenticated",
                     "user": {
                       "id": "7d785d72-ea2c-44bb-9d82-87b272112b32"
+                    },
+                    "account": {
+                      "signInMethod": "phone",
+                      "phoneVerified": true
                     },
                     "csrfToken": "synthetic-csrf-token"
                   }

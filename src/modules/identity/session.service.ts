@@ -2,7 +2,10 @@ import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { AuthHttpError } from './auth.service';
 
 export interface SessionRepositoryPort {
-  findAndTouchSession(tokenHash: string, idleTtlSeconds: number, absoluteTtlSeconds: number): Promise<{ sessionId: string; userId: string; expiresAt: Date; mfaVerifiedAt: Date | null } | null>;
+  findAndTouchSession(tokenHash: string, idleTtlSeconds: number, absoluteTtlSeconds: number): Promise<{
+    sessionId: string; userId: string; expiresAt: Date; mfaVerifiedAt: Date | null;
+    signInMethod: 'phone' | 'email_password'; phoneVerified: boolean;
+  } | null>;
   revokeSession(tokenHash: string): Promise<boolean>;
 }
 
@@ -62,11 +65,17 @@ export class SessionService {
     private readonly absoluteTtlSeconds = 604_800,
   ) {}
 
-  async authenticate(sessionToken: string | undefined): Promise<{ sessionId: string; userId: string; csrfToken: string; expiresInSeconds: number; mfaVerifiedAt: Date | null }> {
+  async authenticate(sessionToken: string | undefined): Promise<{
+    sessionId: string; userId: string; csrfToken: string; expiresInSeconds: number; mfaVerifiedAt: Date | null;
+    account: { signInMethod: 'phone' | 'email_password'; phoneVerified: boolean };
+  }> {
     if (!sessionToken || !/^[A-Za-z0-9_-]{43}$/.test(sessionToken) || !this.csrfKey || this.csrfKey.length < 32) {
       throw new SessionDeniedError();
     }
-    let session: { sessionId: string; userId: string; expiresAt: Date; mfaVerifiedAt: Date | null } | null;
+    let session: {
+      sessionId: string; userId: string; expiresAt: Date; mfaVerifiedAt: Date | null;
+      signInMethod: 'phone' | 'email_password'; phoneVerified: boolean;
+    } | null;
     try {
       session = await this.repository.findAndTouchSession(hashSessionToken(sessionToken), this.idleTtlSeconds, this.absoluteTtlSeconds);
     } catch {
@@ -81,6 +90,7 @@ export class SessionService {
       csrfToken: deriveCsrfToken(sessionToken, this.csrfKey),
       expiresInSeconds,
       mfaVerifiedAt: session.mfaVerifiedAt,
+      account: { signInMethod: session.signInMethod, phoneVerified: session.phoneVerified },
     };
   }
 
