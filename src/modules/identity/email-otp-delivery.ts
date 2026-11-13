@@ -1,5 +1,5 @@
 import { OtpDeliveryPort } from './otp-delivery';
-import { ResendTemplateOtpDelivery } from './resend-template-otp-delivery';
+import { ResendOtpDeliveryFailure, ResendTemplateOtpDelivery } from './resend-template-otp-delivery';
 import { SmtpOtpDelivery } from './smtp-otp-delivery';
 
 export interface EmailOtpProviderConfiguration {
@@ -14,6 +14,7 @@ export interface EmailOtpProviderConfiguration {
   resendFrom?: string;
   resendEmailVerificationTemplateId?: string;
   resendPasswordRecoveryTemplateId?: string;
+  onResendDeliveryFailure?: (failure: ResendOtpDeliveryFailure) => void;
 }
 
 /** Builds exactly one email adapter, retaining SMTP as the backwards-compatible default. */
@@ -26,6 +27,7 @@ export function createEmailOtpDelivery(configuration: EmailOtpProviderConfigurat
       from: configuration.resendFrom ?? configuration.smtpFrom,
       emailVerificationTemplateId: configuration.resendEmailVerificationTemplateId,
       passwordRecoveryTemplateId: configuration.resendPasswordRecoveryTemplateId,
+      onDeliveryFailure: configuration.onResendDeliveryFailure,
     });
   }
 

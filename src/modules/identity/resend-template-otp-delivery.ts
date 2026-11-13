@@ -10,6 +10,14 @@ export interface ResendTemplateOtpConfiguration {
   from?: string;
   emailVerificationTemplateId?: string;
   passwordRecoveryTemplateId?: string;
+  onDeliveryFailure?: (failure: ResendOtpDeliveryFailure) => void;
+}
+
+export interface ResendOtpDeliveryFailure {
+  provider: 'resend';
+  kind: 'http_error' | 'invalid_response' | 'network_error';
+  status?: number;
+  code?: string;
 }
 
 export type ResendFetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
@@ -41,6 +49,7 @@ export class ResendTemplateOtpDelivery implements OtpDeliveryPort {
   private readonly emailVerificationTemplateId?: string;
   private readonly passwordRecoveryTemplateId?: string;
   private readonly isConfigured: boolean;
+  private readonly onDeliveryFailure?: (failure: ResendOtpDeliveryFailure) => void;
 
   constructor(
     configuration: ResendTemplateOtpConfiguration,
@@ -53,6 +62,7 @@ export class ResendTemplateOtpDelivery implements OtpDeliveryPort {
       ?? DEFAULT_EMAIL_VERIFICATION_TEMPLATE_ID;
     this.passwordRecoveryTemplateId = clean(configuration.passwordRecoveryTemplateId)
       ?? DEFAULT_PASSWORD_RECOVERY_TEMPLATE_ID;
+    this.onDeliveryFailure = configuration.onDeliveryFailure;
     this.isConfigured = Boolean(this.apiKey)
       && validSender(this.from)
       && validTemplateId(this.emailVerificationTemplateId)
@@ -88,6 +98,11 @@ export class ResendTemplateOtpDelivery implements OtpDeliveryPort {
     const controller = new AbortController();
     let abortListener: (() => void) | undefined;
     const timer = setTimeout(() => controller.abort(), this.timeoutMilliseconds);
+    let failureReported = false;
+    const reportFailure = (failure: ResendOtpDeliveryFailure) => {
+      failureReported = true;
+      this.reportFailure(failure);
+    };
     if (signal) {
       abortListener = () => controller.abort();
       signal.addEventListener('abort', abortListener, { once: true });
@@ -103,27 +118,62 @@ export class ResendTemplateOtpDelivery implements OtpDeliveryPort {
         body: JSON.stringify({
           from: this.from,
           to: [message.destination],
+          subject: message.purpose === 'email_verification'
+            ? 'Verify your Renivet email'
+            : 'Reset your Renivet password',
           template: {
             id: templateId,
             variables: {
               OTP_CODE: message.code,
-              EXPIRY_MINUTES: Math.ceil(message.expiresInSeconds / 60),
+              // Resend hosted-template variables must all be strings.
+              EXPIRY_MINUTES: String(Math.ceil(message.expiresInSeconds / 60)),
             },
           },
         }),
         signal: controller.signal,
       });
-      if (!response.ok) throw new Error('provider failure');
-      const result: unknown = await response.json();
+      if (!response.ok) {
+        const failure: ResendOtpDeliveryFailure = {
+          provider: 'resend',
+          kind: 'http_error',
+          status: response.status,
+        };
+        try {
+          const providerError: unknown = await response.json();
+          if (providerError && typeof providerError === 'object' && 'name' in providerError
+            && typeof providerError.name === 'string' && /^[a-z0-9_-]{1,64}$/i.test(providerError.name)) {
+            failure.code = providerError.name;
+          }
+        } catch {
+          // Keep the diagnostic limited to status if the provider body is not JSON.
+        }
+        reportFailure(failure);
+        throw new Error('provider failure');
+      }
+      let result: unknown;
+      try {
+        result = await response.json();
+      } catch {
+        reportFailure({ provider: 'resend', kind: 'invalid_response', status: response.status });
+        throw new Error('invalid provider response');
+      }
       if (!result || typeof result !== 'object' || !('id' in result)
         || typeof result.id !== 'string' || result.id.length === 0 || result.id.length > 200) {
+        reportFailure({ provider: 'resend', kind: 'invalid_response', status: response.status });
         throw new Error('invalid provider response');
       }
     } catch {
+      // The public OTP endpoint deliberately keeps delivery failures indistinguishable
+      // from unknown accounts. Emit only non-sensitive provider diagnostics internally.
+      if (!failureReported && !signal?.aborted) reportFailure({ provider: 'resend', kind: 'network_error' });
       throw new Error('Email delivery failed.');
     } finally {
       clearTimeout(timer);
       if (signal && abortListener) signal.removeEventListener('abort', abortListener);
     }
+  }
+
+  private reportFailure(failure: ResendOtpDeliveryFailure): void {
+    try { this.onDeliveryFailure?.(failure); } catch { /* Diagnostics must not affect delivery behavior. */ }
   }
 }
