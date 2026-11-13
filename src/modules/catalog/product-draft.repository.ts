@@ -178,7 +178,7 @@ export class ProductDraftPostgresRepository {
       if (replay) return replay;
       const found = await this.variantForUpdate(client, productId, variantId, context);
       if (!found) throw failure('VARIANT_NOT_FOUND');
-      if (Number(found.row_version) !== expectedRowVersion) throw failure('VARIANT_ROW_VERSION_CONFLICT');
+      if (Number(found.product_row_version) !== expectedRowVersion) throw failure('PRODUCT_ROW_VERSION_CONFLICT');
       if (found.variant_state !== 'DRAFT') throw failure('VARIANT_STATE_RESTRICTED');
       if (found.sku_locked_at !== null && patch.options !== undefined) throw failure('VARIANT_STATE_RESTRICTED');
       const category = await this.categoryById(client, context, found.category_id, found.category_schema_version);
@@ -196,7 +196,7 @@ export class ProductDraftPostgresRepository {
               AND ((ep.scope_type='global' AND ep.brand_id IS NULL) OR (ep.scope_type='brand' AND ep.brand_id=$3)))
             AND EXISTS (SELECT 1 FROM brands.brands b WHERE b.id=$3 AND b.onboarding_state='approved')
           RETURNING v.id,v.brand_id,v.product_id,v.sku,v.options,v.option_signature,v.weight_g,v.gtin,v.variant_state,v.row_version,v.sku_locked_at`,
-        [variantId, productId, context.brandId, expectedRowVersion, JSON.stringify(options), signature,
+        [variantId, productId, context.brandId, Number(found.row_version), JSON.stringify(options), signature,
           patch.weightG ?? found.weight_g, patch.gtin === undefined ? found.gtin : patch.gtin, context.userId]);
       if (!updated.rows[0]) throw failure('VARIANT_ROW_VERSION_CONFLICT');
       await this.saveVariantAttributes(client, context.brandId,
@@ -224,7 +224,8 @@ export class ProductDraftPostgresRepository {
       if (replay) return replay;
       const found = await this.variantForUpdate(client, productId, variantId, context);
       if (!found) throw failure('VARIANT_NOT_FOUND');
-      if (Number(found.row_version) !== expectedRowVersion) throw failure('VARIANT_ROW_VERSION_CONFLICT');
+      if (Number(found.product_row_version) !== expectedRowVersion) throw failure('PRODUCT_ROW_VERSION_CONFLICT');
+      if (input.expectedVariantVersion !== undefined && Number(found.row_version) !== input.expectedVariantVersion) throw failure('VARIANT_ROW_VERSION_CONFLICT');
       if (found.variant_state !== 'DRAFT') throw failure('VARIANT_STATE_RESTRICTED');
       const references = await client.query<{ referenced: boolean }>(
         `SELECT (
@@ -244,7 +245,7 @@ export class ProductDraftPostgresRepository {
               AND ((ep.scope_type='global' AND ep.brand_id IS NULL) OR (ep.scope_type='brand' AND ep.brand_id=$3)))
             AND EXISTS (SELECT 1 FROM brands.brands b WHERE b.id=$3 AND b.onboarding_state='approved')
           RETURNING v.id,v.brand_id,v.product_id,v.sku,v.options,v.option_signature,v.weight_g,v.gtin,v.variant_state,v.row_version,v.sku_locked_at`,
-        [variantId, productId, context.brandId, expectedRowVersion, context.userId]);
+        [variantId, productId, context.brandId, Number(found.row_version), context.userId]);
       if (!updated.rows[0]) throw failure('VARIANT_ROW_VERSION_CONFLICT');
       await this.bumpProductContentVersion(client, productId, context, found);
       await this.lineage(client, context, productId, [`variants.${variantId}.variantState`, `variants.${variantId}.deactivationReason`]);

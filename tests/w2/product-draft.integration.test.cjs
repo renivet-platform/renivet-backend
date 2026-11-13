@@ -196,20 +196,21 @@ test('REN2-61/62 product drafts and SKU variants enforce category pins, CAS, ide
     { sku: `bad-${suffix.slice(0, 12)}`, options: { [colorAttribute.code]: 'Green', [sizeAttribute.code]: 'M' } },
     3, { ...accessContext, idempotencyKey: `invalid-category-option-${suffix}` }), expectCode('VARIANT_ATTRIBUTE_INVALID'));
   const updatedVariant = await repository.updateVariant(withVariant.productId, blueM.id,
-    { options: { [colorAttribute.code]: 'Red', [sizeAttribute.code]: 'M' }, weightG: 275 }, 1,
+    { options: { [colorAttribute.code]: 'Red', [sizeAttribute.code]: 'M' }, weightG: 275 }, 3,
     { ...accessContext, idempotencyKey: `update-variant-${suffix}` });
   assert.equal(updatedVariant.rowVersion, 2);
-  await assert.rejects(repository.updateVariant(withVariant.productId, blueM.id, { weightG: 300 }, 1,
-    { ...accessContext, idempotencyKey: `stale-variant-${suffix}` }), expectCode('VARIANT_ROW_VERSION_CONFLICT'));
-  await assert.rejects(repository.updateVariant(withVariant.productId, blueM.id, { weightG: 300 }, 2,
+  assert.equal(updatedVariant.parentRowVersion, 4, 'variant update returns the incremented product version');
+  await assert.rejects(repository.updateVariant(withVariant.productId, blueM.id, { weightG: 300 }, 3,
+    { ...accessContext, idempotencyKey: `stale-variant-${suffix}` }), expectCode('PRODUCT_ROW_VERSION_CONFLICT'));
+  await assert.rejects(repository.updateVariant(withVariant.productId, blueM.id, { weightG: 300 }, 4,
     { ...accessContext, brandId: otherBrand, idempotencyKey: `cross-brand-variant-${suffix}` }), expectCode('VARIANT_NOT_FOUND'));
   const concurrentVariantUpdates = await Promise.allSettled([
-    repository.updateVariant(withVariant.productId, blueL.id, { weightG: 100 }, 1, { ...accessContext, idempotencyKey: `parallel-a-${suffix}` }),
-    repository.updateVariant(withVariant.productId, blueL.id, { weightG: 110 }, 1, { ...accessContext, idempotencyKey: `parallel-b-${suffix}` }),
+    repository.updateVariant(withVariant.productId, blueL.id, { weightG: 100 }, 4, { ...accessContext, idempotencyKey: `parallel-a-${suffix}` }),
+    repository.updateVariant(withVariant.productId, blueL.id, { weightG: 110 }, 4, { ...accessContext, idempotencyKey: `parallel-b-${suffix}` }),
   ]);
   assert.equal(concurrentVariantUpdates.filter((item) => item.status === 'fulfilled').length, 1);
-  assert.equal(concurrentVariantUpdates.filter((item) => item.status === 'rejected' && item.reason.code === 'VARIANT_ROW_VERSION_CONFLICT').length, 1);
-  const inactiveVariant = await repository.deactivateVariant(withVariant.productId, blueL.id, { reasonCode: 'NO_LONGER_SOLD', expectedVariantVersion: 2 }, 2,
+  assert.equal(concurrentVariantUpdates.filter((item) => item.status === 'rejected' && item.reason.code === 'PRODUCT_ROW_VERSION_CONFLICT').length, 1);
+  const inactiveVariant = await repository.deactivateVariant(withVariant.productId, blueL.id, { reasonCode: 'NO_LONGER_SOLD' }, 5,
     { ...accessContext, idempotencyKey: `deactivate-variant-${suffix}` });
   assert.equal(inactiveVariant.variantState, 'INACTIVE');
   const retainedSku = await pool.query('SELECT sku,variant_state FROM catalogue.product_variants WHERE id=$1', [blueL.id]);
@@ -220,12 +221,12 @@ test('REN2-61/62 product drafts and SKU variants enforce category pins, CAS, ide
     6, { ...accessContext, idempotencyKey: `recycle-inactive-sku-${suffix}` }), expectCode('PRODUCT_CONFLICT'));
   await pool.query(`INSERT INTO catalogue.variant_prices(brand_id,variant_id,currency,amount_minor,mrp_minor,valid_from,price_state,rule_version)
     VALUES($1,$2,'INR',50,100,now(),'DRAFT',1)`, [brand, blueM.id]);
-  await assert.rejects(repository.deactivateVariant(withVariant.productId, blueM.id, { reasonCode: 'HAS_PRICE' }, 2,
+  await assert.rejects(repository.deactivateVariant(withVariant.productId, blueM.id, { reasonCode: 'HAS_PRICE' }, 6,
     { ...accessContext, idempotencyKey: `referenced-deactivate-${suffix}` }), expectCode('VARIANT_REFERENCED'));
   await pool.query('UPDATE catalogue.product_variants SET sku_locked_at=now() WHERE id=$1', [blueM.id]);
   await assert.rejects(pool.query('UPDATE catalogue.product_variants SET sku=$2 WHERE id=$1', [blueM.id, `changed-${suffix.slice(0, 12)}`]),
     /ordered variant SKU and its lock are immutable/);
-  await assert.rejects(repository.deactivateVariant(withVariant.productId, blueM.id, { reasonCode: 'ORDERED' }, 2,
+  await assert.rejects(repository.deactivateVariant(withVariant.productId, blueM.id, { reasonCode: 'ORDERED' }, 6,
     { ...accessContext, idempotencyKey: `ordered-deactivate-${suffix}` }), expectCode('VARIANT_REFERENCED'));
 
   const submitPermission = (await pool.query(`INSERT INTO access.permissions(permission_code,resource,action,description)

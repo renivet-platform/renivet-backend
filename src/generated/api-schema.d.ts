@@ -3238,6 +3238,7 @@ export interface operations {
             query?: never;
             header: {
                 "Idempotency-Key": string;
+                /** @description Quoted parent product rowVersion. */
                 "If-Match": string;
             };
             path: {
@@ -3390,6 +3391,7 @@ export interface operations {
             query?: never;
             header: {
                 "Idempotency-Key": string;
+                /** @description Quoted parent product rowVersion. */
                 "If-Match": string;
             };
             path: {
