@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Logger, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import { MfaGuard } from '../../common/guards/require-mfa';
@@ -44,6 +44,7 @@ import { MfaService } from './mfa.service';
     {
       provide: OTP_DELIVERY,
       useFactory: (configuration: ConfigService) => {
+        const logger = new Logger('ResendOtpDelivery');
         const emailDelivery = createEmailOtpDelivery({
           provider: configuration.get<string>('EMAIL_OTP_PROVIDER'),
           smtpHost: configuration.get<string>('SMTP_HOST'),
@@ -56,6 +57,7 @@ import { MfaService } from './mfa.service';
           resendFrom: configuration.get<string>('RESEND_FROM'),
           resendEmailVerificationTemplateId: configuration.get<string>('RESEND_EMAIL_VERIFICATION_TEMPLATE_ID'),
           resendPasswordRecoveryTemplateId: configuration.get<string>('RESEND_PASSWORD_RECOVERY_TEMPLATE_ID'),
+          onResendDeliveryFailure: (failure) => logger.warn(JSON.stringify({ event: 'otp_email_delivery_failed', ...failure })),
         });
         return new CompositeOtpDelivery([
           emailDelivery,

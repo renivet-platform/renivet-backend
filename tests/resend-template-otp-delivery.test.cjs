@@ -118,6 +118,21 @@ test('provider failures and malformed success responses are mapped to a generic 
   }
 });
 
+test('Resend failures emit safe diagnostics without exposing the recipient, code, or provider message', async () => {
+  const failures = [];
+  const delivery = new ResendTemplateOtpDelivery({
+    ...validConfiguration,
+    onDeliveryFailure: (failure) => failures.push(failure),
+  }, async () => new Response(JSON.stringify({
+    name: 'validation_error',
+    message: 'Rejected customer@example.test code 004281 secret provider detail',
+  }), { status: 422 }));
+
+  await assert.rejects(delivery.send(message()), { message: 'Email delivery failed.' });
+
+  assert.deepEqual(failures, [{ provider: 'resend', kind: 'http_error', status: 422, code: 'validation_error' }]);
+});
+
 test('invalid messages and an already-aborted request do not contact Resend', async () => {
   let calls = 0;
   const delivery = new ResendTemplateOtpDelivery(validConfiguration, async () => {
