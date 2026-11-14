@@ -19,6 +19,8 @@ import { SessionService } from './session.service';
 import { MfaController } from './mfa.controller';
 import { MfaRepository } from './mfa.repository';
 import { MfaService } from './mfa.service';
+import { BRAND_CATALOG_ELIGIBILITY_REPOSITORY, BrandCatalogEligibilityService } from './brand-catalog-eligibility';
+import { BrandCatalogEligibilityPostgresRepository } from './brand-catalog-eligibility.repository';
 
 @Module({
   controllers: [AuthController, PhoneContactController, OtpController, MfaController],
@@ -31,6 +33,9 @@ import { MfaService } from './mfa.service';
       inject: [IdentityRepository, AuthRateLimiter],
     },
     MfaRepository,
+    BrandCatalogEligibilityPostgresRepository,
+    { provide: BRAND_CATALOG_ELIGIBILITY_REPOSITORY, useExisting: BrandCatalogEligibilityPostgresRepository },
+    BrandCatalogEligibilityService,
     {
       provide: SessionService,
       useFactory: (repository: IdentityRepository, configuration: ConfigService) => new SessionService(
@@ -140,6 +145,6 @@ import { MfaService } from './mfa.service';
       inject: [Reflector, SessionService, MfaService],
     },
   ],
-  exports: [MfaGuard, MfaService, SessionService, IdentityInfrastructure],
+  exports: [MfaGuard, MfaService, SessionService, IdentityInfrastructure, BrandCatalogEligibilityService],
 })
 export class IdentityModule {}

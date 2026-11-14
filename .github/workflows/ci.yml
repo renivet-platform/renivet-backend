@@ -362,6 +362,12 @@ jobs:
           path: ren2-31-worker-*.tap
           retention-days: 7
           if-no-files-found: warn
+      - name: Verify REN2-55 W1 brand eligibility approval handoff
+        env:
+          RENIVET_TEST_DATABASE_URL: postgresql://renivet_ci:ci_disposable_only@127.0.0.1:5432/renivet_ci
+        run: |
+          npm run build
+          node --test tests/w2/brand-catalog-eligibility.test.cjs tests/w2/brand-catalog-eligibility.integration.test.cjs
   docker:
     runs-on: ubuntu-latest
     timeout-minutes: 20
