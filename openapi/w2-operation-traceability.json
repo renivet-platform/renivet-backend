@@ -422,8 +422,8 @@
           "path": "tests/w2/submitProductForReview.test.cjs"
         },
         "pullRequest": {
-          "status": "pending",
-          "url": null
+          "status": "open",
+          "url": "https://github.com/renivet-platform/renivet-backend/pull/82"
         }
       },
       "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-71"
