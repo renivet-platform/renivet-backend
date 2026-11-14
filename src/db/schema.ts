@@ -42,7 +42,7 @@ export const taxonomySeedDatasets = catalogue.table(
     importedAt: timestamp('imported_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    primaryKey({ name: 'taxonomy_seed_datasets_pk', columns: [table.datasetId, table.version] }),
+    primaryKey({ name: 'taxonomy_seed_datasets_pkey', columns: [table.datasetId, table.version] }),
     check('taxonomy_seed_datasets_version_positive', sql`${table.version} > 0`),
     check('taxonomy_seed_datasets_hash_sha256', sql`${table.sourceSha256} ~ '^[0-9a-f]{64}$'`),
   ],
