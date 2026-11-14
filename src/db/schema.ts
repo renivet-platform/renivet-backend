@@ -10,6 +10,7 @@ import {
   jsonb,
   pgSchema,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   unique,
@@ -28,6 +29,24 @@ export const identity = pgSchema('identity');
 export const platform = pgSchema('platform');
 export const brands = pgSchema('brands');
 export const access = pgSchema('access');
+export const catalogue = pgSchema('catalogue');
+
+export const taxonomySeedDatasets = catalogue.table(
+  'taxonomy_seed_datasets',
+  {
+    datasetId: text('dataset_id').notNull(),
+    version: integer('version').notNull(),
+    owner: text('owner').notNull(),
+    sourceSha256: char('source_sha256', { length: 64 }).notNull(),
+    approvalReference: text('approval_reference').notNull(),
+    importedAt: timestamp('imported_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ name: 'taxonomy_seed_datasets_pkey', columns: [table.datasetId, table.version] }),
+    check('taxonomy_seed_datasets_version_positive', sql`${table.version} > 0`),
+    check('taxonomy_seed_datasets_hash_sha256', sql`${table.sourceSha256} ~ '^[0-9a-f]{64}$'`),
+  ],
+);
 
 export const identityUsers = identity.table(
   'users',
@@ -472,6 +491,41 @@ export const brandMemberships = brands.table(
     ),
     check('ren2_26_brand_memberships_row_version_positive', sql`${table.rowVersion} > 0`),
     check('ren2_26_brand_memberships_timestamps_ordered', sql`${table.updatedAt} >= ${table.createdAt}`),
+  ],
+);
+
+export const brandCatalogEligibilityEvents = brands.table(
+  'brand_catalog_eligibility_events',
+  {
+    eventId: uuid('event_id').primaryKey(),
+    brandId: uuid('brand_id').notNull().references(() => brandOrganizations.id),
+    applicantUserId: uuid('applicant_user_id').notNull().references(() => identityUsers.id),
+    decision: text('decision').notNull(),
+    approvedByUserId: uuid('approved_by_user_id').notNull().references(() => identityUsers.id),
+    checkedByUserId: uuid('checked_by_user_id').notNull().references(() => identityUsers.id),
+    requestId: text('request_id').notNull(),
+    payloadSha256: char('payload_sha256', { length: 64 }).notNull(),
+    previousBrandState: text('previous_brand_state').notNull(),
+    resultingBrandState: text('resulting_brand_state').notNull(),
+    membershipBefore: text('membership_before'),
+    membershipAfter: text('membership_after'),
+    responsePayload: jsonb('response_payload').$type<Record<string, unknown>>().notNull(),
+    occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('brand_catalog_eligibility_events_brand_time_idx').on(table.brandId, table.occurredAt, table.eventId),
+    check('brand_catalog_eligibility_events_decision_valid', sql`${table.decision} IN ('approved','rejected')`),
+    check('brand_catalog_eligibility_events_request_id_safe', sql`${table.requestId} ~ '^[A-Za-z0-9._:-]{1,128}$'`),
+    check('brand_catalog_eligibility_events_payload_sha256', sql`${table.payloadSha256} ~ '^[0-9a-f]{64}$'`),
+    check('brand_catalog_eligibility_events_result_valid', sql`${table.resultingBrandState} IN ('approved','rejected')`),
+    check('brand_catalog_eligibility_events_maker_checker', sql`${table.approvedByUserId} <> ${table.checkedByUserId}`),
+    check('brand_catalog_eligibility_events_applicant_independent', sql`${table.approvedByUserId} <> ${table.applicantUserId} AND ${table.checkedByUserId} <> ${table.applicantUserId}`),
+    check('brand_catalog_eligibility_events_outcome_consistent', sql`(
+      ${table.decision}='approved' AND ${table.resultingBrandState}='approved'
+      AND ${table.membershipBefore} IN ('pending','active') AND ${table.membershipAfter}='active'
+    ) OR (
+      ${table.decision}='rejected' AND ${table.resultingBrandState}='rejected' AND ${table.membershipAfter} IS NULL
+    )`),
   ],
 );
 

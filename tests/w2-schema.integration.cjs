@@ -18,7 +18,7 @@ const W2_TABLES = [
   'catalogue.product_review_decision_receipts', 'catalogue.publication_command_receipts',
   'catalogue.search_projection_state',
   'catalogue.price_audit_events', 'catalogue.price_mutation_receipts', 'catalogue.product_attribute_values',
-  'catalogue.taxonomy_admin_events',
+  'catalogue.taxonomy_admin_events', 'catalogue.taxonomy_seed_datasets',
   'catalogue.variant_attribute_values', 'catalogue.sustainability_claims',
   'catalogue.claim_evidence', 'catalogue.claim_review_events', 'catalogue.claim_mutation_receipts', 'catalogue.publication_events',
   'media.media_assets', 'media.media_derivatives', 'media.upload_audit_events', 'media.product_media', 'media.product_media_audit_events',

@@ -1,0 +1,1234 @@
+{
+    "datasetId":  "renivet.catalog-taxonomy.apparel-pilot-v1",
+    "version":  1,
+    "owner":  "Catalog Operations",
+    "approval":  "Owner-approved pilot category and attribute scope; legal and compliance values are limited to current approved W2 policy.",
+    "parentCategories":  [
+                             {
+                                 "code":  "apparel",
+                                 "name":  "Apparel",
+                                 "leaf":  false,
+                                 "id":  "346b5c43-6e27-5b9e-8c99-c3053eeb0019"
+                             }
+                         ],
+    "categories":  [
+                       {
+                           "leaf":  true,
+                           "code":  "t_shirts_tops",
+                           "name":  "T-shirts and tops",
+                           "attributes":  [
+                                              {
+                                                  "scope":  "variant",
+                                                  "valueType":  "enum",
+                                                  "code":  "size",
+                                                  "allowedValues":  [
+                                                                        "XS",
+                                                                        "S",
+                                                                        "M",
+                                                                        "L",
+                                                                        "XL",
+                                                                        "XXL",
+                                                                        "0",
+                                                                        "2",
+                                                                        "4",
+                                                                        "6",
+                                                                        "8",
+                                                                        "10",
+                                                                        "12",
+                                                                        "14",
+                                                                        "16",
+                                                                        "18",
+                                                                        "20",
+                                                                        "24",
+                                                                        "26",
+                                                                        "28",
+                                                                        "30",
+                                                                        "32",
+                                                                        "34",
+                                                                        "36",
+                                                                        "38",
+                                                                        "40",
+                                                                        "42",
+                                                                        "44"
+                                                                    ],
+                                                  "id":  "78a928a0-867d-59ba-b437-6638b7ba9b0a"
+                                              },
+                                              {
+                                                  "scope":  "variant",
+                                                  "valueType":  "enum",
+                                                  "code":  "color",
+                                                  "allowedValues":  [
+                                                                        "black",
+                                                                        "white",
+                                                                        "ivory",
+                                                                        "grey",
+                                                                        "navy",
+                                                                        "blue",
+                                                                        "green",
+                                                                        "olive",
+                                                                        "red",
+                                                                        "pink",
+                                                                        "purple",
+                                                                        "yellow",
+                                                                        "orange",
+                                                                        "brown",
+                                                                        "beige",
+                                                                        "multicolor"
+                                                                    ],
+                                                  "id":  "afee88de-d8aa-58d2-bbad-21c41e7710ef"
+                                              },
+                                              {
+                                                  "scope":  "product",
+                                                  "valueType":  "text",
+                                                  "code":  "material_composition",
+                                                  "fiberVocabulary":  [
+                                                                          "cotton",
+                                                                          "linen",
+                                                                          "hemp",
+                                                                          "silk",
+                                                                          "wool",
+                                                                          "cashmere",
+                                                                          "viscose",
+                                                                          "modal",
+                                                                          "lyocell",
+                                                                          "polyester",
+                                                                          "nylon",
+                                                                          "acrylic",
+                                                                          "elastane",
+                                                                          "recycled_polyester",
+                                                                          "recycled_cotton"
+                                                                      ],
+                                                  "id":  "8253576f-93a4-593a-bb7c-3f445ad56b01"
+                                              },
+                                              {
+                                                  "scope":  "product",
+                                                  "valueType":  "enum",
+                                                  "code":  "fit",
+                                                  "allowedValues":  [
+                                                                        "regular",
+                                                                        "slim",
+                                                                        "relaxed",
+                                                                        "oversized",
+                                                                        "fitted",
+                                                                        "compression"
+                                                                    ],
+                                                  "id":  "c71795de-4377-57b8-b731-c50c2a5a7b1b"
+                                              },
+                                              {
+                                                  "scope":  "product",
+                                                  "valueType":  "multi_enum",
+                                                  "code":  "care_instructions",
+                                                  "allowedValues":  [
+                                                                        "machine_wash_cold",
+                                                                        "machine_wash_warm",
+                                                                        "hand_wash",
+                                                                        "do_not_wash",
+                                                                        "do_not_bleach",
+                                                                        "tumble_dry_low",
+                                                                        "line_dry",
+                                                                        "dry_flat",
+                                                                        "iron_low",
+                                                                        "iron_medium",
+                                                                        "do_not_iron",
+                                                                        "dry_clean"
+                                                                    ],
+                                                  "id":  "c1b66fe5-6d72-5243-ae5a-17a58c9300a3"
+                                              },
+                                              {
+                                                  "scope":  "variant",
+                                                  "valueType":  "measurement",
+                                                  "code":  "sleeve_length",
+                                                  "unitCode":  "cm",
+                                                  "minValues":  0,
+                                                  "id":  "e2dd3fcc-d45b-54c7-be32-8c5c27082eb0"
+                                              },
+                                              {
+                                                  "scope":  "product",
+                                                  "valueType":  "enum",
+                                                  "code":  "neckline",
+                                                  "allowedValues":  [
+                                                                        "crew",
+                                                                        "v_neck",
+                                                                        "scoop",
+                                                                        "boat",
+                                                                        "square",
+                                                                        "collared",
+                                                                        "sweetheart",
+                                                                        "mock_neck",
+                                                                        "hooded",
+                                                                        "other"
+                                                                    ],
+                                                  "id":  "cd203376-19da-5f44-bbf5-54ef124cdcd5"
+                                              }
+                                          ],
+                           "parentCode":  "apparel",
+                           "id":  "c59bf848-8328-52d2-b675-1d5bbca13104"
+                       },
+                       {
+                           "leaf":  true,
+                           "code":  "shirts_blouses",
+                           "name":  "Shirts and blouses",
+                           "attributes":  [
+                                              {
+                                                  "scope":  "variant",
+                                                  "valueType":  "enum",
+                                                  "code":  "size",
+                                                  "allowedValues":  [
+                                                                        "XS",
+                                                                        "S",
+                                                                        "M",
+                                                                        "L",
+                                                                        "XL",
+                                                                        "XXL",
+                                                                        "0",
+                                                                        "2",
+                                                                        "4",
+                                                                        "6",
+                                                                        "8",
+                                                                        "10",
+                                                                        "12",
+                                                                        "14",
+                                                                        "16",
+                                                                        "18",
+                                                                        "20",
+                                                                        "24",
+                                                                        "26",
+                                                                        "28",
+                                                                        "30",
+                                                                        "32",
+                                                                        "34",
+                                                                        "36",
+                                                                        "38",
+                                                                        "40",
+                                                                        "42",
+                                                                        "44"
+                                                                    ],
+                                                  "id":  "78a928a0-867d-59ba-b437-6638b7ba9b0a"
+                                              },
+                                              {
+                                                  "scope":  "variant",
+                                                  "valueType":  "enum",
+                                                  "code":  "color",
+                                                  "allowedValues":  [
+                                                                        "black",
+                                                                        "white",
+                                                                        "ivory",
+                                                                        "grey",
+                                                                        "navy",
+                                                                        "blue",
+                                                                        "green",
+                                                                        "olive",
+                                                                        "red",
+                                                                        "pink",
+                                                                        "purple",
+                                                                        "yellow",
+                                                                        "orange",
+                                                                        "brown",
+                                                                        "beige",
+                                                                        "multicolor"
+                                                                    ],
+                                                  "id":  "afee88de-d8aa-58d2-bbad-21c41e7710ef"
+                                              },
+                                              {
+                                                  "scope":  "product",
+                                                  "valueType":  "text",
+                                                  "code":  "material_composition",
+                                                  "fiberVocabulary":  [
+                                                                          "cotton",
+                                                                          "linen",
+                                                                          "hemp",
+                                                                          "silk",
+                                                                          "wool",
+                                                                          "cashmere",
+                                                                          "viscose",
+                                                                          "modal",
+                                                                          "lyocell",
+                                                                          "polyester",
+                                                                          "nylon",
+                                                                          "acrylic",
+                                                                          "elastane",
+                                                                          "recycled_polyester",
+                                                                          "recycled_cotton"
+                                                                      ],
+                                                  "id":  "8253576f-93a4-593a-bb7c-3f445ad56b01"
+                                              },
+                                              {
+                                                  "scope":  "product",
+                                                  "valueType":  "enum",
+                                                  "code":  "fit",
+                                                  "allowedValues":  [
+                                                                        "regular",
+                                                                        "slim",
+                                                                        "relaxed",
+                                                                        "oversized",
+                                                                        "fitted",
+                                                                        "compression"
+                                                                    ],
+                                                  "id":  "c71795de-4377-57b8-b731-c50c2a5a7b1b"
+                                              },
+                                              {
+                                                  "scope":  "product",
+                                                  "valueType":  "multi_enum",
+                                                  "code":  "care_instructions",
+                                                  "allowedValues":  [
+                                                                        "machine_wash_cold",
+                                                                        "machine_wash_warm",
+                                                                        "hand_wash",
+                                                                        "do_not_wash",
+                                                                        "do_not_bleach",
+                                                                        "tumble_dry_low",
+                                                                        "line_dry",
+                                                                        "dry_flat",
+                                                                        "iron_low",
+                                                                        "iron_medium",
+                                                                        "do_not_iron",
+                                                                        "dry_clean"
+                                                                    ],
+                                                  "id":  "c1b66fe5-6d72-5243-ae5a-17a58c9300a3"
+                                              },
+                                              {
+                                                  "scope":  "variant",
+                                                  "valueType":  "measurement",
+                                                  "code":  "sleeve_length",
+                                                  "unitCode":  "cm",
+                                                  "minValues":  0,
+                                                  "id":  "e2dd3fcc-d45b-54c7-be32-8c5c27082eb0"
+                                              },
+                                              {
+                                                  "scope":  "product",
+                                                  "valueType":  "enum",
+                                                  "code":  "neckline",
+                                                  "allowedValues":  [
+                                                                        "crew",
+                                                                        "v_neck",
+                                                                        "scoop",
+                                                                        "boat",
+                                                                        "square",
+                                                                        "collared",
+                                                                        "sweetheart",
+                                                                        "mock_neck",
+                                                                        "hooded",
+                                                                        "other"
+                                                                    ],
+                                                  "id":  "cd203376-19da-5f44-bbf5-54ef124cdcd5"
+                                              }
+                                          ],
+                           "parentCode":  "apparel",
+                           "id":  "b837f89d-d15b-5473-925c-3b5d4fc96964"
+                       },
+                       {
+                           "leaf":  true,
+                           "code":  "kurtas_tunics",
+                           "name":  "Kurtas and tunics",
+                           "attributes":  [
+                                              {
+                                                  "scope":  "variant",
+                                                  "valueType":  "enum",
+                                                  "code":  "size",
+                                                  "allowedValues":  [
+                                                                        "XS",
+                                                                        "S",
+                                                                        "M",
+                                                                        "L",
+                                                                        "XL",
+                                                                        "XXL",
+                                                                        "0",
+                                                                        "2",
+                                                                        "4",
+                                                                        "6",
+                                                                        "8",
+                                                                        "10",
+                                                                        "12",
+                                                                        "14",
+                                                                        "16",
+                                                                        "18",
+                                                                        "20",
+                                                                        "24",
+                                                                        "26",
+                                                                        "28",
+                                                                        "30",
+                                                                        "32",
+                                                                        "34",
+                                                                        "36",
+                                                                        "38",
+                                                                        "40",
+                                                                        "42",
+                                                                        "44"
+                                                                    ],
+                                                  "id":  "78a928a0-867d-59ba-b437-6638b7ba9b0a"
+                                              },
+                                              {
+                                                  "scope":  "variant",
+                                                  "valueType":  "enum",
+                                                  "code":  "color",
+                                                  "allowedValues":  [
+                                                                        "black",
+                                                                        "white",
+                                                                        "ivory",
+                                                                        "grey",
+                                                                        "navy",
+                                                                        "blue",
+                                                                        "green",
+                                                                        "olive",
+                                                                        "red",
+                                                                        "pink",
+                                                                        "purple",
+                                                                        "yellow",
+                                                                        "orange",
+                                                                        "brown",
+                                                                        "beige",
+                                                                        "multicolor"
+                                                                    ],
+                                                  "id":  "afee88de-d8aa-58d2-bbad-21c41e7710ef"
+                                              },
+                                              {
+                                                  "scope":  "product",
+                                                  "valueType":  "text",
+                                                  "code":  "material_composition",
+                                                  "fiberVocabulary":  [
+                                                                          "cotton",
+                                                                          "linen",
+                                                                          "hemp",
+                                                                          "silk",
+                                                                          "wool",
+                                                                          "cashmere",
+                                                                          "viscose",
+                                                                          "modal",
+                                                                          "lyocell",
+                                                                          "polyester",
+                                                                          "nylon",
+                                                                          "acrylic",
+                                                                          "elastane",
+                                                                          "recycled_polyester",
+                                                                          "recycled_cotton"
+                                                                      ],
+                                                  "id":  "8253576f-93a4-593a-bb7c-3f445ad56b01"
+                                              },
+                                              {
+                                                  "scope":  "product",
+                                                  "valueType":  "enum",
+                                                  "code":  "fit",
+                                                  "allowedValues":  [
+                                                                        "regular",
+                                                                        "slim",
+                                                                        "relaxed",
+                                                                        "oversized",
+                                                                        "fitted",
+                                                                        "compression"
+                                                                    ],
+                                                  "id":  "c71795de-4377-57b8-b731-c50c2a5a7b1b"
+                                              },
+                                              {
+                                                  "scope":  "product",
+                                                  "valueType":  "multi_enum",
+                                                  "code":  "care_instructions",
+                                                  "allowedValues":  [
+                                                                        "machine_wash_cold",
+                                                                        "machine_wash_warm",
+                                                                        "hand_wash",
+                                                                        "do_not_wash",
+                                                                        "do_not_bleach",
+                                                                        "tumble_dry_low",
+                                                                        "line_dry",
+                                                                        "dry_flat",
+                                                                        "iron_low",
+                                                                        "iron_medium",
+                                                                        "do_not_iron",
+                                                                        "dry_clean"
+                                                                    ],
+                                                  "id":  "c1b66fe5-6d72-5243-ae5a-17a58c9300a3"
+                                              },
+                                              {
+                                                  "scope":  "variant",
+                                                  "valueType":  "measurement",
+                                                  "code":  "sleeve_length",
+                                                  "unitCode":  "cm",
+                                                  "minValues":  0,
+                                                  "id":  "e2dd3fcc-d45b-54c7-be32-8c5c27082eb0"
+                                              },
+                                              {
+                                                  "scope":  "product",
+                                                  "valueType":  "enum",
+                                                  "code":  "neckline",
+                                                  "allowedValues":  [
+                                                                        "crew",
+                                                                        "v_neck",
+                                                                        "scoop",
+                                                                        "boat",
+                                                                        "square",
+                                                                        "collared",
+                                                                        "sweetheart",
+                                                                        "mock_neck",
+                                                                        "hooded",
+                                                                        "other"
+                                                                    ],
+                                                  "id":  "cd203376-19da-5f44-bbf5-54ef124cdcd5"
+                                              }
+                                          ],
+                           "parentCode":  "apparel",
+                           "id":  "1af066e0-e191-5830-832d-a2274ac04a47"
+                       },
+                       {
+                           "leaf":  true,
+                           "code":  "dresses_jumpsuits",
+                           "name":  "Dresses and jumpsuits",
+                           "attributes":  [
+                                              {
+                                                  "scope":  "variant",
+                                                  "valueType":  "enum",
+                                                  "code":  "size",
+                                                  "allowedValues":  [
+                                                                        "XS",
+                                                                        "S",
+                                                                        "M",
+                                                                        "L",
+                                                                        "XL",
+                                                                        "XXL",
+                                                                        "0",
+                                                                        "2",
+                                                                        "4",
+                                                                        "6",
+                                                                        "8",
+                                                                        "10",
+                                                                        "12",
+                                                                        "14",
+                                                                        "16",
+                                                                        "18",
+                                                                        "20",
+                                                                        "24",
+                                                                        "26",
+                                                                        "28",
+                                                                        "30",
+                                                                        "32",
+                                                                        "34",
+                                                                        "36",
+                                                                        "38",
+                                                                        "40",
+                                                                        "42",
+                                                                        "44"
+                                                                    ],
+                                                  "id":  "78a928a0-867d-59ba-b437-6638b7ba9b0a"
+                                              },
+                                              {
+                                                  "scope":  "variant",
+                                                  "valueType":  "enum",
+                                                  "code":  "color",
+                                                  "allowedValues":  [
+                                                                        "black",
+                                                                        "white",
+                                                                        "ivory",
+                                                                        "grey",
+                                                                        "navy",
+                                                                        "blue",
+                                                                        "green",
+                                                                        "olive",
+                                                                        "red",
+                                                                        "pink",
+                                                                        "purple",
+                                                                        "yellow",
+                                                                        "orange",
+                                                                        "brown",
+                                                                        "beige",
+                                                                        "multicolor"
+                                                                    ],
+                                                  "id":  "afee88de-d8aa-58d2-bbad-21c41e7710ef"
+                                              },
+                                              {
+                                                  "scope":  "product",
+                                                  "valueType":  "text",
+                                                  "code":  "material_composition",
+                                                  "fiberVocabulary":  [
+                                                                          "cotton",
+                                                                          "linen",
+                                                                          "hemp",
+                                                                          "silk",
+                                                                          "wool",
+                                                                          "cashmere",
+                                                                          "viscose",
+                                                                          "modal",
+                                                                          "lyocell",
+                                                                          "polyester",
+                                                                          "nylon",
+                                                                          "acrylic",
+                                                                          "elastane",
+                                                                          "recycled_polyester",
+                                                                          "recycled_cotton"
+                                                                      ],
+                                                  "id":  "8253576f-93a4-593a-bb7c-3f445ad56b01"
+                                              },
+                                              {
+                                                  "scope":  "product",
+                                                  "valueType":  "enum",
+                                                  "code":  "fit",
+                                                  "allowedValues":  [
+                                                                        "regular",
+                                                                        "slim",
+                                                                        "relaxed",
+                                                                        "oversized",
+                                                                        "fitted",
+                                                                        "compression"
+                                                                    ],
+                                                  "id":  "c71795de-4377-57b8-b731-c50c2a5a7b1b"
+                                              },
+                                              {
+                                                  "scope":  "product",
+                                                  "valueType":  "multi_enum",
+                                                  "code":  "care_instructions",
+                                                  "allowedValues":  [
+                                                                        "machine_wash_cold",
+                                                                        "machine_wash_warm",
+                                                                        "hand_wash",
+                                                                        "do_not_wash",
+                                                                        "do_not_bleach",
+                                                                        "tumble_dry_low",
+                                                                        "line_dry",
+                                                                        "dry_flat",
+                                                                        "iron_low",
+                                                                        "iron_medium",
+                                                                        "do_not_iron",
+                                                                        "dry_clean"
+                                                                    ],
+                                                  "id":  "c1b66fe5-6d72-5243-ae5a-17a58c9300a3"
+                                              },
+                                              {
+                                                  "scope":  "variant",
+                                                  "valueType":  "measurement",
+                                                  "code":  "sleeve_length",
+                                                  "unitCode":  "cm",
+                                                  "minValues":  0,
+                                                  "id":  "e2dd3fcc-d45b-54c7-be32-8c5c27082eb0"
+                                              },
+                                              {
+                                                  "scope":  "product",
+                                                  "valueType":  "enum",
+                                                  "code":  "neckline",
+                                                  "allowedValues":  [
+                                                                        "crew",
+                                                                        "v_neck",
+                                                                        "scoop",
+                                                                        "boat",
+                                                                        "square",
+                                                                        "collared",
+                                                                        "sweetheart",
+                                                                        "mock_neck",
+                                                                        "hooded",
+                                                                        "other"
+                                                                    ],
+                                                  "id":  "cd203376-19da-5f44-bbf5-54ef124cdcd5"
+                                              }
+                                          ],
+                           "parentCode":  "apparel",
+                           "id":  "67d76a81-dae4-523b-bd73-21fd85b7b631"
+                       },
+                       {
+                           "leaf":  true,
+                           "code":  "trousers_jeans",
+                           "name":  "Trousers and jeans",
+                           "attributes":  [
+                                              {
+                                                  "scope":  "variant",
+                                                  "valueType":  "enum",
+                                                  "code":  "size",
+                                                  "allowedValues":  [
+                                                                        "XS",
+                                                                        "S",
+                                                                        "M",
+                                                                        "L",
+                                                                        "XL",
+                                                                        "XXL",
+                                                                        "0",
+                                                                        "2",
+                                                                        "4",
+                                                                        "6",
+                                                                        "8",
+                                                                        "10",
+                                                                        "12",
+                                                                        "14",
+                                                                        "16",
+                                                                        "18",
+                                                                        "20",
+                                                                        "24",
+                                                                        "26",
+                                                                        "28",
+                                                                        "30",
+                                                                        "32",
+                                                                        "34",
+                                                                        "36",
+                                                                        "38",
+                                                                        "40",
+                                                                        "42",
+                                                                        "44"
+                                                                    ],
+                                                  "id":  "78a928a0-867d-59ba-b437-6638b7ba9b0a"
+                                              },
+                                              {
+                                                  "scope":  "variant",
+                                                  "valueType":  "enum",
+                                                  "code":  "color",
+                                                  "allowedValues":  [
+                                                                        "black",
+                                                                        "white",
+                                                                        "ivory",
+                                                                        "grey",
+                                                                        "navy",
+                                                                        "blue",
+                                                                        "green",
+                                                                        "olive",
+                                                                        "red",
+                                                                        "pink",
+                                                                        "purple",
+                                                                        "yellow",
+                                                                        "orange",
+                                                                        "brown",
+                                                                        "beige",
+                                                                        "multicolor"
+                                                                    ],
+                                                  "id":  "afee88de-d8aa-58d2-bbad-21c41e7710ef"
+                                              },
+                                              {
+                                                  "scope":  "product",
+                                                  "valueType":  "text",
+                                                  "code":  "material_composition",
+                                                  "fiberVocabulary":  [
+                                                                          "cotton",
+                                                                          "linen",
+                                                                          "hemp",
+                                                                          "silk",
+                                                                          "wool",
+                                                                          "cashmere",
+                                                                          "viscose",
+                                                                          "modal",
+                                                                          "lyocell",
+                                                                          "polyester",
+                                                                          "nylon",
+                                                                          "acrylic",
+                                                                          "elastane",
+                                                                          "recycled_polyester",
+                                                                          "recycled_cotton"
+                                                                      ],
+                                                  "id":  "8253576f-93a4-593a-bb7c-3f445ad56b01"
+                                              },
+                                              {
+                                                  "scope":  "product",
+                                                  "valueType":  "enum",
+                                                  "code":  "fit",
+                                                  "allowedValues":  [
+                                                                        "regular",
+                                                                        "slim",
+                                                                        "relaxed",
+                                                                        "oversized",
+                                                                        "fitted",
+                                                                        "compression"
+                                                                    ],
+                                                  "id":  "c71795de-4377-57b8-b731-c50c2a5a7b1b"
+                                              },
+                                              {
+                                                  "scope":  "product",
+                                                  "valueType":  "multi_enum",
+                                                  "code":  "care_instructions",
+                                                  "allowedValues":  [
+                                                                        "machine_wash_cold",
+                                                                        "machine_wash_warm",
+                                                                        "hand_wash",
+                                                                        "do_not_wash",
+                                                                        "do_not_bleach",
+                                                                        "tumble_dry_low",
+                                                                        "line_dry",
+                                                                        "dry_flat",
+                                                                        "iron_low",
+                                                                        "iron_medium",
+                                                                        "do_not_iron",
+                                                                        "dry_clean"
+                                                                    ],
+                                                  "id":  "c1b66fe5-6d72-5243-ae5a-17a58c9300a3"
+                                              },
+                                              {
+                                                  "scope":  "variant",
+                                                  "valueType":  "enum",
+                                                  "code":  "rise",
+                                                  "allowedValues":  [
+                                                                        "low",
+                                                                        "mid",
+                                                                        "high"
+                                                                    ],
+                                                  "id":  "221df242-c0e7-5c7e-85ab-f45c4b304aa2"
+                                              },
+                                              {
+                                                  "scope":  "variant",
+                                                  "valueType":  "measurement",
+                                                  "code":  "inseam",
+                                                  "unitCode":  "cm",
+                                                  "minValues":  0,
+                                                  "id":  "956df4d5-b876-5536-a242-a58fac93eb4c"
+                                              }
+                                          ],
+                           "parentCode":  "apparel",
+                           "id":  "a828481e-ee8d-5770-9260-9a8361655538"
+                       },
+                       {
+                           "leaf":  true,
+                           "code":  "skirts_shorts",
+                           "name":  "Skirts and shorts",
+                           "attributes":  [
+                                              {
+                                                  "scope":  "variant",
+                                                  "valueType":  "enum",
+                                                  "code":  "size",
+                                                  "allowedValues":  [
+                                                                        "XS",
+                                                                        "S",
+                                                                        "M",
+                                                                        "L",
+                                                                        "XL",
+                                                                        "XXL",
+                                                                        "0",
+                                                                        "2",
+                                                                        "4",
+                                                                        "6",
+                                                                        "8",
+                                                                        "10",
+                                                                        "12",
+                                                                        "14",
+                                                                        "16",
+                                                                        "18",
+                                                                        "20",
+                                                                        "24",
+                                                                        "26",
+                                                                        "28",
+                                                                        "30",
+                                                                        "32",
+                                                                        "34",
+                                                                        "36",
+                                                                        "38",
+                                                                        "40",
+                                                                        "42",
+                                                                        "44"
+                                                                    ],
+                                                  "id":  "78a928a0-867d-59ba-b437-6638b7ba9b0a"
+                                              },
+                                              {
+                                                  "scope":  "variant",
+                                                  "valueType":  "enum",
+                                                  "code":  "color",
+                                                  "allowedValues":  [
+                                                                        "black",
+                                                                        "white",
+                                                                        "ivory",
+                                                                        "grey",
+                                                                        "navy",
+                                                                        "blue",
+                                                                        "green",
+                                                                        "olive",
+                                                                        "red",
+                                                                        "pink",
+                                                                        "purple",
+                                                                        "yellow",
+                                                                        "orange",
+                                                                        "brown",
+                                                                        "beige",
+                                                                        "multicolor"
+                                                                    ],
+                                                  "id":  "afee88de-d8aa-58d2-bbad-21c41e7710ef"
+                                              },
+                                              {
+                                                  "scope":  "product",
+                                                  "valueType":  "text",
+                                                  "code":  "material_composition",
+                                                  "fiberVocabulary":  [
+                                                                          "cotton",
+                                                                          "linen",
+                                                                          "hemp",
+                                                                          "silk",
+                                                                          "wool",
+                                                                          "cashmere",
+                                                                          "viscose",
+                                                                          "modal",
+                                                                          "lyocell",
+                                                                          "polyester",
+                                                                          "nylon",
+                                                                          "acrylic",
+                                                                          "elastane",
+                                                                          "recycled_polyester",
+                                                                          "recycled_cotton"
+                                                                      ],
+                                                  "id":  "8253576f-93a4-593a-bb7c-3f445ad56b01"
+                                              },
+                                              {
+                                                  "scope":  "product",
+                                                  "valueType":  "enum",
+                                                  "code":  "fit",
+                                                  "allowedValues":  [
+                                                                        "regular",
+                                                                        "slim",
+                                                                        "relaxed",
+                                                                        "oversized",
+                                                                        "fitted",
+                                                                        "compression"
+                                                                    ],
+                                                  "id":  "c71795de-4377-57b8-b731-c50c2a5a7b1b"
+                                              },
+                                              {
+                                                  "scope":  "product",
+                                                  "valueType":  "multi_enum",
+                                                  "code":  "care_instructions",
+                                                  "allowedValues":  [
+                                                                        "machine_wash_cold",
+                                                                        "machine_wash_warm",
+                                                                        "hand_wash",
+                                                                        "do_not_wash",
+                                                                        "do_not_bleach",
+                                                                        "tumble_dry_low",
+                                                                        "line_dry",
+                                                                        "dry_flat",
+                                                                        "iron_low",
+                                                                        "iron_medium",
+                                                                        "do_not_iron",
+                                                                        "dry_clean"
+                                                                    ],
+                                                  "id":  "c1b66fe5-6d72-5243-ae5a-17a58c9300a3"
+                                              },
+                                              {
+                                                  "scope":  "variant",
+                                                  "valueType":  "enum",
+                                                  "code":  "rise",
+                                                  "allowedValues":  [
+                                                                        "low",
+                                                                        "mid",
+                                                                        "high"
+                                                                    ],
+                                                  "id":  "221df242-c0e7-5c7e-85ab-f45c4b304aa2"
+                                              },
+                                              {
+                                                  "scope":  "variant",
+                                                  "valueType":  "measurement",
+                                                  "code":  "inseam",
+                                                  "unitCode":  "cm",
+                                                  "minValues":  0,
+                                                  "id":  "956df4d5-b876-5536-a242-a58fac93eb4c"
+                                              }
+                                          ],
+                           "parentCode":  "apparel",
+                           "id":  "1b931a5f-b28c-5d2e-9bd0-d3b143b573e2"
+                       },
+                       {
+                           "leaf":  true,
+                           "code":  "jackets_outerwear",
+                           "name":  "Jackets and outerwear",
+                           "attributes":  [
+                                              {
+                                                  "scope":  "variant",
+                                                  "valueType":  "enum",
+                                                  "code":  "size",
+                                                  "allowedValues":  [
+                                                                        "XS",
+                                                                        "S",
+                                                                        "M",
+                                                                        "L",
+                                                                        "XL",
+                                                                        "XXL",
+                                                                        "0",
+                                                                        "2",
+                                                                        "4",
+                                                                        "6",
+                                                                        "8",
+                                                                        "10",
+                                                                        "12",
+                                                                        "14",
+                                                                        "16",
+                                                                        "18",
+                                                                        "20",
+                                                                        "24",
+                                                                        "26",
+                                                                        "28",
+                                                                        "30",
+                                                                        "32",
+                                                                        "34",
+                                                                        "36",
+                                                                        "38",
+                                                                        "40",
+                                                                        "42",
+                                                                        "44"
+                                                                    ],
+                                                  "id":  "78a928a0-867d-59ba-b437-6638b7ba9b0a"
+                                              },
+                                              {
+                                                  "scope":  "variant",
+                                                  "valueType":  "enum",
+                                                  "code":  "color",
+                                                  "allowedValues":  [
+                                                                        "black",
+                                                                        "white",
+                                                                        "ivory",
+                                                                        "grey",
+                                                                        "navy",
+                                                                        "blue",
+                                                                        "green",
+                                                                        "olive",
+                                                                        "red",
+                                                                        "pink",
+                                                                        "purple",
+                                                                        "yellow",
+                                                                        "orange",
+                                                                        "brown",
+                                                                        "beige",
+                                                                        "multicolor"
+                                                                    ],
+                                                  "id":  "afee88de-d8aa-58d2-bbad-21c41e7710ef"
+                                              },
+                                              {
+                                                  "scope":  "product",
+                                                  "valueType":  "text",
+                                                  "code":  "material_composition",
+                                                  "fiberVocabulary":  [
+                                                                          "cotton",
+                                                                          "linen",
+                                                                          "hemp",
+                                                                          "silk",
+                                                                          "wool",
+                                                                          "cashmere",
+                                                                          "viscose",
+                                                                          "modal",
+                                                                          "lyocell",
+                                                                          "polyester",
+                                                                          "nylon",
+                                                                          "acrylic",
+                                                                          "elastane",
+                                                                          "recycled_polyester",
+                                                                          "recycled_cotton"
+                                                                      ],
+                                                  "id":  "8253576f-93a4-593a-bb7c-3f445ad56b01"
+                                              },
+                                              {
+                                                  "scope":  "product",
+                                                  "valueType":  "enum",
+                                                  "code":  "fit",
+                                                  "allowedValues":  [
+                                                                        "regular",
+                                                                        "slim",
+                                                                        "relaxed",
+                                                                        "oversized",
+                                                                        "fitted",
+                                                                        "compression"
+                                                                    ],
+                                                  "id":  "c71795de-4377-57b8-b731-c50c2a5a7b1b"
+                                              },
+                                              {
+                                                  "scope":  "product",
+                                                  "valueType":  "multi_enum",
+                                                  "code":  "care_instructions",
+                                                  "allowedValues":  [
+                                                                        "machine_wash_cold",
+                                                                        "machine_wash_warm",
+                                                                        "hand_wash",
+                                                                        "do_not_wash",
+                                                                        "do_not_bleach",
+                                                                        "tumble_dry_low",
+                                                                        "line_dry",
+                                                                        "dry_flat",
+                                                                        "iron_low",
+                                                                        "iron_medium",
+                                                                        "do_not_iron",
+                                                                        "dry_clean"
+                                                                    ],
+                                                  "id":  "c1b66fe5-6d72-5243-ae5a-17a58c9300a3"
+                                              },
+                                              {
+                                                  "scope":  "variant",
+                                                  "valueType":  "measurement",
+                                                  "code":  "sleeve_length",
+                                                  "unitCode":  "cm",
+                                                  "minValues":  0,
+                                                  "id":  "e2dd3fcc-d45b-54c7-be32-8c5c27082eb0"
+                                              },
+                                              {
+                                                  "scope":  "product",
+                                                  "valueType":  "enum",
+                                                  "code":  "neckline",
+                                                  "allowedValues":  [
+                                                                        "crew",
+                                                                        "v_neck",
+                                                                        "scoop",
+                                                                        "boat",
+                                                                        "square",
+                                                                        "collared",
+                                                                        "sweetheart",
+                                                                        "mock_neck",
+                                                                        "hooded",
+                                                                        "other"
+                                                                    ],
+                                                  "id":  "cd203376-19da-5f44-bbf5-54ef124cdcd5"
+                                              }
+                                          ],
+                           "parentCode":  "apparel",
+                           "id":  "c0f351c7-f298-508d-a565-ee28c8c63a02"
+                       },
+                       {
+                           "leaf":  true,
+                           "code":  "activewear",
+                           "name":  "Activewear",
+                           "attributes":  [
+                                              {
+                                                  "scope":  "variant",
+                                                  "valueType":  "enum",
+                                                  "code":  "size",
+                                                  "allowedValues":  [
+                                                                        "XS",
+                                                                        "S",
+                                                                        "M",
+                                                                        "L",
+                                                                        "XL",
+                                                                        "XXL",
+                                                                        "0",
+                                                                        "2",
+                                                                        "4",
+                                                                        "6",
+                                                                        "8",
+                                                                        "10",
+                                                                        "12",
+                                                                        "14",
+                                                                        "16",
+                                                                        "18",
+                                                                        "20",
+                                                                        "24",
+                                                                        "26",
+                                                                        "28",
+                                                                        "30",
+                                                                        "32",
+                                                                        "34",
+                                                                        "36",
+                                                                        "38",
+                                                                        "40",
+                                                                        "42",
+                                                                        "44"
+                                                                    ],
+                                                  "id":  "78a928a0-867d-59ba-b437-6638b7ba9b0a"
+                                              },
+                                              {
+                                                  "scope":  "variant",
+                                                  "valueType":  "enum",
+                                                  "code":  "color",
+                                                  "allowedValues":  [
+                                                                        "black",
+                                                                        "white",
+                                                                        "ivory",
+                                                                        "grey",
+                                                                        "navy",
+                                                                        "blue",
+                                                                        "green",
+                                                                        "olive",
+                                                                        "red",
+                                                                        "pink",
+                                                                        "purple",
+                                                                        "yellow",
+                                                                        "orange",
+                                                                        "brown",
+                                                                        "beige",
+                                                                        "multicolor"
+                                                                    ],
+                                                  "id":  "afee88de-d8aa-58d2-bbad-21c41e7710ef"
+                                              },
+                                              {
+                                                  "scope":  "product",
+                                                  "valueType":  "text",
+                                                  "code":  "material_composition",
+                                                  "fiberVocabulary":  [
+                                                                          "cotton",
+                                                                          "linen",
+                                                                          "hemp",
+                                                                          "silk",
+                                                                          "wool",
+                                                                          "cashmere",
+                                                                          "viscose",
+                                                                          "modal",
+                                                                          "lyocell",
+                                                                          "polyester",
+                                                                          "nylon",
+                                                                          "acrylic",
+                                                                          "elastane",
+                                                                          "recycled_polyester",
+                                                                          "recycled_cotton"
+                                                                      ],
+                                                  "id":  "8253576f-93a4-593a-bb7c-3f445ad56b01"
+                                              },
+                                              {
+                                                  "scope":  "product",
+                                                  "valueType":  "enum",
+                                                  "code":  "fit",
+                                                  "allowedValues":  [
+                                                                        "regular",
+                                                                        "slim",
+                                                                        "relaxed",
+                                                                        "oversized",
+                                                                        "fitted",
+                                                                        "compression"
+                                                                    ],
+                                                  "id":  "c71795de-4377-57b8-b731-c50c2a5a7b1b"
+                                              },
+                                              {
+                                                  "scope":  "product",
+                                                  "valueType":  "multi_enum",
+                                                  "code":  "care_instructions",
+                                                  "allowedValues":  [
+                                                                        "machine_wash_cold",
+                                                                        "machine_wash_warm",
+                                                                        "hand_wash",
+                                                                        "do_not_wash",
+                                                                        "do_not_bleach",
+                                                                        "tumble_dry_low",
+                                                                        "line_dry",
+                                                                        "dry_flat",
+                                                                        "iron_low",
+                                                                        "iron_medium",
+                                                                        "do_not_iron",
+                                                                        "dry_clean"
+                                                                    ],
+                                                  "id":  "c1b66fe5-6d72-5243-ae5a-17a58c9300a3"
+                                              },
+                                              {
+                                                  "scope":  "variant",
+                                                  "valueType":  "measurement",
+                                                  "code":  "sleeve_length",
+                                                  "unitCode":  "cm",
+                                                  "minValues":  0,
+                                                  "id":  "e2dd3fcc-d45b-54c7-be32-8c5c27082eb0"
+                                              },
+                                              {
+                                                  "scope":  "product",
+                                                  "valueType":  "enum",
+                                                  "code":  "neckline",
+                                                  "allowedValues":  [
+                                                                        "crew",
+                                                                        "v_neck",
+                                                                        "scoop",
+                                                                        "boat",
+                                                                        "square",
+                                                                        "collared",
+                                                                        "sweetheart",
+                                                                        "mock_neck",
+                                                                        "hooded",
+                                                                        "other"
+                                                                    ],
+                                                  "id":  "cd203376-19da-5f44-bbf5-54ef124cdcd5"
+                                              },
+                                              {
+                                                  "scope":  "variant",
+                                                  "valueType":  "measurement",
+                                                  "code":  "inseam",
+                                                  "unitCode":  "cm",
+                                                  "minValues":  0,
+                                                  "id":  "956df4d5-b876-5536-a242-a58fac93eb4c"
+                                              }
+                                          ],
+                           "parentCode":  "apparel",
+                           "id":  "e040d097-c268-5d2f-aee4-9761f8ba31c6"
+                       }
+                   ],
+    "compliance":  {
+                       "policy":  "existing-w2-policy-only",
+                       "rules":  [
+
+                                 ],
+                       "publishGate":  "Fail closed when an applicable requirement in the currently approved W2 policy or verified evidence is missing; this dataset adds no legal, labeling, or certification rules."
+                   },
+    "retirementPolicy":  "Publish a new immutable dataset version; retain published category and schema snapshots. Retire categories through the existing guarded taxonomy lifecycle only after references and owner review are reconciled."
+}

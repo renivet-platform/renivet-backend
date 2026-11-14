@@ -288,6 +288,20 @@
       "when": 1794297300000,
       "tag": "0040_ren2_91_checkout_admission_proofs",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1794700800000,
+      "tag": "0041_ren2_54_apparel_taxonomy_seed",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1794700860000,
+      "tag": "0042_ren2_55_brand_catalog_eligibility_handoff",
+      "breakpoints": true
     }
   ]
 }
