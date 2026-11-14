@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsInt, IsObject, IsOptional, IsString, Min, MinLength } from 'class-validator';
+import { IsInt, IsObject, IsOptional, IsString, Matches, Min, MinLength } from 'class-validator';
 
 export class CreateProductDraftDto {
   @ApiProperty({ maxLength: 128 }) @IsString() @MinLength(1) styleCode!: string;
@@ -34,6 +34,12 @@ export class UpdateProductVariantDto {
 export class DeactivateProductVariantDto {
   @ApiProperty({ maxLength: 64 }) @IsString() @MinLength(1) reasonCode!: string;
   @ApiPropertyOptional({ minimum: 1 }) @IsOptional() @IsInt() @Min(1) expectedVariantVersion?: number;
+}
+
+export class SubmitProductRevisionDto {
+  @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) draftContentVersion!: number;
+  @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) categorySchemaVersion!: number;
+  @ApiProperty({ pattern: '^[0-9a-f]{64}$' }) @IsString() @Matches(/^[0-9a-f]{64}$/) contentSha256!: string;
 }
 
 export class ProductDraftErrorDto { @ApiProperty() code!: string; @ApiProperty() message!: string; @ApiProperty() requestId!: string; }

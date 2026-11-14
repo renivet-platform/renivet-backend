@@ -7,9 +7,10 @@ import { ApiBody, ApiCookieAuth, ApiExtension, ApiHeader, ApiNotFoundResponse, A
 import { ConfigService } from '@nestjs/config';
 import { BrandAccessGuard, BrandAccessRequest, RequireBrandPermission } from '../access/brand-access.guard';
 import { csrfMatches, readSessionToken, SessionService } from '../identity/session.service';
-import { CreateProductDraftDto, CreateProductVariantDto, DeactivateProductVariantDto, UpdateProductDraftDto, UpdateProductVariantDto } from './product-draft.dto';
+import { CreateProductDraftDto, CreateProductVariantDto, DeactivateProductVariantDto, SubmitProductRevisionDto, UpdateProductDraftDto, UpdateProductVariantDto } from './product-draft.dto';
 import { ProductDraftService } from './product-draft.service';
 import { ProductDraftExceptionFilter } from './product-draft-exception.filter';
+import { ProductSubmissionService } from './catalog-submission';
 
 interface ProductRequest extends BrandAccessRequest { id?: string; }
 const IDEMPOTENCY_KEY = /^[A-Za-z0-9._:-]{1,120}$/;
@@ -19,6 +20,8 @@ const patchValidation = new ValidationPipe({ transform: true, whitelist: true, f
   exceptionFactory: () => new UnprocessableEntityException({ code: 'PRODUCT_DRAFT_INVALID', message: 'The product draft request is invalid.' }) });
 const variantValidation = new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true,
   exceptionFactory: () => new UnprocessableEntityException({ code: 'PRODUCT_DRAFT_INVALID', message: 'The product variant request is invalid.' }) });
+const submissionValidation = new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: false,
+  exceptionFactory: () => new UnprocessableEntityException({ code: 'SUBMISSION_REQUEST_INVALID', message: 'The product submission is invalid.' }) });
 
 const ERROR_SCHEMA = { type: 'object', required: ['code', 'message', 'requestId'], properties: {
   code: { type: 'string' }, message: { type: 'string' }, requestId: { type: 'string' },
@@ -42,12 +45,13 @@ const VARIANT_DETAIL_SCHEMA = { type: 'object', required: ['id','productId','bra
 } };
 
 @ApiTags('Catalog')
-@ApiCookieAuth('renivetSession')
+@ApiCookieAuth('sessionCookie')
 @Controller('brands/:brandId/products')
 @UseGuards(BrandAccessGuard)
 @UseFilters(ProductDraftExceptionFilter)
 export class ProductDraftController {
-  constructor(private readonly products: ProductDraftService, private readonly sessions: SessionService, private readonly config: ConfigService) {}
+  constructor(private readonly products: ProductDraftService, private readonly submissions: ProductSubmissionService,
+    private readonly sessions: SessionService, private readonly config: ConfigService) {}
 
   @Post()
   @HttpCode(201)
@@ -202,6 +206,43 @@ export class ProductDraftController {
     @Headers('If-Match') ifMatch?: string | string[]) {
     const context = await this.mutationContext(request, key, 'deactivateVariant');
     return this.products.deactivateVariant(productId, variantId, body, ifMatch, context);
+  }
+
+  @Post(':productId/submit')
+  @HttpCode(202)
+  @UsePipes(submissionValidation)
+  @RequireBrandPermission('catalog.submit')
+  @ApiParam({ name: 'brandId', type: 'string', format: 'uuid' })
+  @ApiParam({ name: 'productId', type: 'string', format: 'uuid' })
+  @ApiExtension('x-renivet-permission', 'catalog.submit')
+  @ApiExtension('x-renivet-csrf-policy', 'Allowlisted origin, same-origin fetch metadata and W1 session-bound X-CSRF-Token; live permission and tenant scope rechecked in transaction.')
+  @ApiExtension('x-renivet-implementation-wave', 'W2')
+  @ApiOperation({ operationId: 'submitProductForReview', summary: 'Submit a product revision for independent review', description: 'Validates persisted readiness and atomically freezes the revision, transitions it to pending review, and records idempotency and lineage. Linear: REN2-71.' })
+  @ApiHeader({ name: 'Idempotency-Key', required: true, schema: { type: 'string', minLength: 1, maxLength: 120 } })
+  @ApiHeader({ name: 'If-Match', required: true, schema: { type: 'string', example: '"7"' }, description: 'Quoted product rowVersion returned by product detail.' })
+  @ApiBody({ schema: { type: 'object', required: ['draftContentVersion','categorySchemaVersion','contentSha256'], properties: {
+    draftContentVersion: { type: 'integer', minimum: 1 }, categorySchemaVersion: { type: 'integer', minimum: 1 }, contentSha256: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+  } } })
+  @ApiResponse({ status: 202, description: 'Submission accepted and an immutable revision is queued for review.', schema: { type: 'object', required: ['id','status','requestId'], properties: {
+    id: { type: 'string', format: 'uuid' }, status: { type: 'string' }, requestId: { type: 'string' }, rowVersion: { type: 'integer', minimum: 1 },
+  } } })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid first-party session.', schema: ERROR_SCHEMA })
+  @ApiResponse({ status: 403, description: 'Brand permission or CSRF denied.', schema: ERROR_SCHEMA })
+  @ApiNotFoundResponse({ description: 'Product was not found in this brand.', schema: ERROR_SCHEMA })
+  @ApiResponse({ status: 409, description: 'Stale product state or idempotency conflict.', schema: ERROR_SCHEMA })
+  @ApiResponse({ status: 422, description: 'Product readiness or submission request is invalid.', schema: ERROR_SCHEMA })
+  @ApiServiceUnavailableResponse({ description: 'Submission storage is unavailable.', schema: ERROR_SCHEMA })
+  async submitForReview(@Param('productId') productId: string, @Body() body: SubmitProductRevisionDto,
+    @Req() request: ProductRequest, @Headers('Idempotency-Key') key?: string, @Headers('If-Match') ifMatch?: string | string[]) {
+    if (typeof ifMatch !== 'string' || !/^"[1-9][0-9]*"$/.test(ifMatch)) {
+      throw new UnprocessableEntityException({ code: 'SUBMISSION_REQUEST_INVALID', message: 'The product submission is invalid.' });
+    }
+    const rowVersion = Number(ifMatch.slice(1, -1));
+    if (!Number.isSafeInteger(rowVersion)) throw new UnprocessableEntityException({ code: 'SUBMISSION_REQUEST_INVALID', message: 'The product submission is invalid.' });
+    const context = await this.mutationContext(request, key, 'submit');
+    const result = await this.submissions.submit(productId, { ...context, expectedRowVersion: rowVersion,
+      expectedContentVersion: body.draftContentVersion, expectedCategorySchemaVersion: body.categorySchemaVersion, expectedContentSha256: body.contentSha256 });
+    return { id: result.revisionId, status: 'PENDING_REVIEW', requestId: context.requestId, rowVersion: result.rowVersion };
   }
 
   private async mutationContext(request: ProductRequest, key: string | undefined, action: string) {

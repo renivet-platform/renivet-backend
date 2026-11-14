@@ -18,7 +18,7 @@ test('REN2-61 mutation context requires a session-bound same-origin CSRF proof a
   const token = 'T'.repeat(43);
   const sessions = { authenticate: async () => ({ userId: 'session-user' }), expectedCsrf: () => 'bound-csrf' };
   const config = { get: () => ['https://brand.example'] };
-  const controller = new ProductDraftController(service, sessions, config);
+  const controller = new ProductDraftController(service, { submit: async () => ({}) }, sessions, config);
   const request = { id: 'req-61', headers: { cookie: `__Host-renivet_session=${token}`, origin: 'https://brand.example',
     'sec-fetch-site': 'same-origin', 'x-csrf-token': 'bound-csrf' },
   brandAccess: { userId: 'guard-user', brandId: 'brand-61', permission: 'catalog.write' } };

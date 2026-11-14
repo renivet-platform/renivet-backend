@@ -35,7 +35,8 @@ export class CatalogSubmissionPostgresRepository implements ProductSubmissionRep
   async submit(productId: string, context: ProductSubmissionContext): Promise<Record<string, unknown>> {
     return this.transaction(async (client) => {
       const requestHash = snapshotSha256({ productId, expectedRowVersion: context.expectedRowVersion,
-        sourceKind: context.sourceKind, sourceReference: context.sourceReference });
+        expectedContentVersion: context.expectedContentVersion, expectedCategorySchemaVersion: context.expectedCategorySchemaVersion,
+        expectedContentSha256: context.expectedContentSha256, sourceKind: context.sourceKind, sourceReference: context.sourceReference });
       await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',
         [`${context.brandId}:${context.userId}:submitProductForReview:${context.idempotencyKey}`]);
       const replay = await client.query<{ request_sha256: string; response_payload: Record<string, unknown> }>(
@@ -68,6 +69,8 @@ export class CatalogSubmissionPostgresRepository implements ProductSubmissionRep
       const product = selected.rows[0];
       if (!product) throw fail('SUBMISSION_NOT_FOUND');
       if (Number(product.row_version) !== context.expectedRowVersion) throw fail('SUBMISSION_VERSION_CONFLICT');
+      if (Number(product.content_version) !== context.expectedContentVersion
+        || Number(product.category_schema_version) !== context.expectedCategorySchemaVersion) throw fail('SUBMISSION_VERSION_CONFLICT');
       if (!['DRAFT', 'INCOMPLETE', 'RE_REVIEW'].includes(String(product.publication_state))) throw fail('SUBMISSION_STATE_INVALID');
 
       const rules = await client.query<Record<string, unknown>>(

@@ -46,7 +46,8 @@ test('REN2-71 submission service validates CAS and idempotency input before repo
   let writes = 0;
   const service = new ProductSubmissionService({ submit: async () => { writes += 1; return { revisionId: 'revision' }; } });
   const context = { userId: '11111111-1111-4111-8111-111111111111', brandId: '22222222-2222-4222-8222-222222222222',
-    expectedRowVersion: 2, idempotencyKey: 'submit-key', sourceKind: 'MANUAL', sourceReference: null };
+    expectedRowVersion: 2, expectedContentVersion: 1, expectedCategorySchemaVersion: 1, expectedContentSha256: 'a'.repeat(64),
+    idempotencyKey: 'submit-key', sourceKind: 'MANUAL', sourceReference: null };
   await assert.rejects(service.submit('not-a-uuid', context), { code: 'SUBMISSION_REQUEST_INVALID' });
   await assert.rejects(service.submit('11111111-1111-4111-8111-111111111111', { ...context, expectedRowVersion: 0 }), { code: 'SUBMISSION_REQUEST_INVALID' });
   assert.equal(writes, 0);

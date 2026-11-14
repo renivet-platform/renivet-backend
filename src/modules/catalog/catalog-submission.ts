@@ -76,6 +76,9 @@ export interface ProductSubmissionContext {
   readonly userId: string;
   readonly brandId: string;
   readonly expectedRowVersion: number;
+  readonly expectedContentVersion: number;
+  readonly expectedCategorySchemaVersion: number;
+  readonly expectedContentSha256: string;
   readonly idempotencyKey: string;
   readonly sourceKind: 'MANUAL' | 'IMPORT';
   readonly sourceReference: string | null;
@@ -95,6 +98,9 @@ export class ProductSubmissionService {
   async submit(productId: string, context: ProductSubmissionContext): Promise<Record<string, unknown>> {
     if (!context || !UUID.test(productId) || !UUID.test(context.userId) || !UUID.test(context.brandId)
       || !Number.isSafeInteger(context.expectedRowVersion) || context.expectedRowVersion < 1
+      || !Number.isSafeInteger(context.expectedContentVersion) || context.expectedContentVersion < 1
+      || !Number.isSafeInteger(context.expectedCategorySchemaVersion) || context.expectedCategorySchemaVersion < 1
+      || typeof context.expectedContentSha256 !== 'string' || !/^[0-9a-f]{64}$/.test(context.expectedContentSha256)
       || typeof context.idempotencyKey !== 'string' || !/^[A-Za-z0-9._:-]{1,120}$/.test(context.idempotencyKey)
       || !['MANUAL', 'IMPORT'].includes(context.sourceKind)
       || (context.sourceReference !== null && (typeof context.sourceReference !== 'string' || context.sourceReference.length > 256))) {
