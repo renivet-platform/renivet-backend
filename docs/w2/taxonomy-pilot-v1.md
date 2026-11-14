@@ -17,4 +17,4 @@ Additions or semantic changes require a new immutable dataset version, reviewed 
 
 ## Loading
 
-This repository change adds a versioned source fixture only. It does not insert category rows or publish schemas in an existing database. A deployment must load it through the reviewed taxonomy lifecycle using authorized global W1 permissions, independent maker/checker users, and the applicable disposable/staging migration evidence.
+Migration `0042_ren2_54_apparel_taxonomy_seed` loads the versioned parent, inactive leaf categories, and typed attribute definitions. It stores the fixture's SHA-256 and immutable dataset provenance. It does not create or publish category schema versions and does not activate any leaf. Each schema still must be proposed and independently published through the existing taxonomy lifecycle with authorized global W1 permissions, fresh MFA/CSRF, and applicable deployment evidence.

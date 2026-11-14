@@ -10,6 +10,7 @@ import {
   jsonb,
   pgSchema,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   unique,
@@ -28,6 +29,24 @@ export const identity = pgSchema('identity');
 export const platform = pgSchema('platform');
 export const brands = pgSchema('brands');
 export const access = pgSchema('access');
+export const catalogue = pgSchema('catalogue');
+
+export const taxonomySeedDatasets = catalogue.table(
+  'taxonomy_seed_datasets',
+  {
+    datasetId: text('dataset_id').notNull(),
+    version: integer('version').notNull(),
+    owner: text('owner').notNull(),
+    sourceSha256: char('source_sha256', { length: 64 }).notNull(),
+    approvalReference: text('approval_reference').notNull(),
+    importedAt: timestamp('imported_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ name: 'taxonomy_seed_datasets_pk', columns: [table.datasetId, table.version] }),
+    check('taxonomy_seed_datasets_version_positive', sql`${table.version} > 0`),
+    check('taxonomy_seed_datasets_hash_sha256', sql`${table.sourceSha256} ~ '^[0-9a-f]{64}$'`),
+  ],
+);
 
 export const identityUsers = identity.table(
   'users',
