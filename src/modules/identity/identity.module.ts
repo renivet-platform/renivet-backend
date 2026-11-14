@@ -21,10 +21,9 @@ import { MfaRepository } from './mfa.repository';
 import { MfaService } from './mfa.service';
 import { BRAND_CATALOG_ELIGIBILITY_REPOSITORY, BrandCatalogEligibilityService } from './brand-catalog-eligibility';
 import { BrandCatalogEligibilityPostgresRepository } from './brand-catalog-eligibility.repository';
-import { BrandApplicationReviewController } from './brand-application-review.controller';
 
 @Module({
-  controllers: [AuthController, PhoneContactController, OtpController, MfaController, BrandApplicationReviewController],
+  controllers: [AuthController, PhoneContactController, OtpController, MfaController],
   providers: [
     IdentityInfrastructure,
     IdentityRepository,
