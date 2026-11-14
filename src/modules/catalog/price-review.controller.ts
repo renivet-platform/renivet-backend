@@ -8,13 +8,13 @@ import {
 } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { RequireMfa, MfaGuard } from '../../common/guards/require-mfa';
-import { BrandAccessGuard, BrandAccessRequest, RequireBrandPermission } from '../access/brand-access.guard';
+import { PlatformPermissionGuard, RequirePlatformAdminPermission } from '../access/platform-permission.guard';
 import { csrfMatches, readSessionToken, SessionService } from '../identity/session.service';
 import { PriceActionReceiptDto, PriceErrorDto } from './price.dto';
 import { PriceExceptionFilter } from './price-exception.filter';
 import { PriceDecisionContext, PriceService } from './price.service';
 
-interface ReviewRequest extends BrandAccessRequest { id?: string; }
+interface ReviewRequest { id?: string; headers: Record<string, string | string[] | undefined>; }
 const IDEMPOTENCY_KEY = /^[A-Za-z0-9._:-]{1,120}$/;
 const PRICE_DECISION_SCHEMA = {
   type: 'object', additionalProperties: false, required: ['decision', 'reasonCode'],
@@ -29,20 +29,20 @@ const PRICE_DECISION_SCHEMA = {
 @ApiTags('Pricing')
 @ApiCookieAuth('renivetSession')
 @Controller('admin/brands/:brandId/variant-prices/:priceId/decision')
-@UseGuards(BrandAccessGuard, MfaGuard)
+@UseGuards(PlatformPermissionGuard, MfaGuard)
 @UseFilters(PriceExceptionFilter)
 export class PriceReviewController {
   constructor(private readonly prices: PriceService, private readonly sessions: SessionService, private readonly config: ConfigService) {}
 
   @Post()
   @HttpCode(200)
-  @RequireBrandPermission('pricing.approve')
+  @RequirePlatformAdminPermission('pricing.approve')
   @RequireMfa('pricing.approve')
   @ApiParam({ name: 'brandId', format: 'uuid' })
   @ApiParam({ name: 'priceId', format: 'uuid' })
-  @ApiOperation({ operationId: 'decideVariantPrice', summary: 'Approve or reject a pending brand price proposal', description: 'Requires current brand-scoped pricing.approve permission, a recent MFA step-up and session-bound CSRF. The price state compare-and-set, approval overlap constraint, audit event and idempotency receipt are committed together. Linear: REN2-65.' })
+  @ApiOperation({ operationId: 'decideVariantPrice', summary: 'Approve or reject a pending brand price proposal', description: 'Requires a platform-global pricing.approve permission, a recent MFA step-up and session-bound CSRF. The price state compare-and-set, approval overlap constraint, audit event and idempotency receipt are committed together. Linear: REN2-65.' })
   @ApiExtension('x-renivet-permission', 'pricing.approve')
-  @ApiExtension('x-renivet-guard', 'brand')
+  @ApiExtension('x-renivet-guard', 'platform-global-admin')
   @ApiExtension('x-renivet-implementation-wave', 'W2')
   @ApiExtension('x-renivet-mfa-required', true)
   @ApiExtension('x-renivet-csrf-policy', 'Require allowlisted Origin, Sec-Fetch-Site and X-CSRF-Token bound to W1 session; same-statement resource permission in W1.')
@@ -66,8 +66,7 @@ export class PriceReviewController {
     if (!token || !csrfMatches(request.headers, allowedOrigins, this.sessions.expectedCsrf(token))) {
       throw new ForbiddenException({ code: 'CSRF_REJECTED', message: 'The operation could not be authorized.' });
     }
-    const access = request.brandAccess!;
-    const context: PriceDecisionContext = { userId: session.userId, brandId: access.brandId,
+    const context: PriceDecisionContext = { userId: session.userId, brandId: _brandId,
       permission: 'pricing.approve', requestId: request.id ?? `price-decision:${key}`, idempotencyKey: key };
     return this.prices.decide(priceId, body, context);
   }

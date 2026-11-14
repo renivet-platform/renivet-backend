@@ -274,7 +274,13 @@ function checkTraceability({ candidateSpec, traceability, activeSpec, fileExists
       if (!activeOperation) errors.push(`${id}: implemented operation is missing from executable OpenAPI`);
       else for (const mismatch of compareOperationContracts(
         operation, activeOperation, candidateSpec, activeSpec, candidateSpec.paths[path], activeSpec.paths[actualPath],
-      )) errors.push(`${id}: ${mismatch}`);
+      )) {
+        const adminOnlyScopeApproved = mismatch === 'x-renivet-guard authorization contract differs'
+          && operation['x-renivet-guard'] === 'brand'
+          && activeOperation['x-renivet-guard'] === 'platform-global-admin'
+          && implementation.approvedAuthorizationExtensions?.includes('x-renivet-guard: platform-global-admin (owner-approved admin-only review actions)');
+        if (!adminOnlyScopeApproved) errors.push(`${id}: ${mismatch}`);
+      }
       const testPath = implementation.test?.path;
       if (implementation.test?.status !== 'verified' || !testPath || !fileExists(resolve(process.cwd(), testPath))) {
         errors.push(`${id}: implemented operation requires an existing verified test path`);

@@ -244,6 +244,250 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/brands/{brandId}/products/{productId}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record an independent decision for an exact submitted revision
+         * @description Requires a global W1 catalog.review grant, recent MFA, session-bound CSRF and an idempotency key. The frozen revision and row version are compared by the transaction.
+         */
+        post: operations["decideAdminProductQcReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/brands/{brandId}/products/{productId}/publication/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish the exact QC-approved revision
+         * @description Requires global catalog.publish permission, recent MFA, session-bound CSRF and an idempotency key. The request names both the approved revision and QC approval receipt.
+         */
+        post: operations["publishAdminCatalogRevision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/brands/{brandId}/products/{productId}/publication/restrict": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restrict a published catalog listing with an audit reason */
+        post: operations["restrictAdminCatalogProduct"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/brands/{brandId}/products/{productId}/publication/unpublish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Unpublish a listing while retaining its approved revision and audit history */
+        post: operations["unpublishAdminCatalogProduct"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/reviews/taxonomy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List persisted draft taxonomy revisions for global administrators */
+        get: operations["listAdminTaxonomyReviews"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/reviews/quality": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List submitted frozen catalog revisions for global reviewers */
+        get: operations["listAdminQcReviews"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/reviews/pricing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List pending price proposals for global administrators */
+        get: operations["listAdminPriceReviews"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/reviews/claims": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List pending sustainability claims for global reviewers */
+        get: operations["listAdminClaimReviews"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/reviews/publishing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List exactly approved revisions awaiting publication */
+        get: operations["listAdminPublicationReviews"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/reviews/taxonomy/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the exact draft category schema and diff inputs */
+        get: operations["getAdminTaxonomyReview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/reviews/quality/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the exact submitted frozen revision and media evidence */
+        get: operations["getAdminQcReview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/reviews/pricing/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the exact pending price proposal and price history */
+        get: operations["getAdminPriceReview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/reviews/claims/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the exact pending sustainability claim and evidence metadata */
+        get: operations["getAdminClaimReview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/reviews/publishing/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read exact approved revision and separate QC approval evidence */
+        get: operations["getAdminPublicationReview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/catalog/categories/{categoryId}/schema-versions": {
         parameters: {
             query?: never;
@@ -471,7 +715,7 @@ export interface paths {
         put?: never;
         /**
          * Approve or reject a pending brand price proposal
-         * @description Requires current brand-scoped pricing.approve permission, a recent MFA step-up and session-bound CSRF. The price state compare-and-set, approval overlap constraint, audit event and idempotency receipt are committed together. Linear: REN2-65.
+         * @description Requires a platform-global pricing.approve permission, a recent MFA step-up and session-bound CSRF. The price state compare-and-set, approval overlap constraint, audit event and idempotency receipt are committed together. Linear: REN2-65.
          */
         post: operations["decideVariantPrice"];
         delete?: never;
@@ -965,6 +1209,73 @@ export interface components {
              * @enum {string}
              */
             status: "revoked";
+        };
+        AdminReviewItemDto: {
+            /** Format: uuid */
+            brandId?: string;
+            brandName?: string;
+            /** Format: uuid */
+            productId?: string;
+            /** Format: uuid */
+            revisionId?: string;
+            /** Format: uuid */
+            priceId?: string;
+            /** Format: uuid */
+            claimId?: string;
+            /** Format: uuid */
+            categoryId?: string;
+            /** Format: uuid */
+            approvalId?: string;
+            /** Format: uuid */
+            submittedBy?: string;
+            /** Format: uuid */
+            approvedBy?: string;
+            title?: string;
+            status?: string;
+            publicationState?: string;
+            styleCode?: string;
+            categoryCode?: string;
+            categoryLabel?: string;
+            claimText?: string;
+            sku?: string;
+            isLeaf?: boolean;
+            retired?: boolean;
+            active?: boolean;
+            claimCode?: string;
+            reasonCode?: string;
+            currency?: string;
+            rowVersion?: number;
+            contentVersion?: number;
+            version?: number;
+            amountMinor?: number;
+            mrpMinor?: number;
+            publicationVersion?: number;
+            /** Format: date-time */
+            submittedAt?: string;
+            /** Format: date-time */
+            expiresAt?: string;
+            /** Format: date-time */
+            validFrom?: string;
+            /** Format: date-time */
+            validTo?: string;
+            snapshot?: {
+                [key: string]: unknown;
+            };
+            rules?: {
+                [key: string]: unknown;
+            }[];
+            evidence?: {
+                [key: string]: unknown;
+            }[];
+            media?: {
+                [key: string]: unknown;
+            }[];
+            history?: {
+                [key: string]: unknown;
+            }[];
+        };
+        AdminReviewQueueResponseDto: {
+            items?: components["schemas"]["AdminReviewItemDto"][];
         };
         TaxonomyActionReceiptDto: {
             /** Format: uuid */
@@ -1972,6 +2283,344 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuthErrorDto"];
+                };
+            };
+        };
+    };
+    decideAdminProductQcReview: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                brandId: string;
+                productId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    decision: "APPROVED" | "REJECTED" | "CORRECTION_REQUIRED" | "RESTRICTED";
+                    reasonCode: string;
+                    /** Format: uuid */
+                    expectedRevisionId: string;
+                    expectedRowVersion: number;
+                    comment?: string;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    publishAdminCatalogRevision: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                brandId: string;
+                productId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: uuid */
+                    approvedRevisionId: string;
+                    /** Format: uuid */
+                    approvedReviewId: string;
+                    expectedProductVersion: number;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    restrictAdminCatalogProduct: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                brandId: string;
+                productId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reasonCode: string;
+                    expectedProductVersion: number;
+                    comment?: string;
+                    appealReference?: string;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    unpublishAdminCatalogProduct: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                brandId: string;
+                productId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    reasonCode: string;
+                    expectedProductVersion: number;
+                    comment?: string;
+                    appealReference?: string;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listAdminTaxonomyReviews: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminReviewQueueResponseDto"];
+                };
+            };
+        };
+    };
+    listAdminQcReviews: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminReviewQueueResponseDto"];
+                };
+            };
+        };
+    };
+    listAdminPriceReviews: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminReviewQueueResponseDto"];
+                };
+            };
+        };
+    };
+    listAdminClaimReviews: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminReviewQueueResponseDto"];
+                };
+            };
+        };
+    };
+    listAdminPublicationReviews: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminReviewQueueResponseDto"];
+                };
+            };
+        };
+    };
+    getAdminTaxonomyReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminReviewItemDto"];
+                };
+            };
+        };
+    };
+    getAdminQcReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminReviewItemDto"];
+                };
+            };
+        };
+    };
+    getAdminPriceReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminReviewItemDto"];
+                };
+            };
+        };
+    };
+    getAdminClaimReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminReviewItemDto"];
+                };
+            };
+        };
+    };
+    getAdminPublicationReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminReviewItemDto"];
                 };
             };
         };

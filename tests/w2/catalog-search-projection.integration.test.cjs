@@ -72,9 +72,9 @@ test('REN2-74 projects current PostgreSQL publication to Typesense, suppresses s
     SELECT p,'catalog',split_part(p,'.',2),'REN2-74 synthetic integration' FROM unnest($1::text[]) p
     ON CONFLICT(permission_code) DO UPDATE SET permission_code=EXCLUDED.permission_code RETURNING id`,
   [['catalog.review','catalog.publish','catalog.restrict']])).rows.map((row) => row.id);
-  const globalRole = (await pool.query(`INSERT INTO access.roles(role_code,scope_kind,description,is_system)
-    VALUES($1,'global','REN2-74 synthetic catalog role',false) RETURNING id`, [`ren2_74_${tag}`])).rows[0].id;
-  for (const permissionId of permissionIds) await pool.query('INSERT INTO access.role_permissions(role_id,permission_id) VALUES($1,$2)', [globalRole, permissionId]);
+  const globalRole = (await pool.query(`SELECT id FROM access.roles WHERE role_code='renivet_admin' AND scope_kind='global'`)).rows[0]?.id;
+  assert.ok(globalRole, 'the disposable schema must contain the W1 platform admin role');
+  for (const permissionId of permissionIds) await pool.query('INSERT INTO access.role_permissions(role_id,permission_id) VALUES($1,$2) ON CONFLICT DO NOTHING', [globalRole, permissionId]);
   await pool.query(`INSERT INTO access.role_assignments(user_id,role_id,scope_type,active_from,granted_by_id)
     VALUES($1,$2,'global',now(),$3)`, [operator, globalRole, grantor]);
 

@@ -34,7 +34,7 @@ export class CatalogPublicationPostgresRepository implements CatalogPublicationR
       return await this.transaction(async (client) => {
         const permissionCode = operation === 'PUBLISH' ? 'catalog.publish' : 'catalog.restrict';
         const permission = `EXISTS(SELECT 1 FROM access.effective_permissions ep WHERE ep.user_id=$2 AND ep.permission_code=$4
-          AND ((ep.scope_type='global' AND ep.brand_id IS NULL) OR (ep.scope_type='brand' AND ep.brand_id=$1)))`;
+          AND ep.role_code='renivet_admin' AND ep.scope_type='global' AND ep.brand_id IS NULL)`;
         const requestHash = createHash('sha256').update(canonicalizeSnapshot({ operation, productId, brandId: context.brandId,
           expectedProductVersion: context.expectedProductVersion, input })).digest('hex');
         await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',
@@ -110,7 +110,7 @@ export class CatalogPublicationPostgresRepository implements CatalogPublicationR
               publication_version=p.publication_version+1,row_version=p.row_version+1,updated_at=now()
             WHERE p.id=$1 AND p.brand_id=$2 AND p.row_version=$3 AND p.publication_state=$8
               AND EXISTS(SELECT 1 FROM access.effective_permissions ep WHERE ep.user_id=$4 AND ep.permission_code=$9
-                AND ((ep.scope_type='global' AND ep.brand_id IS NULL) OR (ep.scope_type='brand' AND ep.brand_id=$2)))
+                AND ep.role_code='renivet_admin' AND ep.scope_type='global' AND ep.brand_id IS NULL)
             RETURNING p.row_version,p.publication_version`,
           [productId, context.brandId, context.expectedProductVersion, context.userId, nextState,
             operation === 'PUBLISH' ? revisionId : null, operation === 'PUBLISH' ? reviewId : null,

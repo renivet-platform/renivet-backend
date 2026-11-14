@@ -17,7 +17,16 @@ test('REN2-72 exact revision review enforces maker-checker, live eligibility, im
   assert.equal(parsed.protocol, 'postgresql:'); assert.equal(parsed.hostname, '127.0.0.1');
   assert.equal(parsed.username, 'renivet_ci'); assert.equal(parsed.pathname, '/renivet_ci');
   const pool = new Pool({ connectionString: url, max: 8 });
-  t.after(() => pool.end());
+  let temporaryAdminPermissionId;
+  let adminRoleId;
+  let adminUserIds = [];
+  t.after(async () => {
+    if (adminUserIds.length && adminRoleId) await pool.query(
+      'DELETE FROM access.role_assignments WHERE role_id=$1 AND user_id=ANY($2::uuid[])', [adminRoleId, adminUserIds]);
+    if (temporaryAdminPermissionId && adminRoleId) await pool.query(
+      'DELETE FROM access.role_permissions WHERE role_id=$1 AND permission_id=$2', [adminRoleId, temporaryAdminPermissionId]);
+    await pool.end();
+  });
   const version = Number((await pool.query('SHOW server_version_num')).rows[0].server_version_num);
   assert.ok(version >= 160000 && version < 170000, 'test requires PostgreSQL 16');
   const suffix = randomUUID().replaceAll('-', '');
@@ -25,12 +34,16 @@ test('REN2-72 exact revision review enforces maker-checker, live eligibility, im
     `INSERT INTO identity.users(email,display_name,state) VALUES($1,$2,'active') RETURNING id`,
     [`ren2-72-${label}-${suffix}@example.invalid`, label])).rows[0].id;
   const submitter = await addUser('submitter'); const reviewer = await addUser('reviewer');
+  adminUserIds = [submitter, reviewer];
   const brand = (await pool.query(`INSERT INTO brands.brands(slug,legal_name,display_name,onboarding_state)
     VALUES($1,'REN2-72 Test','REN2-72 Test','approved') RETURNING id`, [`ren2-72-${suffix}`])).rows[0].id;
   const permissionId = (await pool.query(`INSERT INTO access.permissions(permission_code,resource,action,description)
     VALUES('catalog.review','catalog','review','REN2-72 integration test') ON CONFLICT(permission_code) DO UPDATE SET permission_code=EXCLUDED.permission_code RETURNING id`)).rows[0].id;
-  const globalRole = (await pool.query(`INSERT INTO access.roles(role_code,scope_kind,description,is_system)
-    VALUES($1,'global','REN2-72 global reviewer',false) RETURNING id`, [`ren2_72_global_${suffix}`])).rows[0].id;
+  const globalRole = (await pool.query(`SELECT id FROM access.roles WHERE role_code='renivet_admin' AND scope_kind='global'`)).rows[0]?.id;
+  assert.ok(globalRole, 'the disposable schema must contain the W1 platform admin role');
+  adminRoleId = globalRole;
+  const hadPermission = (await pool.query('SELECT 1 FROM access.role_permissions WHERE role_id=$1 AND permission_id=$2', [globalRole, permissionId])).rowCount > 0;
+  if (!hadPermission) temporaryAdminPermissionId = permissionId;
   await pool.query('INSERT INTO access.role_permissions(role_id,permission_id) VALUES($1,$2) ON CONFLICT DO NOTHING', [globalRole, permissionId]);
   const grantor = await addUser('grantor');
   for (const userId of [submitter, reviewer]) await pool.query(`INSERT INTO access.role_assignments

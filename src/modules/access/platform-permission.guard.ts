@@ -12,10 +12,18 @@ import { readSessionToken, SessionService } from '../identity/session.service';
 import { BrandAccessRepository } from './brand-access.repository';
 
 export const REQUIRE_PLATFORM_PERMISSION = 'renivet:require-platform-permission';
+export const REQUIRE_PLATFORM_ADMIN_PERMISSION = 'renivet:require-platform-admin-permission';
 const PERMISSION_PATTERN = /^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$/;
 
 export function RequirePlatformPermission(permission: string): MethodDecorator & ClassDecorator {
   return SetMetadata(REQUIRE_PLATFORM_PERMISSION, permission);
+}
+
+export function RequirePlatformAdminPermission(permission: string): MethodDecorator & ClassDecorator {
+  return (target: object, propertyKey?: string | symbol, descriptor?: PropertyDescriptor) => {
+    SetMetadata(REQUIRE_PLATFORM_ADMIN_PERMISSION, true)(target, propertyKey as string, descriptor!);
+    SetMetadata(REQUIRE_PLATFORM_PERMISSION, permission)(target, propertyKey as string, descriptor!);
+  };
 }
 
 interface PlatformPermissionRequest {
@@ -56,7 +64,11 @@ export class PlatformPermissionGuard implements CanActivate {
 
     let allowed: boolean;
     try {
-      allowed = await this.access.hasGlobalPermission(session.userId, permission);
+      const adminOnly = this.reflector.get<boolean>(REQUIRE_PLATFORM_ADMIN_PERMISSION, context.getHandler())
+        ?? this.reflector.get<boolean>(REQUIRE_PLATFORM_ADMIN_PERMISSION, context.getClass()) ?? false;
+      allowed = adminOnly
+        ? await this.access.hasGlobalAdminPermission(session.userId, permission)
+        : await this.access.hasGlobalPermission(session.userId, permission);
     } catch {
       throw new HttpException({ code: 'AUTH_SERVICE_UNAVAILABLE', message: 'Authorization is temporarily unavailable.' }, 503);
     }

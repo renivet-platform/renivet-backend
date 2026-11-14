@@ -1133,6 +1133,9 @@
       "ownerIssue": "REN2-65",
       "implementation": {
         "status": "implemented",
+        "approvedAuthorizationExtensions": [
+          "x-renivet-guard: platform-global-admin (owner-approved admin-only review actions)"
+        ],
         "test": {
           "status": "verified",
           "path": "tests/w2/decideVariantPrice.test.cjs"
@@ -1306,6 +1309,9 @@
       "ownerIssue": "REN2-69",
       "implementation": {
         "status": "implemented",
+        "approvedAuthorizationExtensions": [
+          "x-renivet-guard: platform-global-admin (owner-approved admin-only review actions)"
+        ],
         "test": {
           "status": "verified",
           "path": "tests/w2/claims-decision.test.cjs"
