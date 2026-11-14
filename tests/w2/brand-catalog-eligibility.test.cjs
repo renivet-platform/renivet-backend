@@ -24,3 +24,14 @@ test('REN2-55 internal eligibility port rejects an invalid W1 event before persi
   }), (error) => error.getResponse?.().code === 'BRAND_APPROVAL_EVENT_INVALID');
   assert.equal(calls, 0);
 });
+
+test('REN2-55 normalizes UUID casing before enforcing independent maker-checker identities', async () => {
+  let calls = 0;
+  const service = new BrandCatalogEligibilityService({ applyOutcome: async () => { calls += 1; return {}; } });
+  const actorId = randomUUID();
+  await assert.rejects(service.applyOutcome({
+    eventId: randomUUID(), brandId: randomUUID(), applicantUserId: randomUUID(),
+    decision: 'approved', approvedByUserId: actorId.toUpperCase(), checkedByUserId: actorId.toLowerCase(), requestId: 'req-case-self-approval',
+  }), (error) => error.getResponse?.().code === 'BRAND_APPROVAL_MAKER_CHECKER_REQUIRED');
+  assert.equal(calls, 0);
+});

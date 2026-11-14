@@ -35,13 +35,21 @@ export class BrandCatalogEligibilityService {
       || !['approved', 'rejected'].includes(outcome.decision)) {
       throw new BadRequestException({ code: 'BRAND_APPROVAL_EVENT_INVALID', message: 'The brand review outcome is invalid.' });
     }
-    if (outcome.approvedByUserId === outcome.checkedByUserId
-      || outcome.applicantUserId === outcome.approvedByUserId
-      || outcome.applicantUserId === outcome.checkedByUserId) {
+    const normalized = {
+      ...outcome,
+      eventId: outcome.eventId.toLowerCase(),
+      brandId: outcome.brandId.toLowerCase(),
+      applicantUserId: outcome.applicantUserId.toLowerCase(),
+      approvedByUserId: outcome.approvedByUserId.toLowerCase(),
+      checkedByUserId: outcome.checkedByUserId.toLowerCase(),
+    };
+    if (normalized.approvedByUserId === normalized.checkedByUserId
+      || normalized.applicantUserId === normalized.approvedByUserId
+      || normalized.applicantUserId === normalized.checkedByUserId) {
       throw new ConflictException({ code: 'BRAND_APPROVAL_MAKER_CHECKER_REQUIRED', message: 'Independent brand review is required.' });
     }
     try {
-      return await this.repository.applyOutcome(outcome);
+      return await this.repository.applyOutcome(normalized);
     } catch (error) {
       const code = (error as { code?: string } | null)?.code;
       if (code === 'BRAND_APPROVAL_REVIEWER_DENIED') {

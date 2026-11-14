@@ -9,3 +9,7 @@ Approval is accepted only for a `pending` brand and its existing `pending` or al
 The source event UUID is the idempotency key. Exact replay returns the original result; reuse with different payload conflicts. Brand state, membership activation and immutable event/audit receipt commit atomically. Audit rows cannot be updated or deleted. No stock location or inventory balance is created; the existing explicit I1 handoff remains in force.
 
 No role grant, account, membership or brand data is seeded by this change. PostgreSQL integration evidence belongs exclusively to the disposable CI database; apply the migration to an existing environment only through its separately approved rollout process.
+
+## Integration gate
+
+This backend repository does not currently contain the established brand application review controller/producer. The exported port is ready for that W1 flow to call, but until the owner-approved caller is wired and verified, brand application decisions do not reach this handoff automatically and no live approval journey is complete. Do not enable brand onboarding based on this port alone.
