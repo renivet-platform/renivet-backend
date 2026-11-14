@@ -213,7 +213,7 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": "Active identity and safe account state; refreshes the session cookie to its server-calculated idle expiry, capped by its absolute expiry.",
+            "description": "Active identity, safe account state and server-resolved role destination; refreshes the session cookie to its server-calculated idle expiry, capped by its absolute expiry.",
             "headers": {
               "Cache-Control": {
                 "description": "Sensitive session response must not be cached.",
@@ -241,6 +241,9 @@
                     "account": {
                       "signInMethod": "phone",
                       "phoneVerified": true
+                    },
+                    "destination": {
+                      "kind": "storefront"
                     },
                     "csrfToken": "synthetic-csrf-token"
                   }

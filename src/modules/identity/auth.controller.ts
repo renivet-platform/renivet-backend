@@ -122,13 +122,14 @@ export class AuthController {
   @Get('session')
   @ApiCookieAuth('renivetSession')
   @ApiOperation({ operationId: 'getCurrentSession', summary: 'Inspect the authenticated first-party session', description: 'Requires a valid opaque session cookie. Returns a minimal user identity, safe sign-in/contact verification state, and a session-bound CSRF token for same-origin mutations. Idle expiry is extended up to the seven-day absolute limit. Linear: REN2-23.' })
-  @ApiResponse({ status: 200, description: 'Active identity and safe account state; refreshes the session cookie to its server-calculated idle expiry, capped by its absolute expiry.', headers: { 'Cache-Control': { description: 'Sensitive session response must not be cached.', schema: { type: 'string', example: 'no-store' } }, 'Set-Cookie': { description: 'Refreshed host-only session cookie, capped at the server-calculated idle/absolute expiry.', schema: { type: 'string', example: '__Host-renivet_session=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA; Path=/; Max-Age=1800; HttpOnly; Secure; SameSite=Lax' } } }, schema: { example: { authenticationState: 'authenticated', user: { id: '7d785d72-ea2c-44bb-9d82-87b272112b32' }, account: { signInMethod: 'phone', phoneVerified: true }, csrfToken: 'synthetic-csrf-token' } } })
+  @ApiResponse({ status: 200, description: 'Active identity, safe account state and server-resolved role destination; refreshes the session cookie to its server-calculated idle expiry, capped by its absolute expiry.', headers: { 'Cache-Control': { description: 'Sensitive session response must not be cached.', schema: { type: 'string', example: 'no-store' } }, 'Set-Cookie': { description: 'Refreshed host-only session cookie, capped at the server-calculated idle/absolute expiry.', schema: { type: 'string', example: '__Host-renivet_session=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA; Path=/; Max-Age=1800; HttpOnly; Secure; SameSite=Lax' } } }, schema: { example: { authenticationState: 'authenticated', user: { id: '7d785d72-ea2c-44bb-9d82-87b272112b32' }, account: { signInMethod: 'phone', phoneVerified: true }, destination: { kind: 'storefront' }, csrfToken: 'synthetic-csrf-token' } } })
   @ApiUnauthorizedResponse({ description: 'AUTHENTICATION_FAILED. Missing, expired, revoked or invalid session.', type: AuthErrorDto })
   @ApiServiceUnavailableResponse({ description: 'AUTH_SERVICE_UNAVAILABLE. Session store or CSRF configuration is unavailable.', type: AuthErrorDto })
   @ApiInternalServerErrorResponse({ description: 'AUTH_INTERNAL_ERROR. Unexpected failure with a safe public message.', type: AuthErrorDto })
   async getSession(@Req() context: AuthenticatedRequestContext, @Res({ passthrough: true }) response: CookieResponse): Promise<{
     authenticationState: 'authenticated'; user: { id: string }; csrfToken: string;
     account: { signInMethod: 'phone' | 'email_password'; phoneVerified: boolean };
+    destination: { kind: 'storefront' } | { kind: 'operations' } | { kind: 'brands'; brands: Array<{ id: string; name: string }> };
   }> {
     const session = await this.sessions.authenticate(readSessionToken(context.headers.cookie));
     response.header('Cache-Control', 'no-store');
@@ -140,6 +141,7 @@ export class AuthController {
     return {
       authenticationState: 'authenticated', user: { id: session.userId }, csrfToken: session.csrfToken,
       account: session.account,
+      destination: session.destination,
     };
   }
 

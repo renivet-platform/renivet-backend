@@ -188,10 +188,11 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
   async findAndTouchSession(tokenHash: string, idleTtlSeconds: number): Promise<{
     sessionId: string; userId: string; expiresAt: Date; mfaVerifiedAt: Date | null;
     signInMethod: 'phone' | 'email_password'; phoneVerified: boolean;
+    destination: { kind: 'storefront' } | { kind: 'operations' } | { kind: 'brands'; brands: Array<{ id: string; name: string }> };
   } | null> {
     const result = await this.requirePool().query<{
       id: string; user_id: string; expires_at: Date; mfa_verified_at: Date | null;
-      is_phone_only: boolean; phone_verified: boolean;
+      is_phone_only: boolean; phone_verified: boolean; is_admin: boolean; eligible_brands: Array<{ id: string; name: string }>;
     }>(
       `WITH refreshed AS (
          UPDATE identity.user_sessions AS session
@@ -208,7 +209,31 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
                 SELECT 1 FROM identity.user_credentials AS credential
                  WHERE credential.user_id = account.id AND credential.disabled_at IS NULL
               )) AS is_phone_only,
-              (account.phone_verified_at IS NOT NULL) AS phone_verified
+              (account.phone_verified_at IS NOT NULL) AS phone_verified,
+              EXISTS (
+                SELECT 1 FROM access.role_assignments AS assignment
+                JOIN access.roles AS role ON role.id = assignment.role_id AND role.scope_kind = 'global'
+                 WHERE assignment.user_id = refreshed.user_id AND assignment.scope_type = 'global'
+                   AND role.role_code = 'renivet_admin' AND assignment.active_from <= clock_timestamp()
+                   AND (assignment.active_until IS NULL OR assignment.active_until > clock_timestamp())
+              ) AS is_admin,
+              COALESCE((
+                SELECT json_agg(json_build_object('id', brand.id, 'name', brand.display_name)
+                                ORDER BY lower(brand.display_name), brand.id)
+                  FROM access.role_assignments AS assignment
+                  JOIN access.roles AS role ON role.id = assignment.role_id AND role.scope_kind = 'brand'
+                  JOIN brands.brand_memberships AS membership
+                    ON membership.user_id = assignment.user_id AND membership.brand_id = assignment.brand_id
+                  JOIN brands.brands AS brand ON brand.id = membership.brand_id
+                 WHERE assignment.user_id = refreshed.user_id AND assignment.scope_type = 'brand'
+                   AND role.role_code IN ('brand_owner', 'brand_staff')
+                   AND assignment.active_from <= clock_timestamp()
+                   AND (assignment.active_until IS NULL OR assignment.active_until > clock_timestamp())
+                   AND membership.membership_state = 'active' AND membership.joined_at IS NOT NULL
+                   AND membership.valid_from <= clock_timestamp()
+                   AND (membership.valid_until IS NULL OR membership.valid_until > clock_timestamp())
+                   AND brand.onboarding_state = 'approved'
+              ), '[]'::json) AS eligible_brands
          FROM refreshed
          JOIN identity.users AS account ON account.id = refreshed.user_id`,
       [tokenHash, idleTtlSeconds],
@@ -220,6 +245,11 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
       mfaVerifiedAt: result.rows[0].mfa_verified_at,
       signInMethod: result.rows[0].is_phone_only ? 'phone' : 'email_password',
       phoneVerified: result.rows[0].phone_verified,
+      destination: result.rows[0].is_admin
+        ? { kind: 'operations' }
+        : result.rows[0].eligible_brands.length
+          ? { kind: 'brands', brands: result.rows[0].eligible_brands }
+          : { kind: 'storefront' },
     } : null;
   }
 

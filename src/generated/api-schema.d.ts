@@ -1274,7 +1274,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Active identity and safe account state; refreshes the session cookie to its server-calculated idle expiry, capped by its absolute expiry. */
+            /** @description Active identity, safe account state and server-resolved role destination; refreshes the session cookie to its server-calculated idle expiry, capped by its absolute expiry. */
             200: {
                 headers: {
                     /** @description Sensitive session response must not be cached. */
