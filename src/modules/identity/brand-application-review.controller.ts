@@ -22,6 +22,7 @@ export class BrandApplicationReviewController {
   @RequirePlatformAdminPermission('brand_membership.review')
   @RequireMfa('brand_membership.review')
   @ApiExtension('x-renivet-permission', 'brand_membership.review')
+  @ApiExtension('x-renivet-implementation-wave', 'W1')
   @ApiExtension('x-renivet-mfa-required', true)
   @ApiOperation({ operationId: 'decideBrandApplicationReview', summary: 'Approve or reject a pending brand application', description: 'Admin-only W1 application decision. Requires independent checker, recent MFA, session-bound CSRF and an idempotent event id.' })
   @ApiParam({ name: 'brandId', format: 'uuid' })

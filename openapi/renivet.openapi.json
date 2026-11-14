@@ -2040,6 +2040,86 @@
         "x-renivet-permission": "catalog.publish"
       }
     },
+    "/api/v1/admin/brands/{brandId}/application-review": {
+      "post": {
+        "description": "Admin-only W1 application decision. Requires independent checker, recent MFA, session-bound CSRF and an idempotent event id.",
+        "operationId": "decideBrandApplicationReview",
+        "parameters": [
+          {
+            "name": "brandId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "applicantUserId",
+                  "checkedByUserId",
+                  "decision",
+                  "eventId"
+                ],
+                "properties": {
+                  "applicantUserId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "checkedByUserId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "decision": {
+                    "type": "string",
+                    "enum": [
+                      "approved",
+                      "rejected"
+                    ]
+                  },
+                  "eventId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "Approve or reject a pending brand application",
+        "tags": [
+          "Admin Brand Review"
+        ],
+        "x-renivet-implementation-wave": "W1",
+        "x-renivet-mfa-required": true,
+        "x-renivet-permission": "brand_membership.review"
+      }
+    },
     "/api/v1/admin/catalog/categories/{categoryId}/schema-versions": {
       "post": {
         "description": "Requires the platform-global taxonomy.manage permission, fresh MFA and session-bound CSRF. Creates a draft snapshot and returns its rule diff against the current published version. Linear: REN2-58.",
