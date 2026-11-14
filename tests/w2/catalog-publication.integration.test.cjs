@@ -31,9 +31,9 @@ test('REN2-73 publishes exact approved revision atomically, replays safely, and 
   const ids = (await pool.query(`INSERT INTO access.permissions(permission_code,resource,action,description)
     SELECT x,'catalog',split_part(x,'.',2),'REN2-73 integration test' FROM unnest($1::text[]) x
     ON CONFLICT(permission_code) DO UPDATE SET permission_code=EXCLUDED.permission_code RETURNING id`, [permissionCodes])).rows.map((r) => r.id);
-  const role = (await pool.query(`INSERT INTO access.roles(role_code,scope_kind,description,is_system)
-    VALUES($1,'global','REN2-73 synthetic reviewer/publisher',false) RETURNING id`, [`ren2_73_global_${tag}`])).rows[0].id;
-  for (const permissionId of ids) await pool.query('INSERT INTO access.role_permissions(role_id,permission_id) VALUES($1,$2)', [role, permissionId]);
+  const role = (await pool.query(`SELECT id FROM access.roles WHERE role_code='renivet_admin' AND scope_kind='global'`)).rows[0]?.id;
+  assert.ok(role, 'the disposable schema must contain the W1 platform admin role');
+  for (const permissionId of ids) await pool.query('INSERT INTO access.role_permissions(role_id,permission_id) VALUES($1,$2) ON CONFLICT DO NOTHING', [role, permissionId]);
   for (const userId of [operator]) await pool.query(`INSERT INTO access.role_assignments
     (user_id,role_id,scope_type,active_from,granted_by_id) VALUES($1,$2,'global',now(),$3)`, [userId, role, grantor]);
 
