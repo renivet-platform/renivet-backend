@@ -1301,6 +1301,745 @@
         ]
       }
     },
+    "/api/v1/admin/brands/{brandId}/products/{productId}/review": {
+      "post": {
+        "description": "Requires a global W1 catalog.review grant, recent MFA, session-bound CSRF and an idempotency key. The frozen revision and row version are compared by the transaction.",
+        "operationId": "decideAdminProductQcReview",
+        "parameters": [
+          {
+            "name": "brandId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "productId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "decision",
+                  "reasonCode",
+                  "expectedRevisionId",
+                  "expectedRowVersion"
+                ],
+                "properties": {
+                  "decision": {
+                    "type": "string",
+                    "enum": [
+                      "APPROVED",
+                      "REJECTED",
+                      "CORRECTION_REQUIRED",
+                      "RESTRICTED"
+                    ]
+                  },
+                  "reasonCode": {
+                    "type": "string"
+                  },
+                  "expectedRevisionId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "expectedRowVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "comment": {
+                    "type": "string",
+                    "maxLength": 2000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "Record an independent decision for an exact submitted revision",
+        "tags": [
+          "Admin Review"
+        ],
+        "x-renivet-implementation-wave": "W1",
+        "x-renivet-mfa-required": true,
+        "x-renivet-permission": "catalog.review"
+      }
+    },
+    "/api/v1/admin/brands/{brandId}/products/{productId}/publication/publish": {
+      "post": {
+        "description": "Requires global catalog.publish permission, recent MFA, session-bound CSRF and an idempotency key. The request names both the approved revision and QC approval receipt.",
+        "operationId": "publishAdminCatalogRevision",
+        "parameters": [
+          {
+            "name": "brandId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "productId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "approvedRevisionId",
+                  "approvedReviewId",
+                  "expectedProductVersion"
+                ],
+                "properties": {
+                  "approvedRevisionId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "approvedReviewId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "expectedProductVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "Publish the exact QC-approved revision",
+        "tags": [
+          "Admin Review"
+        ],
+        "x-renivet-implementation-wave": "W1",
+        "x-renivet-mfa-required": true,
+        "x-renivet-permission": "catalog.publish"
+      }
+    },
+    "/api/v1/admin/brands/{brandId}/products/{productId}/publication/restrict": {
+      "post": {
+        "operationId": "restrictAdminCatalogProduct",
+        "parameters": [
+          {
+            "name": "brandId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "productId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "reasonCode",
+                  "expectedProductVersion"
+                ],
+                "properties": {
+                  "reasonCode": {
+                    "type": "string"
+                  },
+                  "expectedProductVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "comment": {
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "appealReference": {
+                    "type": "string",
+                    "maxLength": 256
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "Restrict a published catalog listing with an audit reason",
+        "tags": [
+          "Admin Review"
+        ],
+        "x-renivet-implementation-wave": "W1",
+        "x-renivet-mfa-required": true,
+        "x-renivet-permission": "catalog.restrict"
+      }
+    },
+    "/api/v1/admin/brands/{brandId}/products/{productId}/publication/unpublish": {
+      "post": {
+        "operationId": "unpublishAdminCatalogProduct",
+        "parameters": [
+          {
+            "name": "brandId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "productId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "reasonCode",
+                  "expectedProductVersion"
+                ],
+                "properties": {
+                  "reasonCode": {
+                    "type": "string"
+                  },
+                  "expectedProductVersion": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "comment": {
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "appealReference": {
+                    "type": "string",
+                    "maxLength": 256
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "Unpublish a listing while retaining its approved revision and audit history",
+        "tags": [
+          "Admin Review"
+        ],
+        "x-renivet-implementation-wave": "W1",
+        "x-renivet-mfa-required": true,
+        "x-renivet-permission": "catalog.restrict"
+      }
+    },
+    "/api/v1/admin/reviews/taxonomy": {
+      "get": {
+        "operationId": "listAdminTaxonomyReviews",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminReviewQueueResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "List persisted draft taxonomy revisions for global administrators",
+        "tags": [
+          "Admin Review"
+        ],
+        "x-renivet-implementation-wave": "W1",
+        "x-renivet-permission": "taxonomy.approve"
+      }
+    },
+    "/api/v1/admin/reviews/quality": {
+      "get": {
+        "operationId": "listAdminQcReviews",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminReviewQueueResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "List submitted frozen catalog revisions for global reviewers",
+        "tags": [
+          "Admin Review"
+        ],
+        "x-renivet-implementation-wave": "W1",
+        "x-renivet-permission": "catalog.review"
+      }
+    },
+    "/api/v1/admin/reviews/pricing": {
+      "get": {
+        "operationId": "listAdminPriceReviews",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminReviewQueueResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "List pending price proposals for global administrators",
+        "tags": [
+          "Admin Review"
+        ],
+        "x-renivet-implementation-wave": "W1",
+        "x-renivet-permission": "pricing.approve"
+      }
+    },
+    "/api/v1/admin/reviews/claims": {
+      "get": {
+        "operationId": "listAdminClaimReviews",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminReviewQueueResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "List pending sustainability claims for global reviewers",
+        "tags": [
+          "Admin Review"
+        ],
+        "x-renivet-implementation-wave": "W1",
+        "x-renivet-permission": "catalog.review"
+      }
+    },
+    "/api/v1/admin/reviews/publishing": {
+      "get": {
+        "operationId": "listAdminPublicationReviews",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminReviewQueueResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "List exactly approved revisions awaiting publication",
+        "tags": [
+          "Admin Review"
+        ],
+        "x-renivet-implementation-wave": "W1",
+        "x-renivet-permission": "catalog.publish"
+      }
+    },
+    "/api/v1/admin/reviews/taxonomy/{id}": {
+      "get": {
+        "operationId": "getAdminTaxonomyReview",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminReviewItemDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "Read the exact draft category schema and diff inputs",
+        "tags": [
+          "Admin Review"
+        ],
+        "x-renivet-implementation-wave": "W1",
+        "x-renivet-permission": "taxonomy.approve"
+      }
+    },
+    "/api/v1/admin/reviews/quality/{id}": {
+      "get": {
+        "operationId": "getAdminQcReview",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminReviewItemDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "Read the exact submitted frozen revision and media evidence",
+        "tags": [
+          "Admin Review"
+        ],
+        "x-renivet-implementation-wave": "W1",
+        "x-renivet-permission": "catalog.review"
+      }
+    },
+    "/api/v1/admin/reviews/pricing/{id}": {
+      "get": {
+        "operationId": "getAdminPriceReview",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminReviewItemDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "Read the exact pending price proposal and price history",
+        "tags": [
+          "Admin Review"
+        ],
+        "x-renivet-implementation-wave": "W1",
+        "x-renivet-permission": "pricing.approve"
+      }
+    },
+    "/api/v1/admin/reviews/claims/{id}": {
+      "get": {
+        "operationId": "getAdminClaimReview",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminReviewItemDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "Read the exact pending sustainability claim and evidence metadata",
+        "tags": [
+          "Admin Review"
+        ],
+        "x-renivet-implementation-wave": "W1",
+        "x-renivet-permission": "catalog.review"
+      }
+    },
+    "/api/v1/admin/reviews/publishing/{id}": {
+      "get": {
+        "operationId": "getAdminPublicationReview",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminReviewItemDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "Read exact approved revision and separate QC approval evidence",
+        "tags": [
+          "Admin Review"
+        ],
+        "x-renivet-implementation-wave": "W1",
+        "x-renivet-permission": "catalog.publish"
+      }
+    },
     "/api/v1/admin/catalog/categories/{categoryId}/schema-versions": {
       "post": {
         "description": "Requires the platform-global taxonomy.manage permission, fresh MFA and session-bound CSRF. Creates a draft snapshot and returns its rule diff against the current published version. Linear: REN2-58.",
@@ -4844,7 +5583,7 @@
     },
     "/api/v1/admin/brands/{brandId}/variant-prices/{priceId}/decision": {
       "post": {
-        "description": "Requires current brand-scoped pricing.approve permission, a recent MFA step-up and session-bound CSRF. The price state compare-and-set, approval overlap constraint, audit event and idempotency receipt are committed together. Linear: REN2-65.",
+        "description": "Requires a platform-global pricing.approve permission, a recent MFA step-up and session-bound CSRF. The price state compare-and-set, approval overlap constraint, audit event and idempotency receipt are committed together. Linear: REN2-65.",
         "operationId": "decideVariantPrice",
         "parameters": [
           {
@@ -5012,7 +5751,7 @@
           "Pricing"
         ],
         "x-renivet-csrf-policy": "Require allowlisted Origin, Sec-Fetch-Site and X-CSRF-Token bound to W1 session; same-statement resource permission in W1.",
-        "x-renivet-guard": "brand",
+        "x-renivet-guard": "platform-global-admin",
         "x-renivet-implementation-wave": "W2",
         "x-renivet-mfa-required": true,
         "x-renivet-permission": "pricing.approve"
@@ -6037,7 +6776,7 @@
           "Review"
         ],
         "x-renivet-csrf-policy": "Require allowlisted Origin, Sec-Fetch-Site and X-CSRF-Token bound to W1 session; global permission rechecked in the database transaction.",
-        "x-renivet-guard": "brand",
+        "x-renivet-guard": "platform-global-admin",
         "x-renivet-implementation-wave": "W2",
         "x-renivet-mfa-required": true,
         "x-renivet-permission": "catalog.review"
@@ -10921,6 +11660,169 @@
         "required": [
           "status"
         ]
+      },
+      "AdminReviewItemDto": {
+        "type": "object",
+        "properties": {
+          "brandId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "brandName": {
+            "type": "string"
+          },
+          "productId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "revisionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "priceId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "claimId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "categoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "approvalId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "submittedBy": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "approvedBy": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "publicationState": {
+            "type": "string"
+          },
+          "styleCode": {
+            "type": "string"
+          },
+          "categoryCode": {
+            "type": "string"
+          },
+          "categoryLabel": {
+            "type": "string"
+          },
+          "claimText": {
+            "type": "string"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "isLeaf": {
+            "type": "boolean"
+          },
+          "retired": {
+            "type": "boolean"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "claimCode": {
+            "type": "string"
+          },
+          "reasonCode": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "rowVersion": {
+            "type": "integer"
+          },
+          "contentVersion": {
+            "type": "integer"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "amountMinor": {
+            "type": "integer"
+          },
+          "mrpMinor": {
+            "type": "integer"
+          },
+          "publicationVersion": {
+            "type": "integer"
+          },
+          "submittedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "validTo": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "snapshot": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "media": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          }
+        }
+      },
+      "AdminReviewQueueResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminReviewItemDto"
+            }
+          }
+        }
       },
       "TaxonomyActionReceiptDto": {
         "type": "object",

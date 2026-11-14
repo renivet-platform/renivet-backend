@@ -173,7 +173,7 @@ export class PricePostgresRepository implements PriceRepository {
            AND r.operation = 'decideVariantPrice' AND r.idempotency_key = $4
            AND EXISTS (SELECT 1 FROM access.effective_permissions AS ep WHERE ep.user_id = $2
              AND ep.permission_code = $5
-             AND ((ep.scope_type = 'global' AND ep.brand_id IS NULL) OR (ep.scope_type = 'brand' AND ep.brand_id = $1)))`,
+             AND ep.role_code = 'renivet_admin' AND ep.scope_type = 'global' AND ep.brand_id IS NULL)`,
         [context.brandId, context.userId, priceId, context.idempotencyKey, context.permission]);
       if (replay.rows[0]) {
         if (replay.rows[0].request_sha256.trim() !== requestHash) throw new PriceError('PRICE_IDEMPOTENCY_CONFLICT');
@@ -185,7 +185,7 @@ export class PricePostgresRepository implements PriceRepository {
           WHERE b.id = $1 AND b.onboarding_state = 'approved'
             AND EXISTS (SELECT 1 FROM access.effective_permissions AS ep WHERE ep.user_id = $2
               AND ep.permission_code = $3
-              AND ((ep.scope_type = 'global' AND ep.brand_id IS NULL) OR (ep.scope_type = 'brand' AND ep.brand_id = $1)))`,
+              AND ep.role_code = 'renivet_admin' AND ep.scope_type = 'global' AND ep.brand_id IS NULL)`,
         [context.brandId, context.userId, context.permission]);
       if (!authorized.rowCount) throw new PriceError('PRICE_PERMISSION_REVOKED');
 
@@ -215,7 +215,7 @@ export class PricePostgresRepository implements PriceRepository {
             AND EXISTS (SELECT 1 FROM brands.brands AS b WHERE b.id = vp.brand_id AND b.onboarding_state = 'approved')
             AND EXISTS (SELECT 1 FROM access.effective_permissions AS ep WHERE ep.user_id = $4
               AND ep.permission_code = $6
-              AND ((ep.scope_type = 'global' AND ep.brand_id IS NULL) OR (ep.scope_type = 'brand' AND ep.brand_id = vp.brand_id)))
+              AND ep.role_code = 'renivet_admin' AND ep.scope_type = 'global' AND ep.brand_id IS NULL)
           RETURNING vp.id, vp.brand_id, vp.variant_id, vp.currency, vp.amount_minor, vp.mrp_minor, vp.price_state,
                     vp.valid_from, vp.valid_to, vp.row_version, vp.rule_version, vp.created_by, vp.reason_code,
                     vp.decided_by, vp.decision_reason_code, vp.decided_at`,

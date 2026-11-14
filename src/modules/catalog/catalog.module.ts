@@ -7,6 +7,10 @@ import { BrandAccessRepository } from '../access/brand-access.repository';
 import { PlatformPermissionGuard } from '../access/platform-permission.guard';
 import { IdentityModule } from '../identity/identity.module';
 import { SessionService } from '../identity/session.service';
+import { AdminReviewController } from './admin-review.controller';
+import { AdminReviewReadRepository } from './admin-review.repository';
+import { AdminQualityDecisionController } from './admin-quality-decision.controller';
+import { AdminPublicationDecisionController } from './admin-publication-decision.controller';
 import { CatalogReadController } from './catalog-read.controller';
 import { CatalogReadPostgresRepository } from './catalog-read.repository';
 import { CATALOG_READ_REPOSITORY, CatalogReadService } from './catalog-read.service';
@@ -37,8 +41,9 @@ import { CatalogPublicationPostgresRepository } from './catalog-publication.repo
 // W2 taxonomy administration, brand reads, and progressive parent draft writes.
 @Module({
   imports: [ConfigModule, IdentityModule, AccessModule],
-  controllers: [TaxonomyAdminController, CatalogReadController, ProductReadController, ProductDraftController, PriceController, PriceReviewController, ClaimsController, ClaimReviewController],
+  controllers: [AdminQualityDecisionController, AdminPublicationDecisionController, AdminReviewController, TaxonomyAdminController, CatalogReadController, ProductReadController, ProductDraftController, PriceController, PriceReviewController, ClaimsController, ClaimReviewController],
   providers: [
+    AdminReviewReadRepository,
     TaxonomyAdminPostgresRepository,
     { provide: TAXONOMY_ADMIN_REPOSITORY, useExisting: TaxonomyAdminPostgresRepository },
     TaxonomyAdminService,

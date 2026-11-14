@@ -19,7 +19,7 @@ export class CatalogReviewPostgresRepository implements CatalogReviewRepository 
         await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',
           [`${context.brandId}:${productId}:${context.userId}:decideCatalogReview:${context.idempotencyKey}`]);
         const permission = `EXISTS(SELECT 1 FROM access.effective_permissions ep WHERE ep.user_id=$2
-          AND ep.permission_code='catalog.review' AND ep.scope_type='global' AND ep.brand_id IS NULL)`;
+          AND ep.permission_code='catalog.review' AND ep.role_code='renivet_admin' AND ep.scope_type='global' AND ep.brand_id IS NULL)`;
         const replay = await client.query<{ request_sha256: string; response_payload: Record<string, unknown> }>(
           `SELECT r.request_sha256,r.response_payload FROM catalogue.product_review_decision_receipts r
             JOIN catalogue.products p ON p.id=r.product_id AND p.brand_id=r.brand_id
@@ -57,7 +57,7 @@ export class CatalogReviewPostgresRepository implements CatalogReviewRepository 
           `UPDATE catalogue.product_revisions r SET review_state=$5
             WHERE r.id=$1 AND r.product_id=$2 AND r.brand_id=$3 AND r.review_state='SUBMITTED'
               AND EXISTS(SELECT 1 FROM access.effective_permissions ep WHERE ep.user_id=$4
-                AND ep.permission_code='catalog.review' AND ep.scope_type='global' AND ep.brand_id IS NULL)
+                AND ep.permission_code='catalog.review' AND ep.role_code='renivet_admin' AND ep.scope_type='global' AND ep.brand_id IS NULL)
             RETURNING r.id`, [input.expectedRevisionId, productId, context.brandId, context.userId, nextState]);
         if (revision.rowCount !== 1) throw fail('CATALOG_REVIEW_ACCESS_DENIED');
         const review = await client.query<{ id: string }>(
@@ -72,7 +72,7 @@ export class CatalogReviewPostgresRepository implements CatalogReviewRepository 
           `UPDATE catalogue.products p SET qc_state=$5,publication_state=$6,row_version=p.row_version+1,updated_at=now()
             WHERE p.id=$1 AND p.brand_id=$2 AND p.row_version=$3 AND p.publication_state='PENDING_REVIEW'
               AND EXISTS(SELECT 1 FROM access.effective_permissions ep WHERE ep.user_id=$4
-                AND ep.permission_code='catalog.review' AND ep.scope_type='global' AND ep.brand_id IS NULL)
+                AND ep.permission_code='catalog.review' AND ep.role_code='renivet_admin' AND ep.scope_type='global' AND ep.brand_id IS NULL)
             RETURNING p.row_version`, [productId, context.brandId, input.expectedRowVersion, context.userId, nextState, publicationState]);
         if (!updated.rows[0]) throw fail('CATALOG_REVIEW_ACCESS_DENIED');
         const afterVersion = Number(updated.rows[0].row_version);
@@ -89,7 +89,7 @@ export class CatalogReviewPostgresRepository implements CatalogReviewRepository 
             (brand_id,product_id,revision_id,actor_user_id,idempotency_key,request_sha256,decision,decision_id,response_payload)
            SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb
             WHERE EXISTS(SELECT 1 FROM access.effective_permissions ep WHERE ep.user_id=$4
-              AND ep.permission_code='catalog.review' AND ep.scope_type='global' AND ep.brand_id IS NULL)`,
+              AND ep.permission_code='catalog.review' AND ep.role_code='renivet_admin' AND ep.scope_type='global' AND ep.brand_id IS NULL)`,
           [context.brandId, productId, input.expectedRevisionId, context.userId, context.idempotencyKey, requestHash,
             nextState, review.rows[0].id, JSON.stringify(response)]);
         if (receipt.rowCount !== 1) throw fail('CATALOG_REVIEW_ACCESS_DENIED');

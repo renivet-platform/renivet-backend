@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { PlatformPermissionGuard, REQUIRE_PLATFORM_PERMISSION, RequirePlatformPermission } = require('../dist/modules/access/platform-permission.guard.js');
+const { PlatformPermissionGuard, REQUIRE_PLATFORM_PERMISSION, REQUIRE_PLATFORM_ADMIN_PERMISSION, RequirePlatformPermission, RequirePlatformAdminPermission } = require('../dist/modules/access/platform-permission.guard.js');
 const { REQUIRE_MFA_ACTION } = require('../dist/common/guards/require-mfa.js');
 const { RequireGlobalTaxonomyPermission } = require('../dist/modules/access/taxonomy-admin.decorator.js');
 
@@ -25,6 +25,7 @@ function harness({ permission = 'taxonomy.manage', granted = false, repositoryEr
 
 test('platform permission decorator declares global permission metadata', () => {
   assert.equal(typeof RequirePlatformPermission('taxonomy.manage'), 'function');
+  assert.equal(typeof RequirePlatformAdminPermission('catalog.review'), 'function');
 });
 
 test('global taxonomy decorator composes global permission and MFA metadata', () => {
@@ -51,6 +52,17 @@ test('explicit global permission is resolved from the authenticated W1 session',
   const h = harness({ granted: true });
   assert.equal(await h.guard.canActivate(h.context), true);
   assert.deepEqual(h.request.platformPermission, { userId, permission: 'taxonomy.manage' });
+});
+
+test('review-only admin metadata requires the authenticated Renivet Admin role check', async () => {
+  const request = { headers: { cookie: `__Host-renivet_session=${token}` } };
+  const reflector = { get: (key) => key === REQUIRE_PLATFORM_PERMISSION ? 'catalog.review' : key === REQUIRE_PLATFORM_ADMIN_PERMISSION ? true : undefined };
+  const sessions = { authenticate: async () => ({ userId, sessionId: '33333333-3333-4333-8333-333333333333' }) };
+  let checkedAdminPermission = false;
+  const access = { hasGlobalAdminPermission: async (actor, permission) => { checkedAdminPermission = true; assert.equal(actor, userId); assert.equal(permission, 'catalog.review'); return true; } };
+  const context = { getHandler: () => ({}), getClass: () => ({}), switchToHttp: () => ({ getRequest: () => request }) };
+  assert.equal(await new PlatformPermissionGuard(reflector, sessions, access).canActivate(context), true);
+  assert.equal(checkedAdminPermission, true);
 });
 
 test('missing policy and repository outage fail closed', async () => {

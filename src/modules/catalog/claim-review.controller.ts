@@ -2,12 +2,12 @@ import { Body, Controller, ForbiddenException, Headers, HttpCode, Param, Post, R
 import { ApiBody, ApiCookieAuth, ApiExtension, ApiHeader, ApiOkResponse, ApiOperation, ApiParam, ApiResponse, ApiServiceUnavailableResponse, ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { MfaGuard, RequireMfa } from '../../common/guards/require-mfa';
-import { BrandAccessGuard, BrandAccessRequest, RequireBrandPermission } from '../access/brand-access.guard';
+import { PlatformPermissionGuard, RequirePlatformAdminPermission } from '../access/platform-permission.guard';
 import { csrfMatches, readSessionToken, SessionService } from '../identity/session.service';
 import { ClaimDecisionContext, ClaimsService } from './claims.service';
 import { ClaimsExceptionFilter } from './claims-exception.filter';
 
-interface ClaimReviewRequest extends BrandAccessRequest { readonly id?: string; }
+interface ClaimReviewRequest { readonly id?: string; headers: Record<string, string | string[] | undefined>; }
 
 const KEY = /^[A-Za-z0-9._:-]{1,120}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -28,21 +28,21 @@ const CLAIM_ERROR = { type: 'object', required: ['code', 'message', 'requestId']
 @ApiTags('Review')
 @ApiCookieAuth('sessionCookie')
 @Controller('admin/brands/:brandId/claims/:claimId/decision')
-@UseGuards(BrandAccessGuard, MfaGuard)
+@UseGuards(PlatformPermissionGuard, MfaGuard)
 @UseFilters(ClaimsExceptionFilter)
 export class ClaimReviewController {
   constructor(private readonly claims: ClaimsService, private readonly sessions: SessionService, private readonly config: ConfigService) {}
 
   @Post()
   @HttpCode(200)
-  @RequireBrandPermission('catalog.review')
+  @RequirePlatformAdminPermission('catalog.review')
   @RequireMfa('catalog.review')
   @ApiParam({ name: 'brandId', type: 'string', format: 'uuid' })
   @ApiParam({ name: 'claimId', type: 'string', format: 'uuid' })
   @ApiOperation({ operationId: 'decideProductClaim', summary: 'Approve, reject, or revoke a sustainability claim',
     description: 'Requires the platform-global catalog.review permission, a recent MFA step-up and session-bound CSRF. A distinct reviewer compares claim/evidence expiry and current asset eligibility, then commits the claim decision, immutable audit, listing recheck outbox event and idempotency receipt atomically. Linear: REN2-69.' })
   @ApiExtension('x-renivet-permission', 'catalog.review')
-  @ApiExtension('x-renivet-guard', 'brand')
+  @ApiExtension('x-renivet-guard', 'platform-global-admin')
   @ApiExtension('x-renivet-implementation-wave', 'W2')
   @ApiExtension('x-renivet-mfa-required', true)
   @ApiExtension('x-renivet-csrf-policy', 'Require allowlisted Origin, Sec-Fetch-Site and X-CSRF-Token bound to W1 session; global permission rechecked in the database transaction.')
@@ -60,7 +60,7 @@ export class ClaimReviewController {
   async decide(@Param('brandId') brandId: string, @Param('claimId') claimId: string, @Body() body: unknown,
     @Req() request: ClaimReviewRequest, @Headers('Idempotency-Key') key?: string,
     @Headers('If-Match') ifMatch?: string | string[]): Promise<Record<string, unknown>> {
-    if (!UUID.test(brandId) || !UUID.test(claimId) || request.brandAccess?.brandId !== brandId) throw new UnprocessableEntityException({ code: 'CLAIM_REQUEST_INVALID', message: 'The claim request is invalid.' });
+    if (!UUID.test(brandId) || !UUID.test(claimId)) throw new UnprocessableEntityException({ code: 'CLAIM_REQUEST_INVALID', message: 'The claim request is invalid.' });
     if (!key || !KEY.test(key)) throw new UnprocessableEntityException({ code: 'CLAIM_REQUEST_INVALID', message: 'A valid idempotency key is required.' });
     const token = readSessionToken(request.headers.cookie);
     const session = await this.sessions.authenticate(token);
@@ -68,7 +68,7 @@ export class ClaimReviewController {
     if (!token || !csrfMatches(request.headers, origins, this.sessions.expectedCsrf(token))) {
       throw new ForbiddenException({ code: 'CSRF_REJECTED', message: 'The operation could not be authorized.' });
     }
-    const context: ClaimDecisionContext = { userId: session.userId, brandId: request.brandAccess.brandId, permission: 'catalog.review',
+    const context: ClaimDecisionContext = { userId: session.userId, brandId, permission: 'catalog.review',
       requestId: request.id ?? `claim-review:${key}`, idempotencyKey: key };
     const result = await this.claims.decide(claimId, body, ifMatch, context);
     return { id: result.id, status: result.claimState, requestId: result.requestId, rowVersion: result.rowVersion };
