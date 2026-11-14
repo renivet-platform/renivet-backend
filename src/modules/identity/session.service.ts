@@ -4,10 +4,15 @@ import { AuthHttpError } from './auth.service';
 export interface SessionRepositoryPort {
   findAndTouchSession(tokenHash: string, idleTtlSeconds: number, absoluteTtlSeconds: number): Promise<{
     sessionId: string; userId: string; expiresAt: Date; mfaVerifiedAt: Date | null;
-    signInMethod: 'phone' | 'email_password'; phoneVerified: boolean;
+    signInMethod: 'phone' | 'email_password'; phoneVerified: boolean; destination: SessionDestination;
   } | null>;
   revokeSession(tokenHash: string): Promise<boolean>;
 }
+
+export type SessionDestination =
+  | { kind: 'storefront' }
+  | { kind: 'operations' }
+  | { kind: 'brands'; brands: Array<{ id: string; name: string }> };
 
 export class SessionDeniedError extends AuthHttpError {
   constructor() { super(401, 'AUTHENTICATION_FAILED', 'The session could not be verified.'); }
@@ -68,6 +73,7 @@ export class SessionService {
   async authenticate(sessionToken: string | undefined): Promise<{
     sessionId: string; userId: string; csrfToken: string; expiresInSeconds: number; mfaVerifiedAt: Date | null;
     account: { signInMethod: 'phone' | 'email_password'; phoneVerified: boolean };
+    destination: SessionDestination;
   }> {
     if (!sessionToken || !/^[A-Za-z0-9_-]{43}$/.test(sessionToken) || !this.csrfKey || this.csrfKey.length < 32) {
       throw new SessionDeniedError();
@@ -75,6 +81,7 @@ export class SessionService {
     let session: {
       sessionId: string; userId: string; expiresAt: Date; mfaVerifiedAt: Date | null;
       signInMethod: 'phone' | 'email_password'; phoneVerified: boolean;
+      destination: SessionDestination;
     } | null;
     try {
       session = await this.repository.findAndTouchSession(hashSessionToken(sessionToken), this.idleTtlSeconds, this.absoluteTtlSeconds);
@@ -91,6 +98,7 @@ export class SessionService {
       expiresInSeconds,
       mfaVerifiedAt: session.mfaVerifiedAt,
       account: { signInMethod: session.signInMethod, phoneVerified: session.phoneVerified },
+      destination: session.destination,
     };
   }
 

@@ -8,7 +8,7 @@ test('active opaque session returns identity and deterministic per-session CSRF 
   const token = 'A'.repeat(43);
   const calls = [];
   const sessions = new SessionService({
-    findAndTouchSession: async (digest) => { calls.push(digest); return { userId: 'user-1', expiresAt: new Date(Date.now() + 1_800_000), signInMethod: 'phone', phoneVerified: true }; },
+    findAndTouchSession: async (digest) => { calls.push(digest); return { userId: 'user-1', expiresAt: new Date(Date.now() + 1_800_000), signInMethod: 'phone', phoneVerified: true, destination: { kind: 'storefront' } }; },
     revokeSession: async (digest) => { calls.push(digest); return true; },
   }, 'synthetic-csrf-key-with-at-least-thirty-two-bytes');
   const result = await sessions.authenticate(token);
@@ -19,12 +19,20 @@ test('active opaque session returns identity and deterministic per-session CSRF 
   assert.deepEqual(calls, [createHash('sha256').update(token).digest('hex')]);
 });
 
+test('authenticated session carries only server-resolved role destinations', async () => {
+  const destination = { kind: 'brands', brands: [{ id: '2a6b7c8d-1111-4111-8111-123456789abc', name: 'Approved brand' }] };
+  const sessions = new SessionService({
+    findAndTouchSession: async () => ({ userId: 'user-1', expiresAt: new Date(Date.now() + 1_800_000), signInMethod: 'email_password', phoneVerified: false, destination }),
+  }, 'synthetic-csrf-key-with-at-least-thirty-two-bytes');
+  assert.deepEqual((await sessions.authenticate('A'.repeat(43))).destination, destination);
+});
+
 test('session cookie lifetime rounds down so it never exceeds the server expiry', async () => {
   const originalNow = Date.now;
   Date.now = () => 1_000_000;
   try {
     const sessions = new SessionService({
-      findAndTouchSession: async () => ({ userId: 'user-1', expiresAt: new Date(2_800_100), signInMethod: 'email_password', phoneVerified: false }),
+      findAndTouchSession: async () => ({ userId: 'user-1', expiresAt: new Date(2_800_100), signInMethod: 'email_password', phoneVerified: false, destination: { kind: 'storefront' } }),
     }, 'synthetic-csrf-key-with-at-least-thirty-two-bytes');
     const result = await sessions.authenticate('C'.repeat(43));
     assert.equal(result.expiresInSeconds, 1_800);
