@@ -29,8 +29,8 @@ test('REN2-72 exact revision review enforces maker-checker, live eligibility, im
     VALUES($1,'REN2-72 Test','REN2-72 Test','approved') RETURNING id`, [`ren2-72-${suffix}`])).rows[0].id;
   const permissionId = (await pool.query(`INSERT INTO access.permissions(permission_code,resource,action,description)
     VALUES('catalog.review','catalog','review','REN2-72 integration test') ON CONFLICT(permission_code) DO UPDATE SET permission_code=EXCLUDED.permission_code RETURNING id`)).rows[0].id;
-  const globalRole = (await pool.query(`INSERT INTO access.roles(role_code,scope_kind,description,is_system)
-    VALUES($1,'global','REN2-72 global reviewer',false) RETURNING id`, [`ren2_72_global_${suffix}`])).rows[0].id;
+  const globalRole = (await pool.query(`SELECT id FROM access.roles WHERE role_code='renivet_admin' AND scope_kind='global'`)).rows[0]?.id;
+  assert.ok(globalRole, 'the disposable schema must contain the W1 platform admin role');
   await pool.query('INSERT INTO access.role_permissions(role_id,permission_id) VALUES($1,$2) ON CONFLICT DO NOTHING', [globalRole, permissionId]);
   const grantor = await addUser('grantor');
   for (const userId of [submitter, reviewer]) await pool.query(`INSERT INTO access.role_assignments
