@@ -237,7 +237,7 @@ test('REN2-61/62 product drafts and SKU variants enforce category pins, CAS, ide
     categoryCode: `r61-${suffix}`, categorySchemaVersion: 2, title: 'Still an editable draft', attributes: {} }),
   { ...accessContext, idempotencyKey: `incomplete-create-${suffix}` });
   await assert.rejects(submissionRepository.submit(incompleteProduct.productId,
-    { userId: owner, brandId: brand, expectedRowVersion: 1, idempotencyKey: `incomplete-submit-${suffix}`, sourceKind: 'MANUAL', sourceReference: null }),
+    { userId: owner, brandId: brand, expectedRowVersion: 1, expectedContentVersion: 1, expectedCategorySchemaVersion: 2, expectedContentSha256: 'a'.repeat(64), idempotencyKey: `incomplete-submit-${suffix}`, sourceKind: 'MANUAL', sourceReference: null }),
   (error) => error.code === 'SUBMISSION_INCOMPLETE' && error.details.issues.some((issue) => issue.path.includes('material')));
   const incompleteEffects = await pool.query(`SELECT p.row_version,
       (SELECT count(*)::int FROM catalogue.product_revisions r WHERE r.product_id=p.id) AS revision_count
@@ -270,7 +270,8 @@ test('REN2-61/62 product drafts and SKU variants enforce category pins, CAS, ide
   await pool.query(`INSERT INTO media.product_media(brand_id,product_id,media_asset_id,display_role,display_order,alt_text)
     VALUES($1,$2,$3,'PRIMARY',0,'Blue dress front')`, [brand, submissionProduct.productId, assetId]);
 
-  const submissionContext = { userId: owner, brandId: brand, expectedRowVersion: 1, idempotencyKey: `submit-${suffix}`,
+  const submissionContext = { userId: owner, brandId: brand, expectedRowVersion: 1, expectedContentVersion: 1, expectedCategorySchemaVersion: 2,
+    expectedContentSha256: 'a'.repeat(64), idempotencyKey: `submit-${suffix}`,
     sourceKind: 'MANUAL', sourceReference: null };
   let submitted;
   try { submitted = await submissionRepository.submit(submissionProduct.productId, submissionContext); }
@@ -294,7 +295,7 @@ test('REN2-61/62 product drafts and SKU variants enforce category pins, CAS, ide
   const snapshotAfterEdit = await pool.query('SELECT content_snapshot FROM catalogue.product_revisions WHERE id=$1', [submitted.revisionId]);
   assert.equal(snapshotAfterEdit.rows[0].content_snapshot.product.title, 'Original review snapshot',
     'later draft edits cannot rewrite submitted revision A');
-  const resubmissionContext = { ...submissionContext, expectedRowVersion: 3, idempotencyKey: `submit-b-${suffix}` };
+  const resubmissionContext = { ...submissionContext, expectedRowVersion: 3, expectedContentVersion: 2, idempotencyKey: `submit-b-${suffix}` };
   const concurrentSubmissions = await Promise.allSettled([
     submissionRepository.submit(submissionProduct.productId, resubmissionContext),
     submissionRepository.submit(submissionProduct.productId, { ...resubmissionContext, idempotencyKey: `submit-b-race-${suffix}` }),
