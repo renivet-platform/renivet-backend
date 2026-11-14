@@ -79,10 +79,16 @@ test('REN2-64/65 persists price proposals and decisions, scopes history, enforce
       [permissionCode, resource, action])).rows[0].id;
     await pool.query('INSERT INTO access.role_permissions(role_id,permission_id) VALUES($1,$2) ON CONFLICT DO NOTHING', [role, permission]);
   }
+  const adminRole = (await pool.query(`SELECT id FROM access.roles WHERE role_code='renivet_admin' AND scope_kind='global'`)).rows[0]?.id;
+  assert.ok(adminRole, 'the disposable schema must contain the W1 platform admin role');
+  const approvePermission = (await pool.query(`SELECT id FROM access.permissions WHERE permission_code='pricing.approve'`)).rows[0].id;
+  await pool.query('INSERT INTO access.role_permissions(role_id,permission_id) VALUES($1,$2) ON CONFLICT DO NOTHING', [adminRole, approvePermission]);
   await pool.query(`INSERT INTO access.role_assignments(user_id,role_id,brand_id,scope_type,active_from,granted_by_id)
     VALUES($1,$2,$3,'brand',now(),$4)`, [actor, role, brand, grantor]);
   await pool.query(`INSERT INTO access.role_assignments(user_id,role_id,brand_id,scope_type,active_from,granted_by_id)
     VALUES($1,$2,$3,'brand',now(),$4)`, [reviewer, role, brand, grantor]);
+  for (const adminUser of [reviewer, actor]) await pool.query(`INSERT INTO access.role_assignments(user_id,role_id,brand_id,scope_type,active_from,granted_by_id)
+    VALUES($1,$2,NULL,'global',now(),$3)`, [adminUser, adminRole, grantor]);
 
   const categoryCode = `ren2-64-${suffix}`;
   const categoryId = (await pool.query(`INSERT INTO catalogue.categories(code,name) VALUES($1,$1) RETURNING id`, [categoryCode])).rows[0].id;
