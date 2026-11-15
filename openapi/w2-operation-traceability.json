@@ -2,8 +2,8 @@
   "contract": "W2 v1.5 local design candidate",
   "candidateFile": "openapi/W2_v1_5_CANDIDATE.yaml",
   "sourceUrl": "https://github.com/renivet-platform/renivet-engineering-os/blob/main/docs/02-system-design/w2-catalog-inventory/v1.5/W2_OpenAPI_v1_5_CANDIDATE.yaml",
-  "expectedOperationCount": 47,
-  "candidateBlob": "eed7651ef326581e0eb1f70be70687bee0fc3aa0",
+  "expectedOperationCount": 48,
+  "candidateBlob": "e65e1777162aaeb36f1be10a175f1e7bd90d46a8",
   "qualityGates": [
     "G07",
     "G08",
@@ -164,6 +164,12 @@
       "id": "REN2-88",
       "title": "[W2-I1.06] Implement cycle counts, reconciliation cases and authoritative balance API",
       "url": "https://linear.app/renivet/issue/REN2-88",
+      "verifiedAt": "2026-11-03"
+    },
+    {
+      "id": "REN2-115",
+      "title": "W2 add audited category activation lifecycle action and UI",
+      "url": "https://linear.app/renivet/issue/REN2-115",
       "verifiedAt": "2026-11-03"
     }
   ],
@@ -1196,6 +1202,19 @@
         }
       },
       "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-58"
+    },
+    {
+      "operationId": "activateCategory",
+      "method": "POST",
+      "path": "/admin/catalog/categories/{categoryId}/activate",
+      "sourceIds": ["A1", "QA-01", "QA-10", "A5", "QA-14"],
+      "ownerIssue": "REN2-115",
+      "implementation": {
+        "status": "implemented",
+        "test": { "status": "verified", "path": "tests/w2/taxonomy-admin.integration.test.cjs" },
+        "pullRequest": { "status": "pending" }
+      },
+      "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-115"
     },
     {
       "operationId": "updateProductVariant",

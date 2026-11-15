@@ -6,6 +6,7 @@ import { CategoryAttributeRule, compileCategorySchema, SUPPORTED_CATEGORY_VALIDA
 import {
   buildCategorySchemaDiff,
   CategorySchemaProposalInput,
+  CategoryActivationInput,
   TaxonomyAdminRepository,
   TaxonomyMutationContext,
   CategorySchemaRuleSnapshot,
@@ -161,6 +162,38 @@ export class TaxonomyAdminPostgresRepository implements TaxonomyAdminRepository 
       );
       const receipt = { id: eventId, status: 'published', requestId: context.requestId, rowVersion: input.version };
       await this.recordEvent(client, context, 'publish', input.categoryId, input.version, requestHash, receipt, payload);
+      return receipt;
+    }).catch((error: unknown) => { throw normalizeDbError(error); });
+  }
+
+  async activate(input: CategoryActivationInput, context: TaxonomyMutationContext): Promise<Record<string, unknown>> {
+    return this.transaction(async (client) => {
+      await client.query('SELECT pg_catalog.pg_advisory_xact_lock($1::bigint)', [ADVISORY_TAXONOMY_LOCK]);
+      const requestHash = hash(input);
+      const prior = await this.findIdempotent(client, context, 'activate', requestHash);
+      if (prior) return prior;
+      const categoryResult = await client.query<{ id: string; active: boolean; schema_version: number | null; is_leaf: boolean; retired: boolean }>(
+        `SELECT c.id, c.active, c.schema_version,
+                NOT EXISTS (SELECT 1 FROM catalogue.categories child WHERE child.parent_id=c.id) AS is_leaf,
+                (NOT c.active AND EXISTS (SELECT 1 FROM catalogue.category_availability_events e
+                                           WHERE e.category_id=c.id AND e.active_after=false)) AS retired
+           FROM catalogue.categories c WHERE c.id=$1 FOR UPDATE`, [input.categoryId],
+      );
+      const category = categoryResult.rows[0];
+      if (!category) throw taxonomyError('TAXONOMY_CATEGORY_NOT_FOUND');
+      if (!category.is_leaf || category.retired || category.schema_version === null) throw taxonomyError('TAXONOMY_VERSION_CONFLICT');
+      const published = await client.query(
+        `SELECT 1 FROM catalogue.category_schema_versions
+          WHERE category_id=$1 AND version=$2 AND state='PUBLISHED'`, [input.categoryId, category.schema_version],
+      );
+      if (!published.rowCount) throw taxonomyError('TAXONOMY_VERSION_CONFLICT');
+      if (category.active) throw taxonomyError('TAXONOMY_CATEGORY_ALREADY_ACTIVE');
+      await client.query("SELECT set_config('app.taxonomy_actor_user_id',$1,true)", [context.actorId]);
+      await client.query("SELECT set_config('app.taxonomy_request_id',$1,true)", [context.requestId]);
+      await client.query("SELECT set_config('app.taxonomy_reason_code',$1,true)", [input.reasonCode]);
+      await client.query('UPDATE catalogue.categories SET active=true WHERE id=$1 AND active=false', [input.categoryId]);
+      const receipt = { id: randomUUID(), status: 'activated', requestId: context.requestId, rowVersion: category.schema_version };
+      await this.recordEvent(client, context, 'activate', input.categoryId, category.schema_version, requestHash, receipt, { reasonCode: input.reasonCode, schemaVersion: category.schema_version });
       return receipt;
     }).catch((error: unknown) => { throw normalizeDbError(error); });
   }

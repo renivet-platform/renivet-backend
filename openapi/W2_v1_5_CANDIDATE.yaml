@@ -1641,6 +1641,47 @@ paths:
       x-renivet-csrf-policy: Require allowlisted Origin, Sec-Fetch-Site and X-CSRF-Token bound to W1 session; same-statement
         resource permission in W1.
       x-renivet-mfa-required: true
+  /admin/catalog/categories/{categoryId}/activate:
+    parameters:
+    - $ref: '#/components/parameters/categoryId'
+    post:
+      operationId: activateCategory
+      tags:
+      - Catalog
+      summary: PROPOSED v1.5 — activateCategory
+      description: Activates an existing leaf category only after an independently published schema; global-admin guard and immutable availability audit required.
+      x-renivet-permission: taxonomy.manage
+      x-renivet-guard: platform-global-admin
+      x-renivet-implementation-wave: W2
+      responses:
+        '200':
+          description: Success / accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionReceipt'
+        '400': *id002
+        '401': *id002
+        '403': *id002
+        '404': *id002
+        '409': *id002
+        '503': *id002
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      x-renivet-csrf-policy: Require allowlisted Origin, Sec-Fetch-Site and X-CSRF-Token bound to W1 session; same-statement
+        resource permission in W1.
+      x-renivet-mfa-required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reasonCode]
+              properties:
+                reasonCode:
+                  type: string
+                  pattern: '^[A-Z][A-Z0-9_]{0,63}$'
   /brands/{brandId}/products/{productId}/variants/{variantId}:
     parameters:
     - $ref: '#/components/parameters/brandId'

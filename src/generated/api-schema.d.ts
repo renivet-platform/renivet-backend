@@ -599,6 +599,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/catalog/categories/{categoryId}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Activate a published leaf category
+         * @description Requires taxonomy.manage, fresh MFA and session-bound CSRF. The category must have an independently published schema; the immutable availability audit event is written atomically. Linear: REN2-115.
+         */
+        post: operations["activateCategory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/catalog/categories": {
         parameters: {
             query?: never;
@@ -1416,6 +1436,10 @@ export interface components {
             details?: {
                 [key: string]: unknown;
             };
+        };
+        CategoryActivationDto: {
+            /** @example PILOT_APPROVED */
+            reasonCode: string;
         };
         CategorySummaryDto: {
             /** Format: uuid */
@@ -3026,6 +3050,88 @@ export interface operations {
             };
             /** @description The schema is incomplete or does not compile against the approved validator. */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxonomyErrorDto"];
+                };
+            };
+            /** @description Authorization or taxonomy database is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxonomyErrorDto"];
+                };
+            };
+        };
+    };
+    activateCategory: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                categoryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategoryActivationDto"];
+            };
+        };
+        responses: {
+            /** @description Category activated and audit receipt persisted. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxonomyActionReceiptDto"];
+                };
+            };
+            /** @description Invalid category activation or CSRF proof. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxonomyErrorDto"];
+                };
+            };
+            /** @description Missing or invalid first-party session. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxonomyErrorDto"];
+                };
+            };
+            /** @description Global taxonomy.manage permission, fresh MFA, or CSRF check denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxonomyErrorDto"];
+                };
+            };
+            /** @description Category does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaxonomyErrorDto"];
+                };
+            };
+            /** @description Category is not a published leaf, is retired, is already active, or changed concurrently. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

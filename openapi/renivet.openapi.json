@@ -2511,6 +2511,129 @@
         "x-renivet-permission": "taxonomy.approve"
       }
     },
+    "/api/v1/admin/catalog/categories/{categoryId}/activate": {
+      "post": {
+        "description": "Requires taxonomy.manage, fresh MFA and session-bound CSRF. The category must have an independently published schema; the immutable availability audit event is written atomically. Linear: REN2-115.",
+        "operationId": "activateCategory",
+        "parameters": [
+          {
+            "name": "categoryId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryActivationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Category activated and audit receipt persisted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxonomyActionReceiptDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid category activation or CSRF proof.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxonomyErrorDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid first-party session.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxonomyErrorDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Global taxonomy.manage permission, fresh MFA, or CSRF check denied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxonomyErrorDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Category does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxonomyErrorDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Category is not a published leaf, is retired, is already active, or changed concurrently.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxonomyErrorDto"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Authorization or taxonomy database is unavailable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxonomyErrorDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "Activate a published leaf category",
+        "tags": [
+          "Catalog"
+        ],
+        "x-renivet-csrf-policy": "Require allowlisted Origin, Sec-Fetch-Site and X-CSRF-Token bound to W1 session; same-statement resource permission in W1.",
+        "x-renivet-guard": "platform-global-admin",
+        "x-renivet-implementation-wave": "W2",
+        "x-renivet-mfa-required": true,
+        "x-renivet-permission": "taxonomy.manage"
+      }
+    },
     "/api/v1/admin/catalog/categories": {
       "get": {
         "operationId": "listAdminTaxonomyCategories",
@@ -12373,6 +12496,19 @@
           "code",
           "message",
           "requestId"
+        ]
+      },
+      "CategoryActivationDto": {
+        "type": "object",
+        "properties": {
+          "reasonCode": {
+            "type": "string",
+            "example": "PILOT_APPROVED",
+            "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
+          }
+        },
+        "required": [
+          "reasonCode"
         ]
       },
       "CategorySummaryDto": {

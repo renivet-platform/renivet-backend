@@ -110,6 +110,25 @@ test('REN2-58 drafts, previews, publishes atomically, replays idempotently, and 
   assert.match(published.rows[0].ruleset_sha256, /^[0-9a-f]{64}$/);
   assert.equal(published.rows[0].notice_count, 1);
   assert.equal(published.rows[0].audit_count, 1);
+  const activationContext = { actorId: approverId, requestId: `activate-${randomUUID()}`, idempotencyKey: `activate-${randomUUID()}` };
+  const activation = await repository.activate({ categoryId, reasonCode: 'PILOT_APPROVED' }, activationContext);
+  assert.equal(activation.status, 'activated');
+  const activationReplay = await repository.activate({ categoryId, reasonCode: 'PILOT_APPROVED' }, { ...activationContext, requestId: `activation-replay-${randomUUID()}` });
+  assert.equal(activationReplay.id, activation.id);
+  const availability = await pool.query(
+    `SELECT c.active, c.schema_version, e.active_before, e.active_after, e.actor_user_id, e.reason_code,
+            (SELECT count(*)::int FROM catalogue.category_availability_events x WHERE x.category_id=c.id) AS event_count
+       FROM catalogue.categories c JOIN catalogue.category_availability_events e ON e.category_id=c.id
+      WHERE c.id=$1 ORDER BY e.occurred_at DESC LIMIT 1`, [categoryId],
+  );
+  assert.equal(availability.rows[0].active, true);
+  assert.equal(availability.rows[0].schema_version, 1);
+  assert.equal(availability.rows[0].active_before, false);
+  assert.equal(availability.rows[0].active_after, true);
+  assert.equal(availability.rows[0].actor_user_id, approverId);
+  assert.equal(availability.rows[0].reason_code, 'PILOT_APPROVED');
+  assert.equal(availability.rows[0].event_count, 1);
+  await assert.rejects(repository.activate({ categoryId, reasonCode: 'PILOT_APPROVED' }, { actorId: actorId, requestId: `activate-again-${randomUUID()}`, idempotencyKey: `activate-again-${randomUUID()}` }), expectCode('TAXONOMY_VERSION_CONFLICT'));
   await pool.query('UPDATE catalogue.attributes SET label=$2 WHERE id=$1', [attribute.attributeId, 'Renamed Material']);
   const frozenLabel = await pool.query('SELECT display_label FROM catalogue.category_schema_attribute_rules WHERE schema_version_id=$1 AND attribute_code=$2', [draft.id, attribute.code]);
   assert.equal(frozenLabel.rows[0].display_label, 'Material', 'renaming the live attribute does not change the published label snapshot');

@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsInt, IsObject, IsString, IsUUID, Min } from 'class-validator';
+import { IsInt, IsObject, IsString, IsUUID, Matches, MaxLength, Min } from 'class-validator';
 import { TaxonomyRuleInput } from './taxonomy-admin.service';
 
 export class CategorySchemaProposalDto {
@@ -18,6 +18,14 @@ export class CategorySchemaProposalDto {
   @ApiProperty({ example: 'w2-attribute-validator-v1' })
   @IsString()
   validatorVersion!: string;
+}
+
+export class CategoryActivationDto {
+  @ApiProperty({ example: 'PILOT_APPROVED', pattern: '^[A-Z][A-Z0-9_]{0,63}$' })
+  @IsString()
+  @MaxLength(64)
+  @Matches(/^[A-Z][A-Z0-9_]{0,63}$/)
+  reasonCode!: string;
 }
 
 export class TaxonomyActionReceiptDto {
