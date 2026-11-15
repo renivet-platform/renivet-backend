@@ -4,11 +4,9 @@ import {
   Controller,
   HttpCode,
   Param,
-  Get,
   Post,
   Req,
   UseFilters,
-  UseGuards,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
@@ -30,8 +28,6 @@ import {
 } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { RequireGlobalTaxonomyPermission } from '../access/taxonomy-admin.decorator';
-import { RequirePlatformAdminPermission } from '../access/platform-permission.guard';
-import { PlatformPermissionGuard } from '../access/platform-permission.guard';
 import { csrfMatches, CsrfRejectedError, readSessionToken, SessionService } from '../identity/session.service';
 import { CategorySchemaProposalDto, TaxonomyActionReceiptDto, TaxonomyErrorDto } from './taxonomy-admin.dto';
 import { TaxonomyExceptionFilter } from './taxonomy-exception.filter';
@@ -62,24 +58,6 @@ export class TaxonomyAdminController {
     private readonly sessions: SessionService,
     private readonly configuration: ConfigService,
   ) {}
-
-  @Get()
-  @UseGuards(PlatformPermissionGuard)
-  @RequirePlatformAdminPermission('taxonomy.approve')
-  @ApiOperation({ operationId: 'listAdminTaxonomyCategories', summary: 'List global taxonomy categories for administration' })
-  @ApiExtension('x-renivet-permission', 'taxonomy.approve')
-  async listCategories(): Promise<{ items: Record<string, unknown>[] }> {
-    return { items: await this.taxonomy.listCategories() };
-  }
-
-  @Get('attributes')
-  @UseGuards(PlatformPermissionGuard)
-  @RequirePlatformAdminPermission('taxonomy.approve')
-  @ApiOperation({ operationId: 'listAdminTaxonomyAttributes', summary: 'List taxonomy attributes for administration' })
-  @ApiExtension('x-renivet-permission', 'taxonomy.approve')
-  async listAttributes(): Promise<{ items: Record<string, unknown>[] }> {
-    return { items: await this.taxonomy.listAttributes() };
-  }
 
   @Post(':categoryId/schema-versions')
   @HttpCode(201)
