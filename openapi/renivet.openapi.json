@@ -2180,6 +2180,28 @@
         "x-renivet-permission": "brand_membership.review"
       }
     },
+    "/api/v1/admin/brand-application-reviews": {
+      "get": {
+        "operationId": "listPendingBrandApplicationReviews",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "List persisted pending brand applications for review",
+        "tags": [
+          "Admin Brand Review"
+        ],
+        "x-renivet-implementation-wave": "W1",
+        "x-renivet-permission": "brand_membership.review"
+      }
+    },
     "/api/v1/admin/catalog/categories/{categoryId}/schema-versions": {
       "post": {
         "description": "Requires the platform-global taxonomy.manage permission, fresh MFA and session-bound CSRF. Creates a draft snapshot and returns its rule diff against the current published version. Linear: REN2-58.",
