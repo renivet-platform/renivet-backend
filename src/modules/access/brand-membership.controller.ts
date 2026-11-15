@@ -11,7 +11,9 @@ export class BrandMembershipController {
 
   @Get()
   @UseGuards(BrandAccessGuard)
-  @RequireBrandPermission('brand_membership.read_self')
+  // Brand owners already receive the reviewed `brand_membership.read` grant;
+  // use that permission for the summary so owners can enter their workspace.
+  @RequireBrandPermission('brand_membership.read')
   @ApiOperation({ operationId: 'getBrandMembershipSummary', summary: 'Read the authenticated member’s brand access summary' })
   @ApiExtension('x-renivet-implementation-wave', 'W1')
   @ApiParam({ name: 'brandId', format: 'uuid' })
