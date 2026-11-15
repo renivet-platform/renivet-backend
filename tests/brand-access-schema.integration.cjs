@@ -146,6 +146,7 @@ test('REN2-26 brand membership, role scopes and permanent audit enforce their da
           'brand_membership.read',
           'brand_membership.revoke',
           'brand_role.assign_staff',
+          'catalog.read',
           'inventory.adjust.propose',
           'inventory.count',
           'inventory.location.manage',
