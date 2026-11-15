@@ -302,6 +302,13 @@
       "when": 1794700860000,
       "tag": "0042_ren2_55_brand_catalog_eligibility_handoff",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1794700920000,
+      "tag": "0043_ren2_47_brand_catalog_read_permission",
+      "breakpoints": true
     }
   ]
 }

@@ -142,6 +142,7 @@ test('REN2-26 brand membership, role scopes and permanent audit enforce their da
         scope: 'brand',
         permissions: [
           'brand_access_audit.read',
+          'catalog.read',
           'brand_membership.invite',
           'brand_membership.read',
           'brand_membership.revoke',
