@@ -2511,6 +2511,48 @@
         "x-renivet-permission": "taxonomy.approve"
       }
     },
+    "/api/v1/admin/catalog/categories": {
+      "get": {
+        "operationId": "listAdminTaxonomyCategories",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "List global taxonomy categories for administration",
+        "tags": [
+          "Catalog"
+        ],
+        "x-renivet-permission": "taxonomy.approve"
+      }
+    },
+    "/api/v1/admin/catalog/categories/attributes": {
+      "get": {
+        "operationId": "listAdminTaxonomyAttributes",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "List taxonomy attributes for administration",
+        "tags": [
+          "Catalog"
+        ],
+        "x-renivet-permission": "taxonomy.approve"
+      }
+    },
     "/api/v1/brands/{brandId}/categories": {
       "get": {
         "description": "Returns parent and leaf nodes with path, active state and current schema version. Non-leaf or inactive nodes are informational and must not be selected for product submission. Revalidates the private representation on every request; a schema or category change produces a new ETag. Linear: REN2-59.",

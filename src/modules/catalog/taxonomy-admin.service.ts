@@ -41,6 +41,8 @@ export interface TaxonomyMutationContext {
 }
 
 export interface TaxonomyAdminRepository {
+  listCategories(): Promise<Record<string, unknown>[]>;
+  listAttributes(): Promise<Record<string, unknown>[]>;
   propose(input: CategorySchemaProposalInput, context: TaxonomyMutationContext): Promise<Record<string, unknown>>;
   publish(input: { categoryId: string; version: number }, context: TaxonomyMutationContext): Promise<Record<string, unknown>>;
 }
@@ -177,6 +179,14 @@ export function buildCategorySchemaDiff(
 @Injectable()
 export class TaxonomyAdminService {
   constructor(@Inject(TAXONOMY_ADMIN_REPOSITORY) private readonly repository: TaxonomyAdminRepository) {}
+
+  async listCategories(): Promise<Record<string, unknown>[]> {
+    return this.repository.listCategories();
+  }
+
+  async listAttributes(): Promise<Record<string, unknown>[]> {
+    return this.repository.listAttributes();
+  }
 
   async propose(input: CategorySchemaProposalInput, context: TaxonomyMutationContext): Promise<Record<string, unknown>> {
     const normalized = normalizeCategorySchemaProposal(input);
