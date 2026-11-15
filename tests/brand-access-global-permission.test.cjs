@@ -19,3 +19,15 @@ test('brand scoped grants do not satisfy platform permission checks', async () =
   const repository = new BrandAccessRepository({ pool: { query: async () => ({ rowCount: 0 }) } });
   assert.equal(await repository.hasGlobalPermission('user-1', 'taxonomy.manage'), false);
 });
+
+test('team permission query binds the brand parameter without an unused PostgreSQL placeholder', async () => {
+  const calls = [];
+  const repository = new BrandAccessRepository({ pool: { query: async (...args) => {
+    calls.push(args);
+    return { rows: [] };
+  } } });
+
+  await repository.listTeamPermissions('user-1', 'brand-1');
+  assert.match(calls[0][0], /WHERE m\.brand_id=\$1/);
+  assert.deepEqual(calls[0][1], ['brand-1']);
+});
