@@ -29,5 +29,7 @@ test('team permission query binds the brand parameter without an unused PostgreS
 
   await repository.listTeamPermissions('user-1', 'brand-1');
   assert.match(calls[0][0], /WHERE m\.brand_id=\$1/);
+  assert.match(calls[0][0], /identity\.users u ON u\.id=m\.user_id/);
+  assert.match(calls[0][0], /COALESCE\(NULLIF\(btrim\(u\.display_name\), ''\), 'Member'\) AS "memberName"/);
   assert.deepEqual(calls[0][1], ['brand-1']);
 });
