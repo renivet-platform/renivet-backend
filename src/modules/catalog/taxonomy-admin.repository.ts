@@ -187,7 +187,10 @@ export class TaxonomyAdminPostgresRepository implements TaxonomyAdminRepository 
           WHERE category_id=$1 AND version=$2 AND state='PUBLISHED'`, [input.categoryId, category.schema_version],
       );
       if (!published.rowCount) throw taxonomyError('TAXONOMY_VERSION_CONFLICT');
-      if (category.active) throw taxonomyError('TAXONOMY_CATEGORY_ALREADY_ACTIVE');
+      // Activation is a versioned state transition. Once active, a repeat
+      // request is a stale/conflicting transition (the established taxonomy
+      // contract surfaces this as VERSION_CONFLICT).
+      if (category.active) throw taxonomyError('TAXONOMY_VERSION_CONFLICT');
       await client.query("SELECT set_config('app.taxonomy_actor_user_id',$1,true)", [context.actorId]);
       await client.query("SELECT set_config('app.taxonomy_request_id',$1,true)", [context.requestId]);
       await client.query("SELECT set_config('app.taxonomy_reason_code',$1,true)", [input.reasonCode]);
