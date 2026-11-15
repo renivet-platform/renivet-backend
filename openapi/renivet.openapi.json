@@ -2180,6 +2180,48 @@
         "x-renivet-permission": "brand_membership.review"
       }
     },
+    "/api/v1/admin/catalog/categories": {
+      "get": {
+        "operationId": "listAdminTaxonomyCategories",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "List global taxonomy categories for administration",
+        "tags": [
+          "Catalog"
+        ],
+        "x-renivet-permission": "taxonomy.approve"
+      }
+    },
+    "/api/v1/admin/catalog/categories/attributes": {
+      "get": {
+        "operationId": "listAdminTaxonomyAttributes",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "List taxonomy attributes for administration",
+        "tags": [
+          "Catalog"
+        ],
+        "x-renivet-permission": "taxonomy.approve"
+      }
+    },
     "/api/v1/admin/catalog/categories/{categoryId}/schema-versions": {
       "post": {
         "description": "Requires the platform-global taxonomy.manage permission, fresh MFA and session-bound CSRF. Creates a draft snapshot and returns its rule diff against the current published version. Linear: REN2-58.",

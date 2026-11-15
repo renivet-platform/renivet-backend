@@ -17,6 +17,24 @@ const ADVISORY_TAXONOMY_LOCK = '56056056';
 export class TaxonomyAdminPostgresRepository implements TaxonomyAdminRepository {
   constructor(private readonly infrastructure: IdentityInfrastructure) {}
 
+  async listCategories(): Promise<Record<string, unknown>[]> {
+    const pool = this.infrastructure.pool;
+    if (!pool) throw taxonomyError('TAXONOMY_DATABASE_UNAVAILABLE');
+    const result = await pool.query(`
+      SELECT c.id, c.code, c.name, c.active, c.schema_version AS "schemaVersion",
+             NOT EXISTS (SELECT 1 FROM catalogue.categories child WHERE child.parent_id=c.id) AS "isLeaf",
+             EXISTS (SELECT 1 FROM catalogue.category_schema_versions v WHERE v.category_id=c.id AND v.state='DRAFT') AS "hasDraft"
+      FROM catalogue.categories c ORDER BY c.code`);
+    return result.rows;
+  }
+
+  async listAttributes(): Promise<Record<string, unknown>[]> {
+    const pool = this.infrastructure.pool;
+    if (!pool) throw taxonomyError('TAXONOMY_DATABASE_UNAVAILABLE');
+    const result = await pool.query(`SELECT id, code, label, value_type AS "valueType", scope_type AS "scopeType", allowed_values AS "allowedValues", unit_code AS "unitCode" FROM catalogue.attributes ORDER BY code`);
+    return result.rows;
+  }
+
   async propose(input: CategorySchemaProposalInput, context: TaxonomyMutationContext): Promise<Record<string, unknown>> {
     return this.transaction(async (client) => {
       await client.query('SELECT pg_catalog.pg_advisory_xact_lock($1::bigint)', [ADVISORY_TAXONOMY_LOCK]);

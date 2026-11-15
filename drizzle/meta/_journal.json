@@ -309,6 +309,13 @@
       "when": 1794700920000,
       "tag": "0043_ren2_47_brand_catalog_read_permission",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1794700980000,
+      "tag": "0044_ren2_113_taxonomy_manage_permission",
+      "breakpoints": true
     }
   ]
 }
