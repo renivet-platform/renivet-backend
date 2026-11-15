@@ -76,9 +76,9 @@ export class BrandAccessRepository {
                FILTER (WHERE ep.permission_code IS NOT NULL), '[]'::jsonb) AS permissions
       FROM brands.brand_memberships m
       LEFT JOIN access.effective_permissions ep ON ep.user_id=m.user_id AND ep.brand_id=m.brand_id
-      WHERE m.brand_id=$2 AND m.membership_state <> 'revoked'
+      WHERE m.brand_id=$1 AND m.membership_state <> 'revoked'
       GROUP BY m.user_id, m.membership_state
-      ORDER BY m.user_id`, [userId, brandId]);
+      ORDER BY m.user_id`, [brandId]);
     return result.rows;
   }
 }
