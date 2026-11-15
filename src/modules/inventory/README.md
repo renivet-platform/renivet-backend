@@ -1,6 +1,6 @@
 # Inventory implementation boundary
 
-REN2-83..89 now have an additive PostgreSQL ledger, brand-scoped repository operations, dormant NestJS controllers and PostgreSQL integration tests. `InventoryModule` is intentionally not imported by `AppModule`; the routes and their generated API contract remain unavailable until G07/G08/G17 are approved.
+REN2-83..89 have an additive PostgreSQL ledger, brand-scoped repository operations, NestJS controllers and PostgreSQL integration tests. `InventoryModule` is opt-in through `RENIVET_INVENTORY_API_ENABLED=true` for disposable/local environments; it remains disabled by default and must not be enabled in staging/production until G07/G08/G17 are approved.
 
 ## Authoritative stock model
 

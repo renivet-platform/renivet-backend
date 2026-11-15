@@ -7,6 +7,7 @@ import { AccessModule } from './modules/access/access.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { MediaModule } from './modules/media/media.module';
 import { ImportsModule } from './modules/imports/imports.module';
+import { InventoryModule } from './modules/inventory/inventory.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { ImportsModule } from './modules/imports/imports.module';
     CatalogModule,
     MediaModule,
     ImportsModule,
+    ...(process.env.RENIVET_INVENTORY_API_ENABLED === 'true' ? [InventoryModule] : []),
   ],
 })
 export class AppModule {}

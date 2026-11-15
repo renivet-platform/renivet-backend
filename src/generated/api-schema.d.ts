@@ -244,6 +244,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/brands/{brandId}/access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the authenticated member’s brand access summary */
+        get: operations["getBrandMembershipSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/brands/{brandId}/access/team": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read redacted brand team membership and permissions */
+        get: operations["listBrandTeamPermissions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/brands/{brandId}/products/{productId}/review": {
         parameters: {
             query?: never;
@@ -2324,6 +2358,44 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AuthErrorDto"];
                 };
+            };
+        };
+    };
+    getBrandMembershipSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                brandId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listBrandTeamPermissions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                brandId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

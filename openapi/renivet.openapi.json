@@ -1301,6 +1301,66 @@
         ]
       }
     },
+    "/api/v1/brands/{brandId}/access": {
+      "get": {
+        "operationId": "getBrandMembershipSummary",
+        "parameters": [
+          {
+            "name": "brandId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "Read the authenticated member’s brand access summary",
+        "tags": [
+          "Brand access"
+        ],
+        "x-renivet-implementation-wave": "W1"
+      }
+    },
+    "/api/v1/brands/{brandId}/access/team": {
+      "get": {
+        "operationId": "listBrandTeamPermissions",
+        "parameters": [
+          {
+            "name": "brandId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "Read redacted brand team membership and permissions",
+        "tags": [
+          "Brand access"
+        ],
+        "x-renivet-implementation-wave": "W1"
+      }
+    },
     "/api/v1/admin/brands/{brandId}/products/{productId}/review": {
       "post": {
         "description": "Requires a global W1 catalog.review grant, recent MFA, session-bound CSRF and an idempotency key. The frozen revision and row version are compared by the transaction.",
