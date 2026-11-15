@@ -542,32 +542,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/catalog/categories": {
+    "/api/v1/admin/brand-application-reviews": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** List global taxonomy categories for administration */
-        get: operations["listAdminTaxonomyCategories"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/admin/catalog/categories/attributes": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List taxonomy attributes for administration */
-        get: operations["listAdminTaxonomyAttributes"];
+        /** List persisted pending brand applications for review */
+        get: operations["listPendingBrandApplicationReviews"];
         put?: never;
         post?: never;
         delete?: never;
@@ -610,6 +593,40 @@ export interface paths {
          * @description Requires a separate platform-global taxonomy.approve permission, fresh MFA and session-bound CSRF. Uses the category current-version pointer as a compare-and-swap and writes the audit receipt and publication outbox notice atomically. Linear: REN2-58.
          */
         post: operations["publishCategorySchemaVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/catalog/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List global taxonomy categories for administration */
+        get: operations["listAdminTaxonomyCategories"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/catalog/categories/attributes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List taxonomy attributes for administration */
+        get: operations["listAdminTaxonomyAttributes"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2805,24 +2822,7 @@ export interface operations {
             };
         };
     };
-    listAdminTaxonomyCategories: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    listAdminTaxonomyAttributes: {
+    listPendingBrandApplicationReviews: {
         parameters: {
             query?: never;
             header?: never;
@@ -3041,6 +3041,40 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["TaxonomyErrorDto"];
                 };
+            };
+        };
+    };
+    listAdminTaxonomyCategories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listAdminTaxonomyAttributes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

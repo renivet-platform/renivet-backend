@@ -2180,9 +2180,9 @@
         "x-renivet-permission": "brand_membership.review"
       }
     },
-    "/api/v1/admin/catalog/categories": {
+    "/api/v1/admin/brand-application-reviews": {
       "get": {
-        "operationId": "listAdminTaxonomyCategories",
+        "operationId": "listPendingBrandApplicationReviews",
         "parameters": [],
         "responses": {
           "200": {
@@ -2194,32 +2194,12 @@
             "renivetSession": []
           }
         ],
-        "summary": "List global taxonomy categories for administration",
+        "summary": "List persisted pending brand applications for review",
         "tags": [
-          "Catalog"
+          "Admin Brand Review"
         ],
-        "x-renivet-permission": "taxonomy.approve"
-      }
-    },
-    "/api/v1/admin/catalog/categories/attributes": {
-      "get": {
-        "operationId": "listAdminTaxonomyAttributes",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "renivetSession": []
-          }
-        ],
-        "summary": "List taxonomy attributes for administration",
-        "tags": [
-          "Catalog"
-        ],
-        "x-renivet-permission": "taxonomy.approve"
+        "x-renivet-implementation-wave": "W1",
+        "x-renivet-permission": "brand_membership.review"
       }
     },
     "/api/v1/admin/catalog/categories/{categoryId}/schema-versions": {
@@ -2528,6 +2508,48 @@
         "x-renivet-guard": "platform-global-admin",
         "x-renivet-implementation-wave": "W2",
         "x-renivet-mfa-required": true,
+        "x-renivet-permission": "taxonomy.approve"
+      }
+    },
+    "/api/v1/admin/catalog/categories": {
+      "get": {
+        "operationId": "listAdminTaxonomyCategories",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "List global taxonomy categories for administration",
+        "tags": [
+          "Catalog"
+        ],
+        "x-renivet-permission": "taxonomy.approve"
+      }
+    },
+    "/api/v1/admin/catalog/categories/attributes": {
+      "get": {
+        "operationId": "listAdminTaxonomyAttributes",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "List taxonomy attributes for administration",
+        "tags": [
+          "Catalog"
+        ],
         "x-renivet-permission": "taxonomy.approve"
       }
     },

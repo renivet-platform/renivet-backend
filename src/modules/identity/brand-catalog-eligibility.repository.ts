@@ -6,6 +6,22 @@ import { BrandApprovalOutcome, BrandCatalogEligibilityRepository } from './brand
 export class BrandCatalogEligibilityPostgresRepository implements BrandCatalogEligibilityRepository {
   constructor(private readonly infrastructure: IdentityInfrastructure) {}
 
+  async listPending(): Promise<Record<string, unknown>[]> {
+    const pool = this.infrastructure.pool;
+    if (!pool) throw new Error('Brand eligibility database is unavailable');
+    const result = await pool.query(`
+      SELECT b.id AS "brandId", b.display_name AS "brandName", b.legal_name AS "legalName",
+             b.onboarding_state AS "brandState", b.created_at AS "submittedAt",
+             m.user_id AS "applicantUserId", u.display_name AS "applicantName",
+             u.email AS "applicantEmail", m.membership_state AS "membershipState"
+        FROM brands.brands b
+        JOIN brands.brand_memberships m ON m.brand_id=b.id AND m.membership_state='pending'
+        JOIN identity.users u ON u.id=m.user_id
+       WHERE b.onboarding_state='pending'
+       ORDER BY b.created_at, b.id`);
+    return result.rows as Record<string, unknown>[];
+  }
+
   async applyOutcome(outcome: BrandApprovalOutcome): Promise<Record<string, unknown>> {
     const pool = this.infrastructure.pool;
     if (!pool) throw new Error('Brand eligibility database is unavailable');
