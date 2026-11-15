@@ -78,6 +78,7 @@ Guard lane: `brand` means W1 `BrandAccessGuard` plus same-statement scoped repos
 | 45 | POST `/brands/{brandId}/product-imports/uploads` | `beginCatalogImportUpload` | `imports.write` | brand | UNMAPPED; v1.5 candidate role map has no imports permission |
 | 46 | POST `/brands/{brandId}/media/zip-mapping-manifests` | `createMediaZipMappingManifest` | `media.write` | brand | UNMAPPED; v1.5 candidate role map has no approved W1 media permission |
 | 47 | GET `/brands/{brandId}/media/zip-imports/{batchId}` | `getMediaZipImportStatus` | `media.write` | brand | UNMAPPED; v1.5 candidate role map has no approved W1 media permission |
+| 48 | POST `/admin/catalog/categories/{categoryId}/activate` | `activateCategory` | `taxonomy.manage` | platform-global-admin | Taxonomy administrator (proposed); requires independently published schema, fresh MFA, CSRF and maker-checker separation |
 
 ## Security findings and contracts to carry forward
 

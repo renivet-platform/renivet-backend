@@ -3,7 +3,7 @@
   "candidateFile": "openapi/W2_v1_5_CANDIDATE.yaml",
   "sourceUrl": "https://github.com/renivet-platform/renivet-engineering-os/blob/main/docs/02-system-design/w2-catalog-inventory/v1.5/W2_OpenAPI_v1_5_CANDIDATE.yaml",
   "expectedOperationCount": 48,
-  "candidateBlob": "e65e1777162aaeb36f1be10a175f1e7bd90d46a8",
+  "candidateBlob": "cc314bb77dcbd9ac7a880e373bfc19a895622f14",
   "qualityGates": [
     "G07",
     "G08",
@@ -1212,7 +1212,7 @@
       "implementation": {
         "status": "implemented",
         "test": { "status": "verified", "path": "tests/w2/taxonomy-admin.integration.test.cjs" },
-        "pullRequest": { "status": "pending" }
+        "pullRequest": { "status": "open", "url": "https://github.com/renivet-platform/renivet-backend/pull/94" }
       },
       "ownerIssueUrl": "https://linear.app/renivet/issue/REN2-115"
     },

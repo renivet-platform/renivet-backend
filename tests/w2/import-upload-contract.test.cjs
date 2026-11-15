@@ -14,7 +14,7 @@ test('REN2-76 defines a protected W2 source-file upload intent operation', () =>
   const operations = Object.entries(candidate.paths ?? {}).flatMap(([path, item]) =>
     Object.entries(item).filter(([method]) => ['get', 'post', 'put', 'patch', 'delete'].includes(method))
       .map(([method, operation]) => ({ path, method, operation })));
-  assert.equal(operations.length, 47);
+  assert.equal(operations.length, 48);
   const upload = operations.find(({ operation }) => operation.operationId === 'beginCatalogImportUpload');
   assert.ok(upload, 'upload operation is in the candidate contract');
   assert.equal(upload.path, '/brands/{brandId}/product-imports/uploads');
