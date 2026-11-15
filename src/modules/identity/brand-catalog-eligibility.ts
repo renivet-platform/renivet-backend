@@ -13,6 +13,7 @@ export interface BrandApprovalOutcome {
 }
 
 export interface BrandCatalogEligibilityRepository {
+  listPending(): Promise<Record<string, unknown>[]>;
   applyOutcome(outcome: BrandApprovalOutcome): Promise<Record<string, unknown>>;
 }
 
@@ -27,6 +28,10 @@ export class BrandCatalogEligibilityService {
     @Inject(BRAND_CATALOG_ELIGIBILITY_REPOSITORY)
     private readonly repository: BrandCatalogEligibilityRepository,
   ) {}
+
+  async listPending(): Promise<Record<string, unknown>[]> {
+    return this.repository.listPending();
+  }
 
   async applyOutcome(outcome: BrandApprovalOutcome): Promise<Record<string, unknown>> {
     if (!outcome || !UUID.test(outcome.eventId) || !UUID.test(outcome.brandId)

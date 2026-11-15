@@ -38,11 +38,12 @@ import { CatalogReviewPostgresRepository } from './catalog-review.repository';
 import { CATALOG_PUBLICATION_REPOSITORY, CatalogPublicationService } from './catalog-publication';
 import { CatalogPublicationPostgresRepository } from './catalog-publication.repository';
 import { BrandApplicationReviewController } from '../identity/brand-application-review.controller';
+import { BrandApplicationReviewListController } from '../identity/brand-application-review-list.controller';
 
 // W2 taxonomy administration, brand reads, and progressive parent draft writes.
 @Module({
   imports: [ConfigModule, IdentityModule, AccessModule],
-  controllers: [AdminQualityDecisionController, AdminPublicationDecisionController, AdminReviewController, BrandApplicationReviewController, TaxonomyAdminController, CatalogReadController, ProductReadController, ProductDraftController, PriceController, PriceReviewController, ClaimsController, ClaimReviewController],
+  controllers: [AdminQualityDecisionController, AdminPublicationDecisionController, AdminReviewController, BrandApplicationReviewController, BrandApplicationReviewListController, TaxonomyAdminController, CatalogReadController, ProductReadController, ProductDraftController, PriceController, PriceReviewController, ClaimsController, ClaimReviewController],
   providers: [
     AdminReviewReadRepository,
     TaxonomyAdminPostgresRepository,
