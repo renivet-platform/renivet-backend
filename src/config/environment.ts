@@ -99,6 +99,7 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
   const authChallengeKey = optionalString(input, 'AUTH_CHALLENGE_HMAC_KEY');
   const authCsrfKey = optionalString(input, 'AUTH_CSRF_HMAC_KEY');
   const authMfaEncryptionKey = optionalString(input, 'AUTH_MFA_ENCRYPTION_KEY');
+  const inventoryApiEnabled = optionalBoolean(input, 'RENIVET_INVENTORY_API_ENABLED') ?? false;
   const smtpHost = optionalConfigString(input, 'SMTP_HOST');
   if (smtpHost && (smtpHost.length > 253 || !/^[A-Za-z0-9.-]+$/.test(smtpHost) || smtpHost.startsWith('.') || smtpHost.endsWith('.'))) {
     error('SMTP_HOST', 'must be a DNS hostname or IPv4 address');
@@ -189,6 +190,7 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
     AUTH_CHALLENGE_HMAC_KEY: authChallengeKey,
     AUTH_CSRF_HMAC_KEY: authCsrfKey,
     AUTH_MFA_ENCRYPTION_KEY: authMfaEncryptionKey,
+    RENIVET_INVENTORY_API_ENABLED: inventoryApiEnabled,
     SMTP_HOST: smtpHost,
     SMTP_PORT: smtpPort,
     SMTP_SECURE: optionalBoolean(input, 'SMTP_SECURE'),

@@ -50,4 +50,35 @@ export class BrandAccessRepository {
     );
     return result.rowCount === 1;
   }
+
+  async getMembershipSummary(userId: string, brandId: string) {
+    const pool = this.infrastructure.pool;
+    if (!pool) throw new Error('Authorization database is unavailable');
+    const result = await pool.query(`
+      SELECT b.id AS "brandId", b.display_name AS "brandName", b.onboarding_state AS "brandState",
+             m.membership_state AS "membershipState", m.valid_from AS "validFrom", m.valid_until AS "validUntil",
+             COALESCE(jsonb_agg(DISTINCT jsonb_build_object('roleCode', ep.role_code, 'permissionCode', ep.permission_code))
+               FILTER (WHERE ep.permission_code IS NOT NULL), '[]'::jsonb) AS permissions
+      FROM brands.brands b
+      JOIN brands.brand_memberships m ON m.brand_id=b.id AND m.user_id=$1
+      LEFT JOIN access.effective_permissions ep ON ep.user_id=$1 AND ep.brand_id=b.id
+      WHERE b.id=$2
+      GROUP BY b.id, b.display_name, b.onboarding_state, m.membership_state, m.valid_from, m.valid_until`, [userId, brandId]);
+    return result.rows[0] ?? null;
+  }
+
+  async listTeamPermissions(userId: string, brandId: string) {
+    const pool = this.infrastructure.pool;
+    if (!pool) throw new Error('Authorization database is unavailable');
+    const result = await pool.query(`
+      SELECT m.user_id AS "userId", m.membership_state AS "membershipState",
+             COALESCE(jsonb_agg(DISTINCT jsonb_build_object('roleCode', ep.role_code, 'permissionCode', ep.permission_code))
+               FILTER (WHERE ep.permission_code IS NOT NULL), '[]'::jsonb) AS permissions
+      FROM brands.brand_memberships m
+      LEFT JOIN access.effective_permissions ep ON ep.user_id=m.user_id AND ep.brand_id=m.brand_id
+      WHERE m.brand_id=$2 AND m.membership_state <> 'revoked'
+      GROUP BY m.user_id, m.membership_state
+      ORDER BY m.user_id`, [userId, brandId]);
+    return result.rows;
+  }
 }
