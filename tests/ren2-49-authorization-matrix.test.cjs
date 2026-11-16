@@ -10,7 +10,7 @@ test('REN2-49 maps every v1.5 candidate operation to a permission and authorizat
   const candidateOperationIds = Object.values(candidate.paths).flatMap((pathItem) => Object.entries(pathItem)
     .filter(([method]) => ['get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace'].includes(method.toLowerCase()))
     .map(([, operation]) => operation.operationId));
-  assert.equal(candidateOperationIds.length, 47);
+  assert.equal(candidateOperationIds.length, 48);
   assert.equal(rows.length, candidateOperationIds.length);
 
   const operationIds = [];
@@ -24,6 +24,6 @@ test('REN2-49 maps every v1.5 candidate operation to a permission and authorizat
   }
   assert.equal(new Set(operationIds).size, candidateOperationIds.length, 'operation IDs must be unique');
   assert.deepEqual([...operationIds].sort(), [...candidateOperationIds].sort(), 'every candidate operation must have one matrix row');
-  assert.equal(rows.filter((row) => row.includes('| platform-global-admin |')).length, 2,
+  assert.equal(rows.filter((row) => row.includes('| platform-global-admin |')).length, 3,
     'taxonomy operations use the separate platform-global guard lane');
 });

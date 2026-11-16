@@ -1641,6 +1641,56 @@ paths:
       x-renivet-csrf-policy: Require allowlisted Origin, Sec-Fetch-Site and X-CSRF-Token bound to W1 session; same-statement
         resource permission in W1.
       x-renivet-mfa-required: true
+  /admin/catalog/categories/{categoryId}/activate:
+    parameters:
+    - $ref: '#/components/parameters/categoryId'
+    post:
+      operationId: activateCategory
+      tags:
+      - Catalog
+      summary: PROPOSED v1.5 — activateCategory
+      description: 'Requires taxonomy.manage, fresh MFA and session-bound CSRF. The category must have an independently published schema; the immutable availability audit event is written atomically. Linear: REN2-115.'
+      x-renivet-permission: taxonomy.manage
+      x-renivet-guard: platform-global-admin
+      x-renivet-implementation-wave: W2
+      responses:
+        '200':
+          description: Category activated and audit receipt persisted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaxonomyActionReceiptDto'
+        '400':
+          description: Invalid category activation or CSRF proof.
+          content: { application/json: { schema: { $ref: '#/components/schemas/TaxonomyErrorDto' } } }
+        '401':
+          description: Missing or invalid first-party session.
+          content: { application/json: { schema: { $ref: '#/components/schemas/TaxonomyErrorDto' } } }
+        '403':
+          description: Global taxonomy.manage permission, fresh MFA, or CSRF check denied.
+          content: { application/json: { schema: { $ref: '#/components/schemas/TaxonomyErrorDto' } } }
+        '404':
+          description: Category does not exist.
+          content: { application/json: { schema: { $ref: '#/components/schemas/TaxonomyErrorDto' } } }
+        '409':
+          description: Category is not a published leaf, is retired, is already active, or changed concurrently.
+          content: { application/json: { schema: { $ref: '#/components/schemas/TaxonomyErrorDto' } } }
+        '503':
+          description: Authorization or taxonomy database is unavailable.
+          content: { application/json: { schema: { $ref: '#/components/schemas/TaxonomyErrorDto' } } }
+      parameters:
+      - $ref: '#/components/parameters/idempotencyKey'
+      x-renivet-csrf-policy: Require allowlisted Origin, Sec-Fetch-Site and X-CSRF-Token bound to W1 session; same-statement
+        resource permission in W1.
+      x-renivet-mfa-required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryActivationDto'
+      security:
+      - sessionCookie: []
   /brands/{brandId}/products/{productId}/variants/{variantId}:
     parameters:
     - $ref: '#/components/parameters/brandId'
@@ -1814,6 +1864,10 @@ components:
       name: __Host-renivet_session
       description: Exact cookie name read from W1 session.service.ts; Secure __Host- cookie. Session verification
         and CSRF enforced server-side.
+    renivetSession:
+      type: apiKey
+      in: cookie
+      name: __Host-renivet_session
   parameters:
     brandId:
       in: path
@@ -2347,6 +2401,47 @@ components:
         rowVersion:
           type: integer
           minimum: 1
+    CategoryActivationDto:
+      type: object
+      required:
+      - reasonCode
+      properties:
+        reasonCode:
+          type: string
+          pattern: '^[A-Z][A-Z0-9_]{0,63}$'
+    TaxonomyActionReceiptDto:
+      type: object
+      required:
+      - id
+      - status
+      - requestId
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        requestId:
+          type: string
+        rowVersion:
+          type: integer
+          minimum: 1
+    TaxonomyErrorDto:
+      type: object
+      required:
+      - code
+      - message
+      - requestId
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        requestId:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
     CategorySummary:
       type: object
       required:

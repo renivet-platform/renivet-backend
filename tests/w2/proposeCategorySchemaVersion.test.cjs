@@ -5,6 +5,7 @@ const test = require('node:test');
 const {
   buildCategorySchemaDiff,
   normalizeCategorySchemaProposal,
+  TaxonomyAdminService,
 } = require('../../dist/modules/catalog/taxonomy-admin.service.js');
 
 const attributeId = 'c080b92a-fb86-4360-9b55-c79b402227df';
@@ -60,4 +61,14 @@ test('category schema preview reports deterministic added, removed and changed r
       code: 'material', scope: 'product', before: before[0], after: after[0],
     }],
   });
+});
+
+test('category activation validates the persisted category identifier and audit reason before writing', async () => {
+  let calls = 0;
+  const service = new TaxonomyAdminService({ activate: async (input) => { calls += 1; return { status: 'activated', reasonCode: input.reasonCode }; } });
+  const context = { actorId: '19f234c6-280a-4b51-9e6f-836f44d2f49d', requestId: 'activate-test', idempotencyKey: 'activate-test' };
+  const result = await service.activate({ categoryId: context.actorId, reasonCode: 'PILOT_APPROVED' }, context);
+  assert.deepEqual(result, { status: 'activated', reasonCode: 'PILOT_APPROVED' });
+  assert.equal(calls, 1);
+  await assert.rejects(service.activate({ categoryId: context.actorId, reasonCode: 'invalid' }, context), (error) => error?.getResponse?.().code === 'CATEGORY_ACTIVATION_INVALID');
 });

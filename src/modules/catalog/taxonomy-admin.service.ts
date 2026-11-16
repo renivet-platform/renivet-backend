@@ -34,6 +34,11 @@ export interface CategorySchemaProposalInput {
   readonly ruleset: { readonly attributes: readonly TaxonomyRuleInput[]; readonly [key: string]: unknown };
 }
 
+export interface CategoryActivationInput {
+  readonly categoryId: string;
+  readonly reasonCode: string;
+}
+
 export interface TaxonomyMutationContext {
   readonly actorId: string;
   readonly requestId: string;
@@ -45,6 +50,7 @@ export interface TaxonomyAdminRepository {
   listAttributes(): Promise<Record<string, unknown>[]>;
   propose(input: CategorySchemaProposalInput, context: TaxonomyMutationContext): Promise<Record<string, unknown>>;
   publish(input: { categoryId: string; version: number }, context: TaxonomyMutationContext): Promise<Record<string, unknown>>;
+  activate(input: CategoryActivationInput, context: TaxonomyMutationContext): Promise<Record<string, unknown>>;
 }
 
 export const TAXONOMY_ADMIN_REPOSITORY = Symbol('TAXONOMY_ADMIN_REPOSITORY');
@@ -206,11 +212,19 @@ export class TaxonomyAdminService {
       throw mapTaxonomyError(error);
     }
   }
+
+  async activate(input: CategoryActivationInput, context: TaxonomyMutationContext): Promise<Record<string, unknown>> {
+    if (!UUID.test(input.categoryId) || !/^[A-Z][A-Z0-9_]{0,63}$/.test(input.reasonCode)) {
+      throw new BadRequestException({ code: 'CATEGORY_ACTIVATION_INVALID', message: 'The category activation is invalid.' });
+    }
+    try { return await this.repository.activate(input, context); }
+    catch (error) { throw mapTaxonomyError(error); }
+  }
 }
 
 function mapTaxonomyError(error: unknown): unknown {
   const code = (error as { code?: string } | null)?.code;
-  if (code === 'TAXONOMY_VERSION_CONFLICT' || code === 'TAXONOMY_IDEMPOTENCY_CONFLICT' || code === 'TAXONOMY_APPROVER_MUST_DIFFER') {
+  if (code === 'TAXONOMY_VERSION_CONFLICT' || code === 'TAXONOMY_IDEMPOTENCY_CONFLICT' || code === 'TAXONOMY_APPROVER_MUST_DIFFER' || code === 'TAXONOMY_CATEGORY_ALREADY_ACTIVE') {
     return new ConflictException({ code, message: 'The taxonomy version changed or the request conflicts with an earlier operation.' });
   }
   if (code === 'TAXONOMY_CATEGORY_NOT_FOUND') {
@@ -218,6 +232,9 @@ function mapTaxonomyError(error: unknown): unknown {
   }
   if (code === 'CATEGORY_SCHEMA_INVALID') {
     return new BadRequestException({ code, message: 'The category schema proposal is invalid.' });
+  }
+  if (code === 'CATEGORY_ACTIVATION_INVALID') {
+    return new BadRequestException({ code, message: 'The category activation is invalid.' });
   }
   if (code === 'TAXONOMY_DATABASE_UNAVAILABLE') {
     return new ServiceUnavailableException({ code: 'TAXONOMY_DATABASE_UNAVAILABLE', message: 'Taxonomy administration is temporarily unavailable.' });

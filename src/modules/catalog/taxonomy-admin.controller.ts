@@ -29,7 +29,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { RequireGlobalTaxonomyPermission } from '../access/taxonomy-admin.decorator';
 import { csrfMatches, CsrfRejectedError, readSessionToken, SessionService } from '../identity/session.service';
-import { CategorySchemaProposalDto, TaxonomyActionReceiptDto, TaxonomyErrorDto } from './taxonomy-admin.dto';
+import { CategoryActivationDto, CategorySchemaProposalDto, TaxonomyActionReceiptDto, TaxonomyErrorDto } from './taxonomy-admin.dto';
 import { TaxonomyExceptionFilter } from './taxonomy-exception.filter';
 import { TaxonomyAdminService } from './taxonomy-admin.service';
 
@@ -138,6 +138,31 @@ export class TaxonomyAdminController {
     const version = Number(rawVersion);
     if (!Number.isSafeInteger(version) || version < 1) throw new BadRequestException({ code: 'CATEGORY_SCHEMA_INVALID', message: 'The category schema version is invalid.' });
     return this.taxonomy.publish({ categoryId, version }, context);
+  }
+
+  @Post(':categoryId/activate')
+  @HttpCode(200)
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }))
+  @RequireGlobalTaxonomyPermission('taxonomy.manage')
+  @ApiParam({ name: 'categoryId', type: 'string', format: 'uuid' })
+  @ApiExtension('x-renivet-permission', 'taxonomy.manage')
+  @ApiExtension('x-renivet-guard', 'platform-global-admin')
+  @ApiExtension('x-renivet-mfa-required', true)
+  @ApiExtension('x-renivet-csrf-policy', 'Require allowlisted Origin, Sec-Fetch-Site and X-CSRF-Token bound to W1 session; same-statement resource permission in W1.')
+  @ApiExtension('x-renivet-implementation-wave', 'W2')
+  @ApiOperation({ operationId: 'activateCategory', summary: 'Activate a published leaf category', description: 'Requires taxonomy.manage, fresh MFA and session-bound CSRF. The category must have an independently published schema; the immutable availability audit event is written atomically. Linear: REN2-115.' })
+  @ApiHeader({ name: 'Idempotency-Key', required: true, schema: { type: 'string', minLength: 1, maxLength: 120 } })
+  @ApiBody({ type: CategoryActivationDto })
+  @ApiResponse({ status: 200, description: 'Category activated and audit receipt persisted.', type: TaxonomyActionReceiptDto })
+  @ApiBadRequestResponse({ description: 'Invalid category activation or CSRF proof.', type: TaxonomyErrorDto })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid first-party session.', type: TaxonomyErrorDto })
+  @ApiForbiddenResponse({ description: 'Global taxonomy.manage permission, fresh MFA, or CSRF check denied.', type: TaxonomyErrorDto })
+  @ApiNotFoundResponse({ description: 'Category does not exist.', type: TaxonomyErrorDto })
+  @ApiConflictResponse({ description: 'Category is not a published leaf, is retired, is already active, or changed concurrently.', type: TaxonomyErrorDto })
+  @ApiServiceUnavailableResponse({ description: 'Authorization or taxonomy database is unavailable.', type: TaxonomyErrorDto })
+  async activate(@Param('categoryId') categoryId: string, @Body() body: CategoryActivationDto, @Req() request: TaxonomyRequest): Promise<Record<string, unknown>> {
+    const context = await this.mutationContext(request, 'activate');
+    return this.taxonomy.activate({ categoryId, reasonCode: body.reasonCode }, context);
   }
 
   private async mutationContext(request: TaxonomyRequest, action: string): Promise<{ actorId: string; requestId: string; idempotencyKey: string }> {

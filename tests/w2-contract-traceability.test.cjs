@@ -15,10 +15,10 @@ function validate(candidate = candidateSpec, manifest = traceability, active = a
   return checkTraceability({ ...options, candidateSpec: candidate, traceability: manifest, activeSpec: active });
 }
 
-test('REN2-52 loads exactly 47 unique v1.5 candidate operations and verifies the implemented subset', () => {
+test('REN2-52 loads exactly 48 unique v1.5 candidate operations and verifies the implemented subset', () => {
   const operations = extractOperations(candidateSpec);
-  assert.equal(operations.length, 47);
-  assert.equal(new Set(operations.map(({ operation }) => operation.operationId)).size, 47);
+  assert.equal(operations.length, 48);
+  assert.equal(new Set(operations.map(({ operation }) => operation.operationId)).size, 48);
   assert.ok(operations.every(({ operation }) => operation['x-renivet-implementation-wave'] === 'W2'));
   assert.deepEqual(validate(), []);
   for (const { path, method, operation } of operations) {
