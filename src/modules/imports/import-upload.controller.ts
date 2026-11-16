@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { Body, ConflictException, Controller, ForbiddenException, Headers, HttpCode, NotFoundException, Post, Req, ServiceUnavailableException, UnprocessableEntityException, UseFilters, UseGuards, UsePipes, ValidationPipe } from '@nestjs/common';
+import { Body, ConflictException, Controller, ForbiddenException, Headers, HttpCode, NotFoundException, Param, Post, Put, Req, ServiceUnavailableException, UnprocessableEntityException, UseFilters, UseGuards, UsePipes, ValidationPipe } from '@nestjs/common';
 import { ApiBody, ApiCookieAuth, ApiExtension, ApiHeader, ApiNotFoundResponse, ApiOperation, ApiParam, ApiResponse, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
@@ -13,6 +13,9 @@ import { readXlsxWorkbook, MAX_IMPORT_FILE_BYTES } from './import-workbook-reade
 import { detectImportFormatProfile, mapImportWorkbook } from './import-format-profiles';
 import { parseCatalogCsv } from './import-csv-parser';
 import { ImportExceptionFilter } from './import-exception.filter';
+import { createLocalUploadToken, localImportObjectPath, localImportStorageRoot, verifyLocalUploadToken } from './local-import-storage';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
 
 interface ImportRequest extends BrandAccessRequest { id?: string }
 const VALIDATION = new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true,
@@ -91,6 +94,11 @@ export class ImportUploadController {
     if (input.sourceKind === 'MEDIA_ZIP' && !MEDIA_ZIP_UPLOAD_ENABLED) {
       throw new ServiceUnavailableException({ code: 'MEDIA_ZIP_IMPORT_INACTIVE', message: 'Media ZIP imports are not activated.' });
     }
+    const localRoot = localImportStorageRoot({
+      NODE_ENV: this.config.get<string>('NODE_ENV'),
+      RENIVET_LOCAL_IMPORT_STORAGE_ENABLED: this.config.get<boolean>('RENIVET_LOCAL_IMPORT_STORAGE_ENABLED'),
+      RENIVET_LOCAL_IMPORT_STORAGE_DIR: this.config.get<string>('RENIVET_LOCAL_IMPORT_STORAGE_DIR'),
+    });
     const endpoint = this.config.get<string>('MEDIA_SPACES_ENDPOINT');
     const bucket = this.config.get<string>('MEDIA_SPACES_BUCKET')?.trim();
     const region = this.config.get<string>('MEDIA_SPACES_REGION')?.trim();
@@ -150,6 +158,18 @@ export class ImportUploadController {
     if (row && (row.status !== 'PENDING' || new Date(row.expires_at).getTime() <= Date.now())) {
       throw new ConflictException({ code: 'IMPORT_UPLOAD_EXPIRED', message: 'The upload intent is no longer available.' });
     }
+    if (localRoot) {
+      const expiresAt = new Date(row?.expires_at ?? Date.now() + 5 * 60_000);
+      const secret = this.config.get<string>('AUTH_CSRF_HMAC_KEY') ?? this.config.get<string>('AUTH_MFA_ENCRYPTION_KEY');
+      if (!secret) throw new ServiceUnavailableException({ code: 'IMPORT_STORAGE_UNAVAILABLE', message: 'Import storage is unavailable.' });
+      localImportObjectPath(localRoot, access.brandId, fileUploadId);
+      const token = createLocalUploadToken(secret, access.brandId, fileUploadId, input.sha256.toLowerCase(), expiresAt.getTime());
+      const host = this.config.get<string>('HOST') ?? '127.0.0.1';
+      const port = this.config.get<number>('PORT') ?? 4000;
+      return { fileUploadId, uploadMethod: 'PUT', uploadUrl: `http://${host}:${port}/api/v1/brands/${access.brandId}/product-imports/uploads/${fileUploadId}/content`, expiresAt: expiresAt.toISOString(), headers: {
+        'content-type': input.mimeType, 'content-length': String(input.byteLength), 'x-renivet-local-upload-token': token,
+      } };
+    }
     this.client ??= new S3Client({ endpoint: parsedEndpoint.origin, region, forcePathStyle: false,
       credentials: { accessKeyId, secretAccessKey } });
     const command = new PutObjectCommand({ Bucket: bucket, Key: storageKey, ContentType: input.mimeType,
@@ -164,6 +184,55 @@ export class ImportUploadController {
       'content-type': input.mimeType, 'x-amz-acl': 'private', 'x-amz-meta-renivet-brand-id': access.brandId,
       'x-amz-meta-renivet-import-upload-id': fileUploadId, 'x-amz-meta-renivet-sha256': input.sha256.toLowerCase(),
     } };
+  }
+
+  @Put('uploads/:fileUploadId/content')
+  @HttpCode(204)
+  @ApiOperation({ operationId: 'putLocalCatalogImportUpload', summary: 'Store a local development import source privately' })
+  async putLocal(@Param('brandId') brandId: string, @Param('fileUploadId') fileUploadId: string, @Req() request: ImportRequest,
+    @Headers('x-renivet-local-upload-token') capability?: string, @Headers('content-length') contentLength?: string,
+    @Headers('content-type') contentType?: string, @Headers('origin') origin?: string) {
+    const localRoot = localImportStorageRoot({
+      NODE_ENV: this.config.get<string>('NODE_ENV'),
+      RENIVET_LOCAL_IMPORT_STORAGE_ENABLED: this.config.get<boolean>('RENIVET_LOCAL_IMPORT_STORAGE_ENABLED'),
+      RENIVET_LOCAL_IMPORT_STORAGE_DIR: this.config.get<string>('RENIVET_LOCAL_IMPORT_STORAGE_DIR'),
+    });
+    if (!localRoot || !capability) throw new NotFoundException({ code: 'IMPORT_UPLOAD_NOT_FOUND', message: 'The upload is not available.' });
+    const origins = this.config.get<string[]>('AUTH_ALLOWED_ORIGINS') ?? [];
+    if (!origin || !origins.includes(origin)) throw new ForbiddenException({ code: 'CSRF_REJECTED', message: 'The operation could not be authorized.' });
+    const pool = this.infrastructure.pool;
+    if (!pool) throw new ServiceUnavailableException({ code: 'IMPORT_DATABASE_UNAVAILABLE', message: 'Import storage is unavailable.' });
+    const rowResult = await pool.query('SELECT * FROM imports.import_uploads WHERE id=$1 AND brand_id=$2', [fileUploadId, brandId]);
+    const upload = rowResult.rows[0];
+    if (!upload || upload.status !== 'PENDING' || new Date(upload.expires_at).getTime() <= Date.now()) {
+      throw new ConflictException({ code: 'IMPORT_UPLOAD_EXPIRED', message: 'The upload intent is no longer available.' });
+    }
+    const secret = this.config.get<string>('AUTH_CSRF_HMAC_KEY') ?? this.config.get<string>('AUTH_MFA_ENCRYPTION_KEY');
+    if (!secret || !verifyLocalUploadToken(secret, capability, brandId, fileUploadId, upload.source_sha256.trim())) {
+      throw new ForbiddenException({ code: 'CSRF_REJECTED', message: 'The operation could not be authorized.' });
+    }
+    if (contentType !== upload.mime_type || Number(contentLength) !== upload.byte_length || upload.byte_length > MAX_IMPORT_FILE_BYTES) {
+      throw new UnprocessableEntityException({ code: 'IMPORT_UPLOAD_METADATA_MISMATCH', message: 'The uploaded file failed verification.' });
+    }
+    const raw = (request as ImportRequest & { raw?: AsyncIterable<Uint8Array> }).raw;
+    if (!raw) throw new UnprocessableEntityException({ code: 'IMPORT_UPLOAD_INVALID', message: 'The upload body is invalid.' });
+    const objectPath = localImportObjectPath(localRoot, brandId, fileUploadId);
+    await fs.mkdir(path.dirname(objectPath), { recursive: true });
+    const chunks: Buffer[] = [];
+    let size = 0;
+    for await (const chunk of raw) {
+      size += chunk.length;
+      if (size > MAX_IMPORT_FILE_BYTES) throw new UnprocessableEntityException({ code: 'IMPORT_FILE_LIMIT_EXCEEDED', message: 'The uploaded file is too large.' });
+      chunks.push(Buffer.from(chunk));
+    }
+    const bytes = Buffer.concat(chunks, size);
+    if (bytes.length !== upload.byte_length || createHash('sha256').update(bytes).digest('hex') !== upload.source_sha256.trim()) {
+      throw new UnprocessableEntityException({ code: 'IMPORT_CHECKSUM_MISMATCH', message: 'The uploaded file failed verification.' });
+    }
+    await fs.writeFile(objectPath, bytes, { flag: 'wx' }).catch(async (error: unknown) => {
+      if ((error as NodeJS.ErrnoException).code === 'EEXIST') await fs.writeFile(objectPath, bytes);
+      else throw error;
+    });
   }
 
   @Post()
@@ -223,39 +292,51 @@ export class ImportUploadController {
     if (upload.status !== 'PENDING' || new Date(upload.expires_at).getTime() <= Date.now()) {
       throw new ConflictException({ code: 'IMPORT_UPLOAD_EXPIRED', message: 'The upload is no longer available.' });
     }
+    const localRoot = localImportStorageRoot({
+      NODE_ENV: this.config.get<string>('NODE_ENV'),
+      RENIVET_LOCAL_IMPORT_STORAGE_ENABLED: this.config.get<boolean>('RENIVET_LOCAL_IMPORT_STORAGE_ENABLED'),
+      RENIVET_LOCAL_IMPORT_STORAGE_DIR: this.config.get<string>('RENIVET_LOCAL_IMPORT_STORAGE_DIR'),
+    });
     const endpoint = this.config.get<string>('MEDIA_SPACES_ENDPOINT');
     const bucket = this.config.get<string>('MEDIA_SPACES_BUCKET')?.trim();
     const region = this.config.get<string>('MEDIA_SPACES_REGION')?.trim();
     const accessKeyId = this.config.get<string>('MEDIA_SPACES_ACCESS_KEY_ID')?.trim();
     const secretAccessKey = this.config.get<string>('MEDIA_SPACES_SECRET_ACCESS_KEY')?.trim();
-    let storageEndpoint: URL;
-    try { storageEndpoint = new URL(endpoint ?? ''); } catch { throw new ServiceUnavailableException({ code: 'IMPORT_STORAGE_UNAVAILABLE', message: 'Import storage is unavailable.' }); }
-    if (!(storageEndpoint.hostname === 'digitaloceanspaces.com' || storageEndpoint.hostname.endsWith('.digitaloceanspaces.com'))
-      || storageEndpoint.protocol !== 'https:' || storageEndpoint.username || storageEndpoint.password || storageEndpoint.search
-      || storageEndpoint.hash || storageEndpoint.pathname !== '/' || !bucket || !/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(bucket)
-      || !region || !/^[a-z0-9-]{2,32}$/.test(region) || !accessKeyId || !secretAccessKey) {
-      throw new ServiceUnavailableException({ code: 'IMPORT_STORAGE_UNAVAILABLE', message: 'Import storage is unavailable.' });
+    let storageEndpoint: URL | undefined;
+    if (!localRoot) {
+      try { storageEndpoint = new URL(endpoint ?? ''); } catch { throw new ServiceUnavailableException({ code: 'IMPORT_STORAGE_UNAVAILABLE', message: 'Import storage is unavailable.' }); }
+      if (!(storageEndpoint.hostname === 'digitaloceanspaces.com' || storageEndpoint.hostname.endsWith('.digitaloceanspaces.com'))
+        || storageEndpoint.protocol !== 'https:' || storageEndpoint.username || storageEndpoint.password || storageEndpoint.search
+        || storageEndpoint.hash || storageEndpoint.pathname !== '/' || !bucket || !/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(bucket)
+        || !region || !/^[a-z0-9-]{2,32}$/.test(region) || !accessKeyId || !secretAccessKey) {
+        throw new ServiceUnavailableException({ code: 'IMPORT_STORAGE_UNAVAILABLE', message: 'Import storage is unavailable.' });
+      }
+      this.client ??= new S3Client({ endpoint: storageEndpoint.origin, region, forcePathStyle: false,
+        credentials: { accessKeyId, secretAccessKey } });
     }
-    this.client ??= new S3Client({ endpoint: storageEndpoint.origin, region, forcePathStyle: false,
-      credentials: { accessKeyId, secretAccessKey } });
     let bytes: Buffer;
     try {
-      const head = await this.client.send(new HeadObjectCommand({ Bucket: bucket, Key: upload.storage_key }));
-      if (!Number.isSafeInteger(head.ContentLength) || head.ContentLength !== upload.byte_length || Number(head.ContentLength) > MAX_IMPORT_FILE_BYTES
-        || head.ContentType !== upload.mime_type || head.Metadata?.['renivet-brand-id'] !== access.brandId
-        || head.Metadata?.['renivet-import-upload-id'] !== upload.id || head.Metadata?.['renivet-sha256'] !== upload.source_sha256.trim()) {
-        throw new UnprocessableEntityException({ code: 'IMPORT_UPLOAD_METADATA_MISMATCH', message: 'The uploaded file failed verification.' });
+      if (localRoot) {
+        bytes = await fs.readFile(localImportObjectPath(localRoot, access.brandId, upload.id));
+        if (bytes.length > MAX_IMPORT_FILE_BYTES) throw new UnprocessableEntityException({ code: 'IMPORT_FILE_LIMIT_EXCEEDED', message: 'The uploaded file is too large.' });
+      } else {
+        const head = await this.client!.send(new HeadObjectCommand({ Bucket: bucket, Key: upload.storage_key }));
+        if (!Number.isSafeInteger(head.ContentLength) || head.ContentLength !== upload.byte_length || Number(head.ContentLength) > MAX_IMPORT_FILE_BYTES
+          || head.ContentType !== upload.mime_type || head.Metadata?.['renivet-brand-id'] !== access.brandId
+          || head.Metadata?.['renivet-import-upload-id'] !== upload.id || head.Metadata?.['renivet-sha256'] !== upload.source_sha256.trim()) {
+          throw new UnprocessableEntityException({ code: 'IMPORT_UPLOAD_METADATA_MISMATCH', message: 'The uploaded file failed verification.' });
+        }
+        const object = await this.client!.send(new GetObjectCommand({ Bucket: bucket, Key: upload.storage_key }));
+        if (!object.Body) throw new Error('missing object body');
+        const chunks: Buffer[] = [];
+        let size = 0;
+        for await (const chunk of object.Body as AsyncIterable<Uint8Array>) {
+          size += chunk.length;
+          if (size > MAX_IMPORT_FILE_BYTES) throw new UnprocessableEntityException({ code: 'IMPORT_FILE_LIMIT_EXCEEDED', message: 'The uploaded file is too large.' });
+          chunks.push(Buffer.from(chunk));
+        }
+        bytes = Buffer.concat(chunks, size);
       }
-      const object = await this.client.send(new GetObjectCommand({ Bucket: bucket, Key: upload.storage_key }));
-      if (!object.Body) throw new Error('missing object body');
-      const chunks: Buffer[] = [];
-      let size = 0;
-      for await (const chunk of object.Body as AsyncIterable<Uint8Array>) {
-        size += chunk.length;
-        if (size > MAX_IMPORT_FILE_BYTES) throw new UnprocessableEntityException({ code: 'IMPORT_FILE_LIMIT_EXCEEDED', message: 'The uploaded file is too large.' });
-        chunks.push(Buffer.from(chunk));
-      }
-      bytes = Buffer.concat(chunks, size);
     } catch (error) {
       if (error instanceof UnprocessableEntityException) throw error;
       throw new ServiceUnavailableException({ code: 'IMPORT_STORAGE_UNAVAILABLE', message: 'Import storage is unavailable.' });
@@ -284,10 +365,16 @@ export class ImportUploadController {
     const batchId = randomUUID();
     const immutableStorageKey = `brands/${access.brandId}/imports/${upload.id}/committed/${batchId}`;
     try {
-      await this.client.send(new PutObjectCommand({ Bucket: bucket, Key: immutableStorageKey, Body: bytes,
-        ContentLength: bytes.length, ContentType: upload.mime_type, ACL: 'private', CacheControl: 'private, no-store',
-        Metadata: { 'renivet-brand-id': access.brandId, 'renivet-import-upload-id': upload.id,
-          'renivet-source-sha256': upload.source_sha256.trim(), 'renivet-import-batch-id': batchId } }));
+      if (localRoot) {
+        const committedPath = path.join(localRoot, 'brands', access.brandId, 'imports', upload.id, 'committed', batchId);
+        await fs.mkdir(path.dirname(committedPath), { recursive: true });
+        await fs.writeFile(committedPath, bytes, { flag: 'wx' });
+      } else {
+        await this.client!.send(new PutObjectCommand({ Bucket: bucket, Key: immutableStorageKey, Body: bytes,
+          ContentLength: bytes.length, ContentType: upload.mime_type, ACL: 'private', CacheControl: 'private, no-store',
+          Metadata: { 'renivet-brand-id': access.brandId, 'renivet-import-upload-id': upload.id,
+            'renivet-source-sha256': upload.source_sha256.trim(), 'renivet-import-batch-id': batchId } }));
+      }
     } catch {
       throw new ServiceUnavailableException({ code: 'IMPORT_STORAGE_UNAVAILABLE', message: 'Import storage is unavailable.' });
     }

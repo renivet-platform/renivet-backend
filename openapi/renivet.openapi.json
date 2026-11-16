@@ -9792,6 +9792,75 @@
         "x-renivet-permission": "imports.write"
       }
     },
+    "/api/v1/brands/{brandId}/product-imports/uploads/{fileUploadId}/content": {
+      "put": {
+        "operationId": "putLocalCatalogImportUpload",
+        "parameters": [
+          {
+            "name": "brandId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "fileUploadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-renivet-local-upload-token",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "content-length",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "content-type",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "origin",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "Store a local development import source privately",
+        "tags": [
+          "Imports"
+        ]
+      }
+    },
     "/api/v1/brands/{brandId}/product-imports": {
       "post": {
         "description": "Verifies and parses the private uploaded source, stores normalized rows and row-level errors in an immutable batch, and does not write product or stock records.",

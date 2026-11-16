@@ -100,6 +100,12 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
   const authCsrfKey = optionalString(input, 'AUTH_CSRF_HMAC_KEY');
   const authMfaEncryptionKey = optionalString(input, 'AUTH_MFA_ENCRYPTION_KEY');
   const inventoryApiEnabled = optionalBoolean(input, 'RENIVET_INVENTORY_API_ENABLED') ?? false;
+  const requestedLocalImportStorageEnabled = optionalBoolean(input, 'RENIVET_LOCAL_IMPORT_STORAGE_ENABLED') ?? false;
+  const localImportStorageDir = optionalConfigString(input, 'RENIVET_LOCAL_IMPORT_STORAGE_DIR');
+  // A development .env is often loaded by test/staging harnesses as well. Keep the
+  // local adapter strictly development-only without making those harnesses fail
+  // startup: the flag is ignored outside development and can never activate there.
+  const localImportStorageEnabled = requestedLocalImportStorageEnabled && envName === 'development';
   const smtpHost = optionalConfigString(input, 'SMTP_HOST');
   if (smtpHost && (smtpHost.length > 253 || !/^[A-Za-z0-9.-]+$/.test(smtpHost) || smtpHost.startsWith('.') || smtpHost.endsWith('.'))) {
     error('SMTP_HOST', 'must be a DNS hostname or IPv4 address');
@@ -191,6 +197,8 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
     AUTH_CSRF_HMAC_KEY: authCsrfKey,
     AUTH_MFA_ENCRYPTION_KEY: authMfaEncryptionKey,
     RENIVET_INVENTORY_API_ENABLED: inventoryApiEnabled,
+    RENIVET_LOCAL_IMPORT_STORAGE_ENABLED: localImportStorageEnabled,
+    RENIVET_LOCAL_IMPORT_STORAGE_DIR: localImportStorageDir,
     SMTP_HOST: smtpHost,
     SMTP_PORT: smtpPort,
     SMTP_SECURE: optionalBoolean(input, 'SMTP_SECURE'),
