@@ -12,6 +12,8 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter({ bodyLimit: FASTIFY_BODY_LIMIT_BYTES }), { bufferLogs: true });
   const configuration = app.get(ConfigService);
   app.setGlobalPrefix('api/v1');
+  const allowedOrigins = configuration.get<string[]>('AUTH_ALLOWED_ORIGINS') ?? [];
+  app.enableCors({ origin: allowedOrigins, methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'], allowedHeaders: ['Accept', 'Content-Type', 'Origin', 'X-Renivet-Local-Upload-Token'], credentials: false });
   if (shouldExposeSwagger(configuration.get<string>('NODE_ENV'))) {
     SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, createOpenApiConfig()));
   }

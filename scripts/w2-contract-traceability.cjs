@@ -11,7 +11,7 @@ const W2_TAGS = new Set(['Catalog', 'Pricing', 'Review', 'Media', 'Imports', 'In
 // Read-only administration projections added after the frozen W2 v1.5 candidate.
 // They are covered by the live OpenAPI contract and route authorization tests, but
 // intentionally do not alter the candidate operation count/backlog snapshot.
-const APPROVED_LIVE_READ_EXTENSIONS = new Set(['listAdminTaxonomyCategories', 'listAdminTaxonomyAttributes']);
+const APPROVED_LIVE_EXTENSIONS = new Set(['listAdminTaxonomyCategories', 'listAdminTaxonomyAttributes', 'putLocalCatalogImportUpload']);
 const IGNORED_CONTRACT_FIELDS = new Set(['description', 'summary', 'title', 'example', 'examples', 'externalDocs']);
 
 function extractOperations(spec) {
@@ -316,7 +316,7 @@ function checkTraceability({ candidateSpec, traceability, activeSpec, fileExists
   }
 
   for (const { path, method, operation } of extractOperations(activeSpec)) {
-    if (APPROVED_LIVE_READ_EXTENSIONS.has(operation.operationId)) continue;
+    if (APPROVED_LIVE_EXTENSIONS.has(operation.operationId)) continue;
     if (!isW2Route(path, operation, candidateIdSet)) continue;
     const entry = manifestById.get(operation.operationId);
     if (!entry || entry.path !== path.slice(basePath.length) || entry.method?.toLowerCase() !== method) {

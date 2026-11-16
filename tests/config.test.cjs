@@ -199,3 +199,8 @@ test('protected environments require a dedicated canonical 32-byte MFA encryptio
   environment.AUTH_MFA_ENCRYPTION_KEY = 'not-base64';
   assert.throws(() => validateEnvironment(environment), /AUTH_MFA_ENCRYPTION_KEY.*base64/);
 });
+
+test('local import storage is ignored outside development', () => {
+  const config = validateEnvironment({ NODE_ENV: 'test', RENIVET_LOCAL_IMPORT_STORAGE_ENABLED: 'true' });
+  assert.equal(config.RENIVET_LOCAL_IMPORT_STORAGE_ENABLED, false);
+});

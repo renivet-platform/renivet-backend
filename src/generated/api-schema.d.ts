@@ -1037,6 +1037,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/brands/{brandId}/product-imports/uploads/{fileUploadId}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Store a local development import source privately */
+        put: operations["putLocalCatalogImportUpload"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/brands/{brandId}/product-imports": {
         parameters: {
             query?: never;
@@ -6586,6 +6603,31 @@ export interface operations {
                         };
                     };
                 };
+            };
+        };
+    };
+    putLocalCatalogImportUpload: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-renivet-local-upload-token": string;
+                "content-length": string;
+                "content-type": string;
+                origin: string;
+            };
+            path: {
+                brandId: string;
+                fileUploadId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
