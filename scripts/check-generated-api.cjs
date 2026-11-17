@@ -14,9 +14,9 @@ const expected = [
 const normalizeLineEndings = (value) => value.replace(/\r\n/g, '\n');
 
 function run(command, args) {
-  const result = spawnSync(command, args, { cwd: root, encoding: 'utf8', shell: process.platform === 'win32' });
+  const result = spawnSync(command, args, { cwd: root, encoding: 'utf8' });
   if (result.status !== 0) {
-    throw new Error(`${result.stdout ?? ''}${result.stderr ?? ''}` || `${command} exited with ${result.status}`);
+    throw new Error(`${result.stdout ?? ''}${result.stderr ?? ''}${result.error ? `\n${result.error.message}` : ''}` || `${command} exited with ${result.status}`);
   }
 }
 

@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "39f4a38d-e11a-4daf-9e91-8e44d6617f77",
     "name": "Renivet Backend - Global Taxonomy Administration (REN2-58)",
-    "description": "Runnable examples for proposing and publishing global category schema versions. Requires a local database seeded with the selected category and attribute, a distinct taxonomy.manage/taxonomy.approve session, recent MFA and session-bound CSRF values. Synthetic defaults only; no Postman Cloud sync. Linear: REN2-58.",
+    "description": "Runnable examples for proposing and publishing global category schema versions. Requires a local database seeded with the selected category and attribute, a distinct taxonomy.manage/taxonomy.approve session and session-bound CSRF values. MFA step-up is required when the server reports enforced policy; only development/test may defer it by configuration. Synthetic defaults only; no Postman Cloud sync. Linear: REN2-58, REN2-116.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -34,7 +34,7 @@
           "options": { "raw": { "language": "json" } }
         },
         "url": "{{apiBaseUrl}}/admin/catalog/categories/{{categoryId}}/schema-versions",
-        "description": "Purpose: create an immutable draft schema snapshot and inspect its rule preview diff. Linear: REN2-58. Parameters: categoryId is the path category UUID; schemaVersion is the next version. Body: validator version and typed rules for an existing taxonomy attribute. Authentication/permissions: first-party session, global taxonomy.manage, recent MFA step-up, allowed Origin, same-origin Sec-Fetch-Site and session-bound CSRF. Responses: 201 with receipt and previewDiff; 400 invalid proposal/CSRF; 401 missing session; 403 permission/MFA denied; 404 category missing; 409 conflict; 412 stale current version; 422 invalid/incomplete schema; 503 service unavailable. Defaults are synthetic; select category and attribute IDs that exist in your local database."
+        "description": "Purpose: create an immutable draft schema snapshot and inspect its rule preview diff. Linear: REN2-58, REN2-116. Parameters: categoryId is the path category UUID; schemaVersion is the next version. Body: validator version and typed rules for an existing taxonomy attribute. Authentication/permissions: first-party session, global taxonomy.manage, MFA step-up when server policy is enforced (development/test may defer this predicate), allowed Origin, same-origin Sec-Fetch-Site and session-bound CSRF. Responses: 201 with receipt and previewDiff; 400 invalid proposal/CSRF; 401 missing session; 403 permission/MFA denied; 404 category missing; 409 conflict; 412 stale current version; 422 invalid/incomplete schema; 503 service unavailable. Defaults are synthetic; select category and attribute IDs that exist in your local database."
       },
       "protocolProfileBehavior": { "disableCookies": true },
       "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
@@ -63,7 +63,7 @@
           { "key": "Idempotency-Key", "value": "ren2-58-publish-{{categoryId}}-v{{schemaVersion}}" }
         ],
         "url": "{{apiBaseUrl}}/admin/catalog/categories/{{categoryId}}/schema-versions/{{schemaVersion}}/publish",
-        "description": "Purpose: publish a complete draft schema version with a separate approver. Linear: REN2-58. Parameters: categoryId and schemaVersion identify the draft. Body: none. Authentication/permissions: first-party session distinct from the proposer, global taxonomy.approve, recent MFA step-up, allowed Origin, same-origin Sec-Fetch-Site and session-bound CSRF. Responses: 200 published receipt; 400 invalid path/CSRF; 401 missing session; 403 permission/MFA denied; 404 category missing; 409 conflict/incomplete/retired/already published; 412 stale current version; 422 invalid schema; 503 service unavailable. Run only after a successful proposal; authenticate as an independent approver."
+        "description": "Purpose: publish a complete draft schema version with a separate approver. Linear: REN2-58, REN2-116. Parameters: categoryId and schemaVersion identify the draft. Body: none. Authentication/permissions: first-party session distinct from the proposer, global taxonomy.approve, MFA step-up when server policy is enforced (development/test may defer this predicate), allowed Origin, same-origin Sec-Fetch-Site and session-bound CSRF. Responses: 200 published receipt; 400 invalid path/CSRF; 401 missing session; 403 permission/MFA denied; 404 category missing; 409 conflict/incomplete/retired/already published; 412 stale current version; 422 invalid schema; 503 service unavailable. Run only after a successful proposal; authenticate as an independent approver."
       },
       "protocolProfileBehavior": { "disableCookies": true },
       "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [

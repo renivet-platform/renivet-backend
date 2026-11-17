@@ -1,7 +1,7 @@
 import { Body, Controller, ForbiddenException, Headers, Param, Post, Req, UnprocessableEntityException, UseGuards } from '@nestjs/common';
 import { ApiCookieAuth, ApiHeader, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
-import { MfaGuard } from '../../common/guards/require-mfa';
+import { MfaGuard, RequireMfa } from '../../common/guards/require-mfa';
 import { PlatformPermissionGuard, RequirePlatformPermission } from '../access/platform-permission.guard';
 import { csrfMatches, readSessionToken, SessionService } from '../identity/session.service';
 import { InventoryPostgresRepository } from './inventory.repository';
@@ -31,6 +31,7 @@ export class InventoryAdminController {
   @Post('adjustments/:adjustmentId/decision')
   @UseGuards(PlatformPermissionGuard, MfaGuard)
   @RequirePlatformPermission('inventory.adjust.approve')
+  @RequireMfa('inventory.adjust.approve')
   @ApiOperation({ operationId: 'decideStockAdjustment' })
   @ApiParam({ name: 'brandId', format: 'uuid' })
   @ApiParam({ name: 'adjustmentId', format: 'uuid' })
@@ -51,6 +52,7 @@ export class InventoryAdminController {
   @Post('returns/:returnId/decision')
   @UseGuards(PlatformPermissionGuard, MfaGuard)
   @RequirePlatformPermission('inventory.adjust.approve')
+  @RequireMfa('inventory.adjust.approve')
   @ApiOperation({ operationId: 'decideStockReturnInspection' })
   @ApiParam({ name: 'brandId', format: 'uuid' })
   @ApiParam({ name: 'returnId', format: 'uuid' })

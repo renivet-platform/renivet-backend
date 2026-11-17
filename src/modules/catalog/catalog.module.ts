@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import { MfaGuard } from '../../common/guards/require-mfa';
 import { AccessModule } from '../access/access.module';
@@ -7,6 +7,7 @@ import { BrandAccessRepository } from '../access/brand-access.repository';
 import { PlatformPermissionGuard } from '../access/platform-permission.guard';
 import { IdentityModule } from '../identity/identity.module';
 import { SessionService } from '../identity/session.service';
+import { MfaService } from '../identity/mfa.service';
 import { AdminReviewController } from './admin-review.controller';
 import { AdminReviewReadRepository } from './admin-review.repository';
 import { AdminQualityDecisionController } from './admin-quality-decision.controller';
@@ -80,7 +81,12 @@ import { BrandApplicationReviewListController } from '../identity/brand-applicat
         new PlatformPermissionGuard(reflector, sessions, access),
       inject: [Reflector, SessionService, BrandAccessRepository],
     },
-    MfaGuard,
+    {
+      provide: MfaGuard,
+      useFactory: (reflector: Reflector, sessions: SessionService, mfa: MfaService, configuration: ConfigService) =>
+        new MfaGuard(reflector, sessions, mfa, Date.now, configuration.get<'enforced' | 'deferred'>('MFA_ENFORCEMENT_MODE') ?? 'enforced'),
+      inject: [Reflector, SessionService, MfaService, ConfigService],
+    },
   ],
 })
 export class CatalogModule {}

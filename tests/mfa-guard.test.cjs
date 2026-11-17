@@ -56,6 +56,55 @@ test('guard admits only the server-authenticated session with fresh persisted el
   assert.equal(audited[0].allowed, true);
 });
 
+test('deferred policy skips only MFA freshness for an authenticated session and records policy provenance', async () => {
+  const audited = [];
+  const request = {
+    headers: { cookie: '__Host-renivet_session=' + 'E'.repeat(43) },
+    body: { role: 'platform_admin', brandId: 'foreign-brand', mfaVerifiedAt: new Date().toISOString() },
+    ip: '127.0.0.1',
+  };
+  const guard = new MfaGuard(
+    { get: () => 'taxonomy.approve' },
+    { authenticate: async () => ({ userId: 'platform-admin', sessionId: 'session-admin', mfaVerifiedAt: null }) },
+    { auditPrivilegedDecision: async (input) => audited.push(input) },
+    () => 1_000_000,
+    'deferred',
+  );
+  assert.equal(await guard.canActivate(contextFor(request)), true);
+  assert.deepEqual(request.authSession, { userId: 'platform-admin', sessionId: 'session-admin' });
+  assert.deepEqual(audited, [{
+    action: 'taxonomy.approve', userId: 'platform-admin', sessionId: 'session-admin',
+    allowed: true, ipAddress: '127.0.0.1', mfaEnforcementMode: 'deferred',
+  }]);
+});
+
+test('deferred policy still denies a missing session', async () => {
+  const audited = [];
+  const guard = new MfaGuard(
+    { get: () => 'imports.confirm' },
+    { authenticate: async () => { throw new Error('must not authenticate without a cookie'); } },
+    { auditPrivilegedDecision: async (input) => audited.push(input) },
+    () => 1_000_000,
+    'deferred',
+  );
+  await assert.rejects(guard.canActivate(contextFor({ headers: {}, ip: '127.0.0.1' })), (error) => error.getStatus() === 401);
+  assert.equal(audited[0].allowed, false);
+  assert.equal(audited[0].mfaEnforcementMode, 'deferred');
+});
+
+test('deferred policy fails closed when the audit sink is unavailable', async () => {
+  const guard = new MfaGuard(
+    { get: () => 'media.write' },
+    { authenticate: async () => ({ userId: 'brand-user', sessionId: 'session-brand', mfaVerifiedAt: null }) },
+    { auditPrivilegedDecision: async () => { throw new Error('audit store unavailable'); } },
+    () => 1_000_000,
+    'deferred',
+  );
+  await assert.rejects(guard.canActivate(contextFor({
+    headers: { cookie: '__Host-renivet_session=' + 'F'.repeat(43) }, ip: '127.0.0.1',
+  })), (error) => error.getStatus() === 503);
+});
+
 for (const action of ['taxonomy.manage', 'taxonomy.approve', 'pricing.approve']) {
   test(`guard accepts a fresh persisted MFA step-up for ${action}`, async () => {
     const audited = [];
@@ -74,6 +123,7 @@ for (const action of ['taxonomy.manage', 'taxonomy.approve', 'pricing.approve'])
       sessionId: 'session-admin',
       allowed: true,
       ipAddress: '127.0.0.1',
+      mfaEnforcementMode: 'enforced',
     }]);
   });
 }
