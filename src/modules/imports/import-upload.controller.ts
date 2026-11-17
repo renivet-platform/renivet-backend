@@ -160,7 +160,7 @@ export class ImportUploadController {
     }
     if (localRoot) {
       const expiresAt = new Date(row?.expires_at ?? Date.now() + 5 * 60_000);
-      const secret = this.config.get<string>('AUTH_CSRF_HMAC_KEY') ?? this.config.get<string>('AUTH_MFA_ENCRYPTION_KEY');
+      const secret = this.config.get<string>('AUTH_IMPORT_UPLOAD_HMAC_KEY');
       if (!secret) throw new ServiceUnavailableException({ code: 'IMPORT_STORAGE_UNAVAILABLE', message: 'Import storage is unavailable.' });
       localImportObjectPath(localRoot, access.brandId, fileUploadId);
       const token = createLocalUploadToken(secret, access.brandId, fileUploadId, input.sha256.toLowerCase(), expiresAt.getTime());
@@ -207,8 +207,9 @@ export class ImportUploadController {
     if (!upload || upload.status !== 'PENDING' || new Date(upload.expires_at).getTime() <= Date.now()) {
       throw new ConflictException({ code: 'IMPORT_UPLOAD_EXPIRED', message: 'The upload intent is no longer available.' });
     }
-    const secret = this.config.get<string>('AUTH_CSRF_HMAC_KEY') ?? this.config.get<string>('AUTH_MFA_ENCRYPTION_KEY');
-    if (!secret || !verifyLocalUploadToken(secret, capability, brandId, fileUploadId, upload.source_sha256.trim())) {
+    const secret = this.config.get<string>('AUTH_IMPORT_UPLOAD_HMAC_KEY');
+    if (!secret) throw new ServiceUnavailableException({ code: 'IMPORT_STORAGE_UNAVAILABLE', message: 'Import storage is unavailable.' });
+    if (!verifyLocalUploadToken(secret, capability, brandId, fileUploadId, upload.source_sha256.trim())) {
       throw new ForbiddenException({ code: 'CSRF_REJECTED', message: 'The operation could not be authorized.' });
     }
     if (contentType !== upload.mime_type || Number(contentLength) !== upload.byte_length || upload.byte_length > MAX_IMPORT_FILE_BYTES) {

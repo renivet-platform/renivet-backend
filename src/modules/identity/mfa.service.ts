@@ -166,11 +166,11 @@ export class MfaService {
     }
   }
 
-  async auditPrivilegedDecision(input: { userId: string | null; sessionId: string | null; action: string; allowed: boolean; ipAddress: string }): Promise<void> {
+  async auditPrivilegedDecision(input: { userId: string | null; sessionId: string | null; action: string; allowed: boolean; ipAddress: string; mfaEnforcementMode: 'enforced' | 'deferred' }): Promise<void> {
     try {
       await this.repository.recordPrivilegedDecision({
         userId: input.userId, sessionId: input.sessionId, action: input.action,
-        allowed: input.allowed, ipHash: this.hashIp(input.ipAddress),
+        allowed: input.allowed, ipHash: this.hashIp(input.ipAddress), mfaEnforcementMode: input.mfaEnforcementMode ?? 'enforced',
       });
     } catch { throw this.unavailable(); }
   }

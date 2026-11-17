@@ -30,6 +30,18 @@ function harness(overrides = {}) {
   return { service, calls, repository, key };
 }
 
+test('privileged audit records the server enforcement mode without credential material', async () => {
+  const { service, calls } = harness();
+  await service.auditPrivilegedDecision({
+    userId: 'user-a', sessionId: 'session-a', action: 'catalog.review', allowed: true,
+    ipAddress: '127.0.0.1', mfaEnforcementMode: 'deferred',
+  });
+  assert.equal(calls.audit.length, 1);
+  assert.equal(calls.audit[0].mfaEnforcementMode, 'deferred');
+  assert.equal(calls.audit[0].action, 'catalog.review');
+  assert.equal(Object.hasOwn(calls.audit[0], 'sessionToken'), false);
+});
+
 test('enrollment returns a provisioning secret once while persisting only authenticated ciphertext', async () => {
   const { service, calls, key } = harness();
   const result = await service.beginEnrollment({ userId: 'user-a', sessionId: 'session-a', ipAddress: '127.0.0.1' });

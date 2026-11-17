@@ -14,6 +14,28 @@ test('development defaults bind to loopback without requiring service credential
   assert.equal(config.EMAIL_OTP_PROVIDER, 'smtp');
 });
 
+test('MFA enforcement defaults to enforced and permits explicit deferral only in development and test', () => {
+  assert.equal(validateEnvironment({}).MFA_ENFORCEMENT_MODE, 'enforced');
+  assert.equal(validateEnvironment({ NODE_ENV: 'development', MFA_ENFORCEMENT_MODE: 'deferred' }).MFA_ENFORCEMENT_MODE, 'deferred');
+  assert.equal(validateEnvironment({ NODE_ENV: 'test', MFA_ENFORCEMENT_MODE: 'deferred' }).MFA_ENFORCEMENT_MODE, 'deferred');
+  assert.throws(() => validateEnvironment({ MFA_ENFORCEMENT_MODE: 'disabled' }), /MFA_ENFORCEMENT_MODE/);
+  assert.throws(() => validateEnvironment({ MFA_ENFORCEMENT_MODE: '' }), /MFA_ENFORCEMENT_MODE/);
+  for (const NODE_ENV of ['staging', 'production']) {
+    assert.throws(() => validateEnvironment({ NODE_ENV, MFA_ENFORCEMENT_MODE: 'deferred' }), /MFA_ENFORCEMENT_MODE/);
+  }
+});
+
+test('local import token signing requires a dedicated HMAC key separate from authentication keys', () => {
+  const key = 'synthetic-import-upload-hmac-key-not-a-secret-000000000';
+  assert.equal(validateEnvironment({ RENIVET_LOCAL_IMPORT_STORAGE_ENABLED: 'true', AUTH_IMPORT_UPLOAD_HMAC_KEY: key }).AUTH_IMPORT_UPLOAD_HMAC_KEY, key);
+  assert.throws(() => validateEnvironment({ RENIVET_LOCAL_IMPORT_STORAGE_ENABLED: 'true' }), /AUTH_IMPORT_UPLOAD_HMAC_KEY/);
+  assert.throws(() => validateEnvironment({ AUTH_IMPORT_UPLOAD_HMAC_KEY: 'short' }), /AUTH_IMPORT_UPLOAD_HMAC_KEY/);
+  assert.throws(() => validateEnvironment({
+    AUTH_IMPORT_UPLOAD_HMAC_KEY: key,
+    AUTH_CSRF_HMAC_KEY: key,
+  }), /AUTH_IMPORT_UPLOAD_HMAC_KEY/);
+});
+
 test('email OTP provider can be switched to Resend and rejects unknown values', () => {
   const config = validateEnvironment({
     EMAIL_OTP_PROVIDER: 'resend',

@@ -19,7 +19,7 @@ export interface MfaRepositoryPort {
   recordDenied(input: { userId: string | null; sessionId: string | null; factorId?: string | null; eventName: 'enrollment_denied' | 'step_up_denied' | 'privileged_access_denied'; reason: string; ipHash: string; action?: string }): Promise<void>;
   elevateSession(input: { userId: string; currentTokenHash: string; newTokenHash: string; factorId: string; ipHash: string; method: 'totp' | 'recovery_code'; totpStep?: number; recoveryCodeHash?: string; idleTtlSeconds: number }): Promise<{ sessionId: string; expiresAt: Date } | null>;
   revokeFactor(input: { userId: string; currentTokenHash: string; ipHash: string; maxMfaAgeSeconds: number }): Promise<boolean>;
-  recordPrivilegedDecision(input: { userId: string | null; sessionId: string | null; ipHash: string; action: string; allowed: boolean }): Promise<void>;
+  recordPrivilegedDecision(input: { userId: string | null; sessionId: string | null; ipHash: string; action: string; allowed: boolean; mfaEnforcementMode: 'enforced' | 'deferred' }): Promise<void>;
 }
 
 @Injectable()
@@ -280,7 +280,7 @@ export class MfaRepository implements MfaRepositoryPort {
         actorUserId: input.userId, sessionId: input.sessionId, factorId: null,
         eventName: input.allowed ? 'privileged_access_allowed' : 'privileged_access_denied',
         outcome: input.allowed ? 'allowed' : 'denied', ipHash: input.ipHash,
-        metadata: { action: input.action },
+        metadata: { action: input.action, mfaEnforcementMode: input.mfaEnforcementMode },
       });
       await client.query('COMMIT');
     } catch (error) {

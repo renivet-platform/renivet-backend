@@ -1,6 +1,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 require('reflect-metadata');
+// Keep this no-dependency smoke test isolated from an ambient developer .env.
+process.env.NODE_ENV = 'test';
+process.env.AUTH_RATE_LIMIT_HMAC_KEY = 'synthetic-health-rate-key-not-a-secret-000000000000';
+process.env.AUTH_IMPORT_UPLOAD_HMAC_KEY = 'synthetic-health-import-key-not-a-secret-000000000';
+process.env.RENIVET_LOCAL_IMPORT_STORAGE_ENABLED = 'false';
 const { NestFactory } = require('@nestjs/core');
 const { FastifyAdapter } = require('@nestjs/platform-fastify');
 const { AppModule } = require('../dist/app.module');

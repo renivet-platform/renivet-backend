@@ -1216,6 +1216,35 @@ export interface components {
             authenticationState: "authenticated";
             user: components["schemas"]["AuthenticatedUserDto"];
         };
+        CurrentSessionResponseDto: {
+            /**
+             * @example authenticated
+             * @enum {string}
+             */
+            authenticationState: "authenticated";
+            user: components["schemas"]["AuthenticatedUserDto"];
+            /** @description Session-bound CSRF proof for same-origin mutations. */
+            csrfToken: string;
+            /**
+             * @description Server-owned policy; deferred is available only in development or test.
+             * @enum {string}
+             */
+            mfaEnforcementMode: "enforced" | "deferred";
+            account: {
+                /** @enum {string} */
+                signInMethod?: "phone" | "email_password";
+                phoneVerified?: boolean;
+            };
+            destination: {
+                /** @enum {string} */
+                kind?: "storefront" | "operations" | "brands";
+                brands?: {
+                    /** Format: uuid */
+                    id?: string;
+                    name?: string;
+                }[];
+            };
+        };
         SetPhoneForVerificationDto: {
             /**
              * @description Indian mobile number in E.164 format. This number remains unverified until a separate phone OTP challenge succeeds.
@@ -1751,7 +1780,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Active identity, safe account state and server-resolved role destination; refreshes the session cookie to its server-calculated idle expiry, capped by its absolute expiry. */
+            /** @description Active identity, safe account state, server-resolved MFA enforcement policy and role destination; refreshes the session cookie to its server-calculated idle expiry, capped by its absolute expiry. */
             200: {
                 headers: {
                     /** @description Sensitive session response must not be cached. */
@@ -1761,7 +1790,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CurrentSessionResponseDto"];
                 };
             };
             /** @description AUTHENTICATION_FAILED. Missing, expired, revoked or invalid session. */

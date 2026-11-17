@@ -141,8 +141,9 @@ import { BrandCatalogEligibilityPostgresRepository } from './brand-catalog-eligi
     },
     {
       provide: MfaGuard,
-      useFactory: (reflector: Reflector, sessions: SessionService, mfa: MfaService) => new MfaGuard(reflector, sessions, mfa),
-      inject: [Reflector, SessionService, MfaService],
+      useFactory: (reflector: Reflector, sessions: SessionService, mfa: MfaService, configuration: ConfigService) =>
+        new MfaGuard(reflector, sessions, mfa, Date.now, configuration.get<'enforced' | 'deferred'>('MFA_ENFORCEMENT_MODE') ?? 'enforced'),
+      inject: [Reflector, SessionService, MfaService, ConfigService],
     },
   ],
   exports: [MfaGuard, MfaService, SessionService, IdentityInfrastructure, BrandCatalogEligibilityService],

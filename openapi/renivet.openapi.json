@@ -213,7 +213,7 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": "Active identity, safe account state and server-resolved role destination; refreshes the session cookie to its server-calculated idle expiry, capped by its absolute expiry.",
+            "description": "Active identity, safe account state, server-resolved MFA enforcement policy and role destination; refreshes the session cookie to its server-calculated idle expiry, capped by its absolute expiry.",
             "headers": {
               "Cache-Control": {
                 "description": "Sensitive session response must not be cached.",
@@ -233,20 +233,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "example": {
-                    "authenticationState": "authenticated",
-                    "user": {
-                      "id": "7d785d72-ea2c-44bb-9d82-87b272112b32"
-                    },
-                    "account": {
-                      "signInMethod": "phone",
-                      "phoneVerified": true
-                    },
-                    "destination": {
-                      "kind": "storefront"
-                    },
-                    "csrfToken": "synthetic-csrf-token"
-                  }
+                  "$ref": "#/components/schemas/CurrentSessionResponseDto"
                 }
               }
             }
@@ -1451,6 +1438,10 @@
           "Admin Review"
         ],
         "x-renivet-implementation-wave": "W1",
+        "x-renivet-mfa-enforcement": {
+          "default": "enforced",
+          "deferral": "Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required."
+        },
         "x-renivet-mfa-required": true,
         "x-renivet-permission": "catalog.review"
       }
@@ -1532,6 +1523,10 @@
           "Admin Review"
         ],
         "x-renivet-implementation-wave": "W1",
+        "x-renivet-mfa-enforcement": {
+          "default": "enforced",
+          "deferral": "Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required."
+        },
         "x-renivet-mfa-required": true,
         "x-renivet-permission": "catalog.publish"
       }
@@ -1614,6 +1609,10 @@
           "Admin Review"
         ],
         "x-renivet-implementation-wave": "W1",
+        "x-renivet-mfa-enforcement": {
+          "default": "enforced",
+          "deferral": "Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required."
+        },
         "x-renivet-mfa-required": true,
         "x-renivet-permission": "catalog.restrict"
       }
@@ -1696,6 +1695,10 @@
           "Admin Review"
         ],
         "x-renivet-implementation-wave": "W1",
+        "x-renivet-mfa-enforcement": {
+          "default": "enforced",
+          "deferral": "Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required."
+        },
         "x-renivet-mfa-required": true,
         "x-renivet-permission": "catalog.restrict"
       }
@@ -2176,6 +2179,10 @@
           "Admin Brand Review"
         ],
         "x-renivet-implementation-wave": "W1",
+        "x-renivet-mfa-enforcement": {
+          "default": "enforced",
+          "deferral": "Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required."
+        },
         "x-renivet-mfa-required": true,
         "x-renivet-permission": "brand_membership.review"
       }
@@ -2364,6 +2371,10 @@
         "x-renivet-csrf-policy": "Require allowlisted Origin, Sec-Fetch-Site and X-CSRF-Token bound to W1 session; same-statement resource permission in W1.",
         "x-renivet-guard": "platform-global-admin",
         "x-renivet-implementation-wave": "W2",
+        "x-renivet-mfa-enforcement": {
+          "default": "enforced",
+          "deferral": "Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required."
+        },
         "x-renivet-mfa-required": true,
         "x-renivet-permission": "taxonomy.manage"
       }
@@ -2507,6 +2518,10 @@
         "x-renivet-csrf-policy": "Require allowlisted Origin, Sec-Fetch-Site and X-CSRF-Token bound to W1 session; same-statement resource permission in W1.",
         "x-renivet-guard": "platform-global-admin",
         "x-renivet-implementation-wave": "W2",
+        "x-renivet-mfa-enforcement": {
+          "default": "enforced",
+          "deferral": "Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required."
+        },
         "x-renivet-mfa-required": true,
         "x-renivet-permission": "taxonomy.approve"
       }
@@ -2630,6 +2645,10 @@
         "x-renivet-csrf-policy": "Require allowlisted Origin, Sec-Fetch-Site and X-CSRF-Token bound to W1 session; same-statement resource permission in W1.",
         "x-renivet-guard": "platform-global-admin",
         "x-renivet-implementation-wave": "W2",
+        "x-renivet-mfa-enforcement": {
+          "default": "enforced",
+          "deferral": "Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required."
+        },
         "x-renivet-mfa-required": true,
         "x-renivet-permission": "taxonomy.manage"
       }
@@ -6380,6 +6399,10 @@
         "x-renivet-csrf-policy": "Require allowlisted Origin, Sec-Fetch-Site and X-CSRF-Token bound to W1 session; same-statement resource permission in W1.",
         "x-renivet-guard": "platform-global-admin",
         "x-renivet-implementation-wave": "W2",
+        "x-renivet-mfa-enforcement": {
+          "default": "enforced",
+          "deferral": "Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required."
+        },
         "x-renivet-mfa-required": true,
         "x-renivet-permission": "pricing.approve"
       }
@@ -7405,6 +7428,10 @@
         "x-renivet-csrf-policy": "Require allowlisted Origin, Sec-Fetch-Site and X-CSRF-Token bound to W1 session; global permission rechecked in the database transaction.",
         "x-renivet-guard": "platform-global-admin",
         "x-renivet-implementation-wave": "W2",
+        "x-renivet-mfa-enforcement": {
+          "default": "enforced",
+          "deferral": "Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required."
+        },
         "x-renivet-mfa-required": true,
         "x-renivet-permission": "catalog.review"
       }
@@ -7705,6 +7732,10 @@
         ],
         "x-renivet-csrf-policy": "W1 session-bound X-CSRF-Token, allowlisted Origin, and Sec-Fetch-Site same-origin validation required; MFA step-up and live media.write permission are required.",
         "x-renivet-implementation-wave": "W2",
+        "x-renivet-mfa-enforcement": {
+          "default": "enforced",
+          "deferral": "Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required."
+        },
         "x-renivet-permission": "media.write",
         "x-renivet-security-review": [
           "W1 effective permissions",
@@ -8057,6 +8088,10 @@
         "x-renivet-csrf-policy": "W1 session-bound X-CSRF-Token, allowlisted Origin and Sec-Fetch-Site same-origin validation required; media.write MFA step-up is required.",
         "x-renivet-guard": "brand",
         "x-renivet-implementation-wave": "W2",
+        "x-renivet-mfa-enforcement": {
+          "default": "enforced",
+          "deferral": "Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required."
+        },
         "x-renivet-permission": "catalog.write"
       }
     },
@@ -9789,6 +9824,10 @@
         ],
         "x-renivet-csrf-policy": "W1 session-bound X-CSRF-Token, allowlisted Origin, and Sec-Fetch-Site same-origin validation required; imports.write permission and MFA step-up are required.",
         "x-renivet-implementation-wave": "W2",
+        "x-renivet-mfa-enforcement": {
+          "default": "enforced",
+          "deferral": "Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required."
+        },
         "x-renivet-permission": "imports.write"
       }
     },
@@ -10148,6 +10187,10 @@
         ],
         "x-renivet-csrf-policy": "W1 session-bound X-CSRF-Token, allowlisted Origin, and Sec-Fetch-Site same-origin validation required; imports.write permission and MFA step-up are required.",
         "x-renivet-implementation-wave": "W2",
+        "x-renivet-mfa-enforcement": {
+          "default": "enforced",
+          "deferral": "Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required."
+        },
         "x-renivet-permission": "imports.write"
       }
     },
@@ -10458,6 +10501,10 @@
         ],
         "x-renivet-csrf-policy": "W1 session validates x-csrf-token and allowlisted Origin; CSRF state is session-bound.",
         "x-renivet-implementation-wave": "W2",
+        "x-renivet-mfa-enforcement": {
+          "default": "enforced",
+          "deferral": "Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required."
+        },
         "x-renivet-permission": "imports.write"
       }
     },
@@ -11246,6 +11293,10 @@
         ],
         "x-renivet-csrf-policy": "W1 session validates x-csrf-token and allowlisted Origin; CSRF state is session-bound.",
         "x-renivet-implementation-wave": "W2",
+        "x-renivet-mfa-enforcement": {
+          "default": "enforced",
+          "deferral": "Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required."
+        },
         "x-renivet-permission": "imports.confirm"
       }
     },
@@ -11900,6 +11951,10 @@
         ],
         "x-renivet-csrf-policy": "W1 session-bound x-csrf-token, allowlisted Origin, same-origin fetch metadata, and MFA step-up required.",
         "x-renivet-implementation-wave": "W2",
+        "x-renivet-mfa-enforcement": {
+          "default": "enforced",
+          "deferral": "Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required."
+        },
         "x-renivet-permission": "imports.write"
       }
     }
@@ -12048,6 +12103,85 @@
         "required": [
           "authenticationState",
           "user"
+        ]
+      },
+      "CurrentSessionResponseDto": {
+        "type": "object",
+        "properties": {
+          "authenticationState": {
+            "type": "string",
+            "enum": [
+              "authenticated"
+            ],
+            "example": "authenticated"
+          },
+          "user": {
+            "$ref": "#/components/schemas/AuthenticatedUserDto"
+          },
+          "csrfToken": {
+            "type": "string",
+            "minLength": 32,
+            "description": "Session-bound CSRF proof for same-origin mutations."
+          },
+          "mfaEnforcementMode": {
+            "type": "string",
+            "enum": [
+              "enforced",
+              "deferred"
+            ],
+            "description": "Server-owned policy; deferred is available only in development or test."
+          },
+          "account": {
+            "type": "object",
+            "properties": {
+              "signInMethod": {
+                "type": "string",
+                "enum": [
+                  "phone",
+                  "email_password"
+                ]
+              },
+              "phoneVerified": {
+                "type": "boolean"
+              }
+            }
+          },
+          "destination": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "storefront",
+                  "operations",
+                  "brands"
+                ]
+              },
+              "brands": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "required": [
+          "authenticationState",
+          "user",
+          "csrfToken",
+          "mfaEnforcementMode",
+          "account",
+          "destination"
         ]
       },
       "SetPhoneForVerificationDto": {

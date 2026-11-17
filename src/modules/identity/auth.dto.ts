@@ -59,6 +59,26 @@ export class PasswordSessionResponseDto {
   user!: AuthenticatedUserDto;
 }
 
+export class CurrentSessionResponseDto extends PasswordSessionResponseDto {
+  @ApiProperty({ minLength: 32, description: 'Session-bound CSRF proof for same-origin mutations.' })
+  csrfToken!: string;
+
+  @ApiProperty({ enum: ['enforced', 'deferred'], description: 'Server-owned policy; deferred is available only in development or test.' })
+  mfaEnforcementMode!: 'enforced' | 'deferred';
+
+  @ApiProperty({ type: 'object', properties: {
+    signInMethod: { type: 'string', enum: ['phone', 'email_password'] },
+    phoneVerified: { type: 'boolean' },
+  } })
+  account!: { signInMethod: 'phone' | 'email_password'; phoneVerified: boolean };
+
+  @ApiProperty({ type: 'object', properties: {
+    kind: { type: 'string', enum: ['storefront', 'operations', 'brands'] },
+    brands: { type: 'array', items: { type: 'object', properties: { id: { type: 'string', format: 'uuid' }, name: { type: 'string' } } } },
+  } })
+  destination!: { kind: 'storefront' } | { kind: 'operations' } | { kind: 'brands'; brands: Array<{ id: string; name: string }> };
+}
+
 export class AuthErrorDto {
   @ApiProperty({ enum: ['AUTH_INPUT_INVALID', 'AUTHENTICATION_FAILED', 'AUTH_RATE_LIMITED', 'AUTH_SERVICE_UNAVAILABLE', 'AUTH_INTERNAL_ERROR', 'AUTH_MFA_PROOF_INVALID', 'AUTH_MFA_STEP_UP_REQUIRED', 'AUTH_MFA_ENROLLMENT_UNAVAILABLE', 'CSRF_VALIDATION_FAILED'] })
   code!: string;

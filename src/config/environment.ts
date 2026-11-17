@@ -80,6 +80,13 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
     error('NODE_ENV', 'must be development, test, staging, or production');
   }
   const protectedEnvironment = envName === 'staging' || envName === 'production';
+  const requestedMfaEnforcementMode = optionalString(input, 'MFA_ENFORCEMENT_MODE') ?? 'enforced';
+  if (requestedMfaEnforcementMode !== 'enforced' && requestedMfaEnforcementMode !== 'deferred') {
+    error('MFA_ENFORCEMENT_MODE', 'must be enforced or deferred');
+  }
+  if (requestedMfaEnforcementMode === 'deferred' && envName !== 'development' && envName !== 'test') {
+    error('MFA_ENFORCEMENT_MODE', 'deferred is permitted only in development or test');
+  }
 
   const rawPort = optionalString(input, 'PORT') ?? '4000';
   if (!/^\d+$/.test(rawPort) || Number(rawPort) < 1 || Number(rawPort) > 65535) {
@@ -99,6 +106,7 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
   const authChallengeKey = optionalString(input, 'AUTH_CHALLENGE_HMAC_KEY');
   const authCsrfKey = optionalString(input, 'AUTH_CSRF_HMAC_KEY');
   const authMfaEncryptionKey = optionalString(input, 'AUTH_MFA_ENCRYPTION_KEY');
+  const authImportUploadHmacKey = optionalString(input, 'AUTH_IMPORT_UPLOAD_HMAC_KEY');
   const inventoryApiEnabled = optionalBoolean(input, 'RENIVET_INVENTORY_API_ENABLED') ?? false;
   const requestedLocalImportStorageEnabled = optionalBoolean(input, 'RENIVET_LOCAL_IMPORT_STORAGE_ENABLED') ?? false;
   const localImportStorageDir = optionalConfigString(input, 'RENIVET_LOCAL_IMPORT_STORAGE_DIR');
@@ -106,6 +114,15 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
   // local adapter strictly development-only without making those harnesses fail
   // startup: the flag is ignored outside development and can never activate there.
   const localImportStorageEnabled = requestedLocalImportStorageEnabled && envName === 'development';
+  if (authImportUploadHmacKey && authImportUploadHmacKey.length < 32) {
+    error('AUTH_IMPORT_UPLOAD_HMAC_KEY', 'must contain at least 32 characters');
+  }
+  if (authImportUploadHmacKey && [authRateLimitKey, authChallengeKey, authCsrfKey, authMfaEncryptionKey].includes(authImportUploadHmacKey)) {
+    error('AUTH_IMPORT_UPLOAD_HMAC_KEY', 'must be distinct from authentication keys');
+  }
+  if (localImportStorageEnabled && !authImportUploadHmacKey) {
+    error('AUTH_IMPORT_UPLOAD_HMAC_KEY', 'is required when development local import storage is enabled');
+  }
   const smtpHost = optionalConfigString(input, 'SMTP_HOST');
   if (smtpHost && (smtpHost.length > 253 || !/^[A-Za-z0-9.-]+$/.test(smtpHost) || smtpHost.startsWith('.') || smtpHost.endsWith('.'))) {
     error('SMTP_HOST', 'must be a DNS hostname or IPv4 address');
@@ -196,6 +213,8 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
     AUTH_CHALLENGE_HMAC_KEY: authChallengeKey,
     AUTH_CSRF_HMAC_KEY: authCsrfKey,
     AUTH_MFA_ENCRYPTION_KEY: authMfaEncryptionKey,
+    AUTH_IMPORT_UPLOAD_HMAC_KEY: authImportUploadHmacKey,
+    MFA_ENFORCEMENT_MODE: requestedMfaEnforcementMode,
     RENIVET_INVENTORY_API_ENABLED: inventoryApiEnabled,
     RENIVET_LOCAL_IMPORT_STORAGE_ENABLED: localImportStorageEnabled,
     RENIVET_LOCAL_IMPORT_STORAGE_DIR: localImportStorageDir,

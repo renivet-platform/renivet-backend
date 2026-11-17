@@ -1,23 +1,34 @@
 import {
+  applyDecorators,
   CanActivate,
   ExecutionContext,
   ForbiddenException,
   HttpException,
+  Inject,
   Injectable,
   Optional,
   SetMetadata,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { ConfigService } from '@nestjs/config';
+import { ApiExtension } from '@nestjs/swagger';
 import { MfaService } from '../../modules/identity/mfa.service';
 import { readSessionToken, SessionService } from '../../modules/identity/session.service';
 
-export type PrivilegedAction = 'brand.manage' | 'brand_membership.review' | 'staff.manage' | 'finance.evidence.manage' | 'taxonomy.manage' | 'taxonomy.approve' | 'pricing.approve' | 'catalog.review' | 'catalog.publish' | 'catalog.restrict' | 'media.write' | 'imports.write' | 'imports.confirm';
+export type PrivilegedAction = 'brand.manage' | 'brand_membership.review' | 'staff.manage' | 'finance.evidence.manage' | 'taxonomy.manage' | 'taxonomy.approve' | 'pricing.approve' | 'catalog.review' | 'catalog.publish' | 'catalog.restrict' | 'media.write' | 'imports.write' | 'imports.confirm' | 'inventory.adjust.approve';
+export type MfaEnforcementMode = 'enforced' | 'deferred';
 export const REQUIRE_MFA_ACTION = 'renivet:require-mfa-action';
 export const MFA_STEP_UP_MAX_AGE_SECONDS = 300;
 
 export function RequireMfa(action: PrivilegedAction): MethodDecorator & ClassDecorator {
-  return SetMetadata(REQUIRE_MFA_ACTION, action);
+  return applyDecorators(
+    SetMetadata(REQUIRE_MFA_ACTION, action),
+    ApiExtension('x-renivet-mfa-enforcement', {
+      default: 'enforced',
+      deferral: 'Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required.',
+    }),
+  );
 }
 
 export function hasRecentMfa(mfaVerifiedAt: Date | null | undefined, maxAgeSeconds: number, nowMs = Date.now()): boolean {
@@ -34,18 +45,27 @@ interface GuardRequest {
 
 @Injectable()
 export class MfaGuard implements CanActivate {
+  private readonly enforcementMode: MfaEnforcementMode;
+
   constructor(
     private readonly reflector: Reflector,
     private readonly sessions: SessionService,
     private readonly mfa: MfaService,
     @Optional()
     private readonly now: () => number = Date.now,
-  ) {}
+    @Optional()
+    @Inject(ConfigService)
+    configurationOrMode: ConfigService | MfaEnforcementMode = 'enforced',
+  ) {
+    this.enforcementMode = typeof configurationOrMode === 'string'
+      ? configurationOrMode
+      : configurationOrMode.get<MfaEnforcementMode>('MFA_ENFORCEMENT_MODE') ?? 'enforced';
+  }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const action = this.reflector.get<PrivilegedAction>(REQUIRE_MFA_ACTION, context.getHandler())
       ?? this.reflector.get<PrivilegedAction>(REQUIRE_MFA_ACTION, context.getClass());
-    if (!action || !['brand.manage', 'brand_membership.review', 'staff.manage', 'finance.evidence.manage', 'taxonomy.manage', 'taxonomy.approve', 'pricing.approve', 'catalog.review', 'catalog.publish', 'catalog.restrict', 'media.write', 'imports.write', 'imports.confirm'].includes(action)) {
+    if (!action || !['brand.manage', 'brand_membership.review', 'staff.manage', 'finance.evidence.manage', 'taxonomy.manage', 'taxonomy.approve', 'pricing.approve', 'catalog.review', 'catalog.publish', 'catalog.restrict', 'media.write', 'imports.write', 'imports.confirm', 'inventory.adjust.approve'].includes(action)) {
       throw new HttpException({ code: 'AUTH_POLICY_CONFIGURATION_ERROR', message: 'The operation could not be authorized.' }, 500);
     }
 
@@ -60,7 +80,8 @@ export class MfaGuard implements CanActivate {
       throw this.sessionError(error);
     });
 
-    const allowed = Boolean(session && hasRecentMfa(session.mfaVerifiedAt, MFA_STEP_UP_MAX_AGE_SECONDS, this.now()));
+    const allowed = Boolean(session && (this.enforcementMode === 'deferred'
+      || hasRecentMfa(session.mfaVerifiedAt, MFA_STEP_UP_MAX_AGE_SECONDS, this.now())));
     await this.audit(action, session?.userId ?? null, session?.sessionId ?? null, allowed, request.ip ?? 'unknown');
     if (!allowed || !session) {
       throw new ForbiddenException({ code: 'AUTH_MFA_STEP_UP_REQUIRED', message: 'A recent MFA step-up is required.' });
@@ -70,7 +91,7 @@ export class MfaGuard implements CanActivate {
   }
 
   private async audit(action: PrivilegedAction, userId: string | null, sessionId: string | null, allowed: boolean, ipAddress: string): Promise<void> {
-    try { await this.mfa.auditPrivilegedDecision({ action, userId, sessionId, allowed, ipAddress }); }
+    try { await this.mfa.auditPrivilegedDecision({ action, userId, sessionId, allowed, ipAddress, mfaEnforcementMode: this.enforcementMode }); }
     catch { throw new HttpException({ code: 'AUTH_SERVICE_UNAVAILABLE', message: 'Authentication is temporarily unavailable.' }, 503); }
   }
 
