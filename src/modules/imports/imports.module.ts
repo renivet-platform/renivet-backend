@@ -7,6 +7,7 @@ import { IdentityModule } from '../identity/identity.module';
 import { MfaService } from '../identity/mfa.service';
 import { SessionService } from '../identity/session.service';
 import { ImportUploadController } from './import-upload.controller';
+import { ImportHistoryController } from './import-history.controller';
 import { ImportPreviewController } from './import-preview.controller';
 import { ImportPreviewService } from './import-preview.service';
 import { ImportConfirmationController } from './import-confirmation.controller';
@@ -17,7 +18,7 @@ import { ImportRecoveryController } from './import-recovery.controller';
 import { ImportRecoveryService } from './import-recovery.service';
 import { ImportRetryEventHandler } from './import-retry-event.handler';
 
-@Module({ imports: [ConfigModule, IdentityModule, AccessModule], controllers: [ImportUploadController, ImportPreviewController, ImportConfirmationController, ImportRecoveryController],
+@Module({ imports: [ConfigModule, IdentityModule, AccessModule], controllers: [ImportHistoryController, ImportUploadController, ImportPreviewController, ImportConfirmationController, ImportRecoveryController],
   providers: [ImportPreviewService, ImportConfirmationService, ImportRecoveryService, ImportRetryEventHandler, ProductDraftPostgresRepository, ProductMediaPostgresRepository, {
     provide: MfaGuard,
     useFactory: (reflector: Reflector, sessions: SessionService, mfa: MfaService, configuration: ConfigService) =>
