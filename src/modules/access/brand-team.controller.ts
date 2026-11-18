@@ -1,5 +1,5 @@
 import { Body, Controller, ForbiddenException, Get, Param, Post, Req, ServiceUnavailableException, UseGuards, UnprocessableEntityException } from '@nestjs/common';
-import { ApiCookieAuth, ApiHeader, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiCookieAuth, ApiExtension, ApiHeader, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import nodemailer from 'nodemailer';
 import { BrandAccessGuard, BrandAccessRequest, RequireBrandPermission } from './brand-access.guard';
@@ -66,6 +66,7 @@ export class BrandTeamController {
   @Get('team-v2')
   @UseGuards(BrandAccessGuard)
   @RequireBrandPermission('brand_membership.read')
+  @ApiExtension('x-renivet-implementation-wave','W1')
   @ApiOperation({ operationId:'getBrandTeamMembersWithInvitations',summary:'Read real brand members and invited staff in owner-friendly presentation' })
   list(@Req() req: TeamRequest) { return this.team.list(req.brandAccess!.brandId,req.brandAccess!.userId); }
 
@@ -73,6 +74,7 @@ export class BrandTeamController {
   @UseGuards(BrandAccessGuard)
   @RequireBrandPermission('brand_membership.invite')
   @ApiHeader({name:'x-csrf-token',required:true})
+  @ApiExtension('x-renivet-implementation-wave','W1')
   @ApiOperation({operationId:'inviteBrandTeamMember',summary:'Send a seven-day invitation to a limited brand role'})
   async invite(@Req() req: TeamRequest,@Body() body: {email?: string;roleCode?: string}) {
     await this.verifiedMutation(req);
@@ -91,6 +93,7 @@ export class BrandTeamController {
   @UseGuards(BrandAccessGuard)
   @RequireBrandPermission('brand_membership.invite')
   @ApiHeader({name:'x-csrf-token',required:true})
+  @ApiExtension('x-renivet-implementation-wave','W1')
   @ApiOperation({operationId:'cancelBrandTeamInvitation'})
   async cancel(@Req() req: TeamRequest,@Param('invitationId') invitationId: string) {
     await this.verifiedMutation(req);
@@ -101,6 +104,7 @@ export class BrandTeamController {
   @UseGuards(BrandAccessGuard)
   @RequireBrandPermission('brand_membership.revoke')
   @ApiHeader({name:'x-csrf-token',required:true})
+  @ApiExtension('x-renivet-implementation-wave','W1')
   @ApiOperation({operationId:'revokeBrandTeamMember'})
   async revoke(@Req() req: TeamRequest,@Param('userId') userId: string) {
     await this.verifiedMutation(req);
@@ -109,6 +113,7 @@ export class BrandTeamController {
 
   @Post('invitations/accept')
   @ApiHeader({name:'x-csrf-token',required:true})
+  @ApiExtension('x-renivet-implementation-wave','W1')
   @ApiOperation({operationId:'acceptBrandTeamInvitation',summary:'Verified invited email accepts scoped role after sign-in'})
   async accept(@Req() req: TeamRequest,@Param('brandId') brandId: string,@Body() body: { token?: string }) {
     const actor=await this.verifiedMutation(req);
