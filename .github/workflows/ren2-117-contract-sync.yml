@@ -1,0 +1,32 @@
+name: REN2-117 regenerate API contracts on branch
+on:
+  push:
+    branches:
+      - ren2-117/team-invitations-revocation
+permissions:
+  contents: write
+jobs:
+  generate:
+    if: github.repository == 'renivet-platform/renivet-backend'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run api:generate
+      - name: Commit only reviewed generated API artifacts
+        run: |
+          git add openapi/renivet.openapi.json src/generated/api-schema.d.ts
+          if git diff --cached --quiet; then
+            echo "No generated API changes"
+          else
+            git config user.name "renivet-contract-bot"
+            git config user.email "contracts@users.noreply.github.com"
+            git commit -m "REN2-117: regenerate OpenAPI and typed API schema"
+            git push origin HEAD:ren2-117/team-invitations-revocation
+          fi
