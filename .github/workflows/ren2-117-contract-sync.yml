@@ -1,0 +1,31 @@
+name: REN2-117 temporary contract artifact sync
+on:
+  push:
+    branches:
+      - ren2-117/import-history-api
+permissions:
+  contents: write
+jobs:
+  regenerate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run api:generate
+      - name: Push generated OpenAPI and type contract on same PR branch
+        run: |
+          git add openapi/renivet.openapi.json src/generated/api-schema.d.ts
+          if git diff --cached --quiet; then
+            echo "Generated artifacts already match"
+          else
+            git config user.name "renivet-contract-bot"
+            git config user.email "contracts@users.noreply.github.com"
+            git commit -m "REN2-117: update generated API contracts"
+            git push origin HEAD:ren2-117/import-history-api
+          fi
