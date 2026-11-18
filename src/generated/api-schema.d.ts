@@ -278,6 +278,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/security-audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read paginated immutable security audit metadata (not hashes or secrets) */
+        get: operations["listAuthorizedSecurityAudit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/brands/{brandId}/products/{productId}/review": {
         parameters: {
             query?: never;
@@ -2508,6 +2525,26 @@ export interface operations {
             path: {
                 brandId: unknown;
             };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listAuthorizedSecurityAudit: {
+        parameters: {
+            query: {
+                cursor: string;
+                action: string;
+            };
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;

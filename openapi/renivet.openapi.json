@@ -1348,6 +1348,45 @@
         "x-renivet-implementation-wave": "W1"
       }
     },
+    "/api/v1/admin/security-audit": {
+      "get": {
+        "operationId": "listAuthorizedSecurityAudit",
+        "parameters": [
+          {
+            "name": "cursor",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "action",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "Read paginated immutable security audit metadata (not hashes or secrets)",
+        "tags": [
+          "Admin Audit"
+        ],
+        "x-renivet-implementation-wave": "W1",
+        "x-renivet-permission": "access_audit.read"
+      }
+    },
     "/api/v1/admin/brands/{brandId}/products/{productId}/review": {
       "post": {
         "description": "Requires a global W1 catalog.review grant, recent MFA, session-bound CSRF and an idempotency key. The frozen revision and row version are compared by the transaction.",
