@@ -1,4 +1,4 @@
-import { Body, Controller, ForbiddenException, Get, Headers, Param, Post, Req, ServiceUnavailableException, UseGuards, UnprocessableEntityException } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Param, Post, Req, ServiceUnavailableException, UseGuards, UnprocessableEntityException } from '@nestjs/common';
 import { ApiCookieAuth, ApiHeader, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import nodemailer from 'nodemailer';
@@ -8,7 +8,7 @@ import { csrfMatches, readSessionToken, SessionService } from '../identity/sessi
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const denied = () => new ForbiddenException({ code:'TEAM_ACCESS_DENIED', message:'The operation could not be authorized.' });
-interface TeamRequest extends BrandAccessRequest {}
+type TeamRequest = BrandAccessRequest;
 
 @ApiTags('Brand team')
 @ApiCookieAuth('renivetSession')
