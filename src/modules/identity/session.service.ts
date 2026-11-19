@@ -4,7 +4,7 @@ import { AuthHttpError } from './auth.service';
 export interface SessionRepositoryPort {
   findAndTouchSession(tokenHash: string, idleTtlSeconds: number, absoluteTtlSeconds: number): Promise<{
     sessionId: string; userId: string; expiresAt: Date; mfaVerifiedAt: Date | null;
-    signInMethod: 'phone' | 'email_password'; phoneVerified: boolean; destination: SessionDestination;
+    signInMethod: 'phone' | 'email_password'; phoneVerified: boolean; displayName: string | null; email: string | null; destination: SessionDestination;
   } | null>;
   revokeSession(tokenHash: string): Promise<boolean>;
 }
@@ -73,6 +73,7 @@ export class SessionService {
   async authenticate(sessionToken: string | undefined): Promise<{
     sessionId: string; userId: string; csrfToken: string; expiresInSeconds: number; mfaVerifiedAt: Date | null;
     account: { signInMethod: 'phone' | 'email_password'; phoneVerified: boolean };
+    profile: { displayName: string | null; email: string | null };
     destination: SessionDestination;
   }> {
     if (!sessionToken || !/^[A-Za-z0-9_-]{43}$/.test(sessionToken) || !this.csrfKey || this.csrfKey.length < 32) {
@@ -81,6 +82,7 @@ export class SessionService {
     let session: {
       sessionId: string; userId: string; expiresAt: Date; mfaVerifiedAt: Date | null;
       signInMethod: 'phone' | 'email_password'; phoneVerified: boolean;
+      displayName: string | null; email: string | null;
       destination: SessionDestination;
     } | null;
     try {
@@ -98,6 +100,7 @@ export class SessionService {
       expiresInSeconds,
       mfaVerifiedAt: session.mfaVerifiedAt,
       account: { signInMethod: session.signInMethod, phoneVerified: session.phoneVerified },
+      profile: { displayName: session.displayName, email: session.email },
       destination: session.destination,
     };
   }

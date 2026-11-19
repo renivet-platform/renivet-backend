@@ -1,6 +1,21 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsInt, IsObject, IsString, IsUUID, Matches, MaxLength, Min } from 'class-validator';
+import { IsInt, IsObject, IsOptional, IsString, IsUUID, Matches, MaxLength, Min, MinLength } from 'class-validator';
 import { TaxonomyRuleInput } from './taxonomy-admin.service';
+
+export class CreateTaxonomyCategoryDto {
+  @IsString()
+  @Matches(/^[a-z][a-z0-9_]{2,63}$/)
+  code!: string;
+
+  @IsString()
+  @MinLength(3)
+  @MaxLength(100)
+  name!: string;
+
+  @IsOptional()
+  @IsUUID()
+  parentId?: string;
+}
 
 export class CategorySchemaProposalDto {
   @ApiProperty({ format: 'uuid' })

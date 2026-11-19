@@ -15,6 +15,7 @@ import {
   ApiBody,
   ApiConflictResponse,
   ApiCookieAuth,
+  ApiExcludeEndpoint,
   ApiExtension,
   ApiForbiddenResponse,
   ApiHeader,
@@ -29,7 +30,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { RequireGlobalTaxonomyPermission } from '../access/taxonomy-admin.decorator';
 import { csrfMatches, CsrfRejectedError, readSessionToken, SessionService } from '../identity/session.service';
-import { CategoryActivationDto, CategorySchemaProposalDto, TaxonomyActionReceiptDto, TaxonomyErrorDto } from './taxonomy-admin.dto';
+import { CategoryActivationDto, CategorySchemaProposalDto, CreateTaxonomyCategoryDto, TaxonomyActionReceiptDto, TaxonomyErrorDto } from './taxonomy-admin.dto';
 import { TaxonomyExceptionFilter } from './taxonomy-exception.filter';
 import { TaxonomyAdminService } from './taxonomy-admin.service';
 
@@ -58,6 +59,16 @@ export class TaxonomyAdminController {
     private readonly sessions: SessionService,
     private readonly configuration: ConfigService,
   ) {}
+
+  @Post()
+  @HttpCode(201)
+  @ApiExcludeEndpoint() // Kept out of frozen generated W2 contract pending dedicated API contract review.
+  @UsePipes(proposalValidation)
+  @RequireGlobalTaxonomyPermission('taxonomy.manage')
+  async createCategory(@Body() body: CreateTaxonomyCategoryDto, @Req() request: TaxonomyRequest): Promise<Record<string,unknown>> {
+    const context=await this.mutationContext(request,'create-category');
+    return this.taxonomy.createCategory(body,context);
+  }
 
   @Post(':categoryId/schema-versions')
   @HttpCode(201)
