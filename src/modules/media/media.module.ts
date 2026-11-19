@@ -8,6 +8,8 @@ import { MfaService } from '../identity/mfa.service';
 import { SessionService } from '../identity/session.service';
 import { ClamAvMediaScanner } from './clamav-media-scanner';
 import { MediaController } from './media.controller';
+import { LocalMediaTransferController } from './local-media-transfer.controller';
+import { LocalMediaStorage } from './local-media-storage';
 import { MediaPostgresRepository } from './media.repository';
 import { ProductMediaController } from './product-media.controller';
 import { ProductMediaPostgresRepository } from './product-media.repository';
@@ -19,14 +21,16 @@ import { SpacesMediaStorage } from './spaces-media-storage';
 
 @Module({
   imports: [ConfigModule, IdentityModule, AccessModule],
-  controllers: [MediaController, ProductMediaController],
+  controllers: [MediaController, LocalMediaTransferController, ProductMediaController],
   providers: [
     MediaPostgresRepository,
     ProductMediaPostgresRepository,
     SpacesMediaStorage,
+    LocalMediaStorage,
     ClamAvMediaScanner,
     SharpMediaImageProcessor,
-    { provide: MEDIA_STORAGE, useExisting: SpacesMediaStorage },
+    { provide: MEDIA_STORAGE, useFactory: (local: LocalMediaStorage, spaces: SpacesMediaStorage) =>
+      local.isConfigured() ? local : spaces, inject: [LocalMediaStorage, SpacesMediaStorage] },
     { provide: MEDIA_SCANNER, useExisting: ClamAvMediaScanner },
     { provide: MEDIA_IMAGE_PROCESSOR, useExisting: SharpMediaImageProcessor },
     {

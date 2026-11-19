@@ -2,6 +2,10 @@
 
 The media API is enabled only when private object storage and a malware scanner are configured. Upload completion fails closed if the scanner or storage service is unavailable.
 
+## Local development storage
+
+For local development, set `RENIVET_LOCAL_MEDIA_STORAGE_ENABLED=true` and optionally set `RENIVET_LOCAL_MEDIA_STORAGE_DIR` (defaults to `.tmp/media`). The adapter is ignored outside `NODE_ENV=development`, rejects directories under `public`, and stores private originals and derivatives on the backend filesystem. Local upload capabilities are process-scoped and expire after five minutes; restarting the backend invalidates outstanding upload and preview URLs. This setting does not bypass ClamAV scanning or the existing rights checks. Configure `MEDIA_CLAMD_HOST` and `MEDIA_CLAMD_PORT` locally before beginning uploads.
+
 ## Required runtime configuration
 
 Provide these values through the deployment secret/configuration manager:

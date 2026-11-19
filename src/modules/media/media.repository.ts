@@ -95,6 +95,17 @@ export class MediaPostgresRepository implements MediaRepositoryPort {
     return mapMediaRow(result.rows[0]);
   }
 
+  async getForLocalUpload(mediaId: string, brandId: string): Promise<MediaAssetRecord> {
+    const result = await this.requirePool().query<MediaRow>(
+      `SELECT ma.* FROM media.media_assets ma
+       JOIN brands.brands b ON b.id=ma.brand_id AND b.onboarding_state='approved'
+       WHERE ma.id=$1 AND ma.brand_id=$2 AND ma.scan_state='PENDING' AND ma.upload_expires_at>now()`,
+      [mediaId, brandId],
+    );
+    if (!result.rows[0]) throw notFound();
+    return mapMediaRow(result.rows[0]);
+  }
+
   async markRejected(input: {
     asset: MediaAssetRecord; context: MediaMutationContext; reasonCode: string; sha256: string | null; completionRequestSha256: string;
   }): Promise<MediaAssetRecord> {

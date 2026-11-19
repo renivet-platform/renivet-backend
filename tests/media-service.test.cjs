@@ -23,6 +23,7 @@ function fixture(overrides = {}) {
   const repository = {
     async createIntent(input) { state.created++; state.row = { ...row, ...input, id: assetId }; return state.row; },
     async getForComplete() { if (overrides.notFound) throw Object.assign(new Error(), { code: 'MEDIA_NOT_FOUND', status: 404 }); return state.row; },
+    async getForLocalUpload() { return state.row; },
     async markRejected(input) { state.rejected.push(input); state.row = { ...state.row, scanState: 'REJECTED', derivativeState: 'FAILED', rejectionCode: input.reasonCode, sha256: input.sha256 ?? null }; return state.row; },
     async markClean(input) { state.cleaned.push(input); state.row = { ...state.row, scanState: 'CLEAN', derivativeState: 'READY', sha256: input.sha256, width: input.width, height: input.height }; return state.row; },
     async getStatus() { return state.row; },
@@ -36,6 +37,7 @@ function fixture(overrides = {}) {
     async createPreviewUrl() { return 'https://private.example/preview-signed'; },
     async deleteObject() {},
   };
+  if (overrides.localStorage) storage.storeLocalUpload = async (input) => { state.localUpload = input; };
   const scanner = { isConfigured: () => overrides.scannerConfigured !== false, async scan() { state.scanCalls++; if (overrides.scanError) throw overrides.scanError; return overrides.scanResult ?? 'CLEAN'; } };
   const processor = { async createDerivatives() { if (overrides.derivativeError) throw overrides.derivativeError; return [
     { kind: 'PREVIEW', key: `brands/${brandId}/media/${assetId}/derivatives/preview.webp`, bytes: Buffer.from('preview'), sha256: 'a'.repeat(64), width: 1, height: 1, mimeType: 'image/webp' },
@@ -43,6 +45,20 @@ function fixture(overrides = {}) {
   ]; } };
   return { service: new MediaService(repository, storage, scanner, processor), state };
 }
+
+test('local upload accepts only the brand-bound pending asset metadata and forwards its scoped capability', async () => {
+  const { service, state } = fixture({ localStorage: true });
+  const bytes = Buffer.alloc(png.length, 7);
+  await service.acceptLocalUpload({ brandId, mediaId: assetId, nonce: 'n1', contentType: 'image/png',
+    contentLength: bytes.length, bytes, capability: 'capability' });
+  assert.equal(state.localUpload.key, state.row.uploadKey);
+  assert.equal(state.localUpload.brandId, brandId);
+  assert.equal(state.localUpload.assetId, assetId);
+  assert.equal(state.localUpload.capability, 'capability');
+  const mismatch = fixture({ localStorage: true, byteLength: bytes.length + 1 });
+  await assert.rejects(mismatch.service.acceptLocalUpload({ brandId, mediaId: assetId, nonce: 'n1', contentType: 'image/png',
+    contentLength: bytes.length, bytes, capability: 'capability' }), { code: 'MEDIA_UPLOAD_EXPIRED', status: 409 });
+});
 
 test('REN2-66 issues a five-minute brand-keyed upload intent after persisting the rights attestation', async () => {
   const { service, state } = fixture();

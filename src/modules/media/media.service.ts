@@ -49,6 +49,7 @@ export interface MediaRepositoryPort {
     context: MediaMutationContext;
   }): Promise<MediaAssetRecord>;
   getForComplete(mediaId: string, context: MediaMutationContext): Promise<MediaAssetRecord>;
+  getForLocalUpload(mediaId: string, brandId: string): Promise<MediaAssetRecord>;
   markRejected(input: {
     asset: MediaAssetRecord;
     context: MediaMutationContext;
@@ -110,6 +111,24 @@ export class MediaService {
       if (error instanceof MediaStorageUnavailableError) throw this.unavailable('MEDIA_STORAGE_UNAVAILABLE', error.message);
       throw this.unavailable('MEDIA_STORAGE_UNAVAILABLE', 'Media storage could not issue an upload URL.');
     }
+  }
+
+  async acceptLocalUpload(input: { brandId: string; mediaId: string; nonce: string; contentType: string;
+    contentLength: number; bytes: Buffer; capability: string }): Promise<void> {
+    if (!this.storage.isConfigured() || !('storeLocalUpload' in this.storage)) {
+      throw this.unavailable('MEDIA_STORAGE_UNAVAILABLE', 'Local media storage is not configured.');
+    }
+    const asset = await this.repository.getForLocalUpload(input.mediaId, input.brandId);
+    if (asset.scanState !== 'PENDING' || new Date(asset.uploadExpiresAt).getTime() <= this.now()
+      || asset.mimeType !== input.contentType || asset.byteLength !== input.contentLength) {
+      throw new MediaServiceError(409, 'MEDIA_UPLOAD_EXPIRED', 'The media upload is no longer available.');
+    }
+    const local = this.storage as MediaStoragePort & { storeLocalUpload(value: {
+      key: string; brandId: string; assetId: string; nonce: string; contentType: string; contentLength: number;
+      bytes: Buffer; capability: string;
+    }): Promise<void> };
+    try { await local.storeLocalUpload({ ...input, key: asset.uploadKey, assetId: asset.id }); }
+    catch { throw new MediaServiceError(403, 'MEDIA_UPLOAD_CAPABILITY_INVALID', 'The local upload capability is invalid or expired.'); }
   }
 
   /** Internal, idempotent path used only by an authorized media ZIP worker. */

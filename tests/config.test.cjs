@@ -34,6 +34,19 @@ test('local import token signing requires a dedicated HMAC key separate from aut
   }), /AUTH_IMPORT_UPLOAD_HMAC_KEY/);
 });
 
+test('local media storage is explicitly enabled only in development and keeps its directory setting', () => {
+  const enabled = validateEnvironment({ NODE_ENV: 'development', RENIVET_LOCAL_MEDIA_STORAGE_ENABLED: 'true',
+    RENIVET_LOCAL_MEDIA_STORAGE_DIR: '.tmp/media' });
+  assert.equal(enabled.RENIVET_LOCAL_MEDIA_STORAGE_ENABLED, true);
+  assert.equal(enabled.RENIVET_LOCAL_MEDIA_STORAGE_DIR, '.tmp/media');
+  assert.equal(validateEnvironment({ NODE_ENV: 'development', RENIVET_LOCAL_MEDIA_STORAGE_ENABLED: 'false' })
+    .RENIVET_LOCAL_MEDIA_STORAGE_ENABLED, false);
+  assert.equal(validateEnvironment({ NODE_ENV: 'test', RENIVET_LOCAL_MEDIA_STORAGE_ENABLED: 'true' })
+    .RENIVET_LOCAL_MEDIA_STORAGE_ENABLED, false);
+  assert.throws(() => validateEnvironment({ NODE_ENV: 'development', RENIVET_LOCAL_MEDIA_STORAGE_ENABLED: 'sometimes' }),
+    /RENIVET_LOCAL_MEDIA_STORAGE_ENABLED/);
+});
+
 test('email OTP provider can be switched to Resend and rejects unknown values', () => {
   const config = validateEnvironment({
     EMAIL_OTP_PROVIDER: 'resend',
