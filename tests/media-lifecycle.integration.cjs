@@ -46,10 +46,19 @@ test('REN2-66 persists idempotent brand-owned media lifecycle and requires priva
     VALUES($1,'REN2-66 Other','REN2-66 Other','approved') RETURNING id`, [`ren2-66-other-${suffix}`])).rows[0].id;
   await pool.query(`INSERT INTO brands.brand_memberships(brand_id,user_id,membership_state,invited_by_id,joined_at)
     VALUES($1,$2,'active',$3,now())`, [brandId, actorId, grantorId]);
-  const existingMediaGrants = await pool.query(`SELECT count(*)::int AS count FROM access.role_permissions rp
-    JOIN access.permissions p ON p.id=rp.permission_id JOIN access.roles r ON r.id=rp.role_id
-    WHERE p.permission_code='media.write' AND r.is_system=true`);
-  assert.equal(existingMediaGrants.rows[0].count, 0, 'the migration creates no default system-role grants for media.write');
+  const roleMediaPolicy = await pool.query(`
+    SELECT r.role_code, p.permission_code
+      FROM access.roles r
+      JOIN access.role_permissions rp ON rp.role_id=r.id
+      JOIN access.permissions p ON p.id=rp.permission_id
+     WHERE r.role_code IN ('brand_owner','brand_staff','renivet_admin')
+       AND p.permission_code IN ('media.write','catalog.write')
+     ORDER BY r.role_code,p.permission_code`);
+  const grants = new Set(roleMediaPolicy.rows.map((row) => `${row.role_code}:${row.permission_code}`));
+  assert.ok(grants.has('brand_owner:media.write'), 'brand owners can start private media uploads');
+  assert.ok(grants.has('brand_owner:catalog.write'), 'brand owners can complete uploads and attach images');
+  assert.ok(!grants.has('brand_staff:media.write'), 'read-only brand staff cannot upload images');
+  assert.ok(!grants.has('renivet_admin:media.write'), 'global platform roles do not gain brand media access');
   const permissions = {};
   for (const [code, resource, action] of [['media.write','media','write'], ['catalog.write','catalog','write'], ['catalog.read','catalog','read']]) {
     const row = await pool.query(`INSERT INTO access.permissions(permission_code,resource,action,description)
