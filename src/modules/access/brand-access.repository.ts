@@ -72,13 +72,17 @@ export class BrandAccessRepository {
     if (!pool) throw new Error('Authorization database is unavailable');
     const result = await pool.query(`
       SELECT m.user_id AS "userId", m.membership_state AS "membershipState",
+             u.display_name AS "memberName", u.email AS "memberEmail",
+             m.valid_until AS "validUntil",
              COALESCE(jsonb_agg(DISTINCT jsonb_build_object('roleCode', ep.role_code, 'permissionCode', ep.permission_code))
                FILTER (WHERE ep.permission_code IS NOT NULL), '[]'::jsonb) AS permissions
       FROM brands.brand_memberships m
+      JOIN identity.users u ON u.id=m.user_id
       LEFT JOIN access.effective_permissions ep ON ep.user_id=m.user_id AND ep.brand_id=m.brand_id
-      WHERE m.brand_id=$1 AND m.membership_state <> 'revoked'
-      GROUP BY m.user_id, m.membership_state
-      ORDER BY m.user_id`, [brandId]);
+      WHERE m.brand_id=$1
+      GROUP BY m.user_id, m.membership_state, u.display_name, u.email, m.valid_until
+      ORDER BY CASE WHEN m.membership_state = 'active' THEN 0 WHEN m.membership_state = 'invited' THEN 1 ELSE 2 END,
+               COALESCE(u.display_name, u.email, m.user_id::text)`, [brandId]);
     return result.rows;
   }
 }
