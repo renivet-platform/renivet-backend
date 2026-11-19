@@ -147,12 +147,14 @@ test('REN2-26 brand membership, role scopes and permanent audit enforce their da
           'brand_membership.revoke',
           'brand_role.assign_staff',
           'catalog.read',
+          'catalog.write',
           'inventory.adjust.propose',
           'inventory.count',
           'inventory.location.manage',
           'inventory.read',
           'inventory.reconcile',
           'inventory.submit',
+          'media.write',
         ],
       },
       brand_staff: { scope: 'brand', permissions: ['brand_membership.read_self'] },
@@ -165,13 +167,14 @@ test('REN2-26 brand membership, role scopes and permanent audit enforce their da
           'inventory.adjust.approve',
           'inventory.read',
           'staff_access.manage',
+          'taxonomy.manage',
         ],
       },
       renivet_support: {
         scope: 'global',
         permissions: ['account_status.read', 'brand_status.read'],
       },
-    }, 'Only the reviewed first-slice permission matrix is seeded');
+    }, 'The reviewed role matrix includes audited owner upload permissions without expanding staff or global media access');
 
     const assignedSeededRoleCount = await client.query(`
       SELECT count(*)::integer AS count
