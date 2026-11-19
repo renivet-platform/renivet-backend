@@ -278,6 +278,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/access-audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read append-only security events with global administrator authorization */
+        get: operations["listPlatformAccessAudit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/brands/{brandId}/access/team-v2": {
         parameters: {
             query?: never;
@@ -1100,6 +1117,27 @@ export interface paths {
         patch: operations["updateProductMediaLink"];
         trace?: never;
     };
+    "/api/v1/brands/{brandId}/product-imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List brand-scoped persisted import jobs in descending creation order */
+        get: operations["listBrandCatalogImportBatches"];
+        put?: never;
+        /**
+         * Stage a brand-owned catalog import batch
+         * @description Verifies and parses the private uploaded source, stores normalized rows and row-level errors in an immutable batch, and does not write product or stock records.
+         */
+        post: operations["createCatalogImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/brands/{brandId}/product-imports/uploads": {
         parameters: {
             query?: never;
@@ -1131,26 +1169,6 @@ export interface paths {
         /** Store a local development import source privately */
         put: operations["putLocalCatalogImportUpload"];
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/brands/{brandId}/product-imports": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Stage a brand-owned catalog import batch
-         * @description Verifies and parses the private uploaded source, stores normalized rows and row-level errors in an immutable batch, and does not write product or stock records.
-         */
-        post: operations["createCatalogImport"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1632,6 +1650,10 @@ export interface components {
             brandId: string;
             styleCode: string;
             title: string;
+            /** Format: uuid */
+            categoryId?: string | null;
+            /** Format: date-time */
+            updatedAt?: string;
             /** @enum {string} */
             publicationState: "DRAFT" | "INCOMPLETE" | "PENDING_REVIEW" | "APPROVED" | "PUBLISHED" | "RE_REVIEW" | "REJECTED" | "RESTRICTED" | "ARCHIVED";
             contentVersion: number;
@@ -2591,6 +2613,26 @@ export interface operations {
             path: {
                 brandId: unknown;
             };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listPlatformAccessAudit: {
+        parameters: {
+            query?: {
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -6673,6 +6715,163 @@ export interface operations {
             };
         };
     };
+    listBrandCatalogImportBatches: {
+        parameters: {
+            query: {
+                cursor: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createCatalogImport: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                brandId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    sourceKind: "RENIVET_CSV" | "RENIVET_XLSX" | "SHOPIFY_CSV" | "UNIWARE_CSV" | "GENERIC_CSV";
+                    /** Format: date-time */
+                    sourceAsOf: string;
+                    /** Format: uuid */
+                    fileUploadId: string;
+                    /** @enum {string} */
+                    mode: "CREATE_ONLY" | "UPDATE_MATCHED" | "SKIP_EXISTING" | "REVIEW_CONFLICT";
+                };
+            };
+        };
+        responses: {
+            /** @description Import batch accepted for review. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        batchId: string;
+                        /** @constant */
+                        status: "RECEIVED";
+                    };
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Brand permission, MFA, or CSRF denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Upload is not accessible. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Upload was already consumed, expired, or conflicts with this request. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description File metadata or content is invalid. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+            /** @description Storage or database is unavailable. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        code: string;
+                        message: string;
+                        requestId: string;
+                        details?: {
+                            [key: string]: unknown;
+                        };
+                    };
+                };
+            };
+        };
+    };
     beginCatalogImportUpload: {
         parameters: {
             query?: never;
@@ -6839,144 +7038,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-        };
-    };
-    createCatalogImport: {
-        parameters: {
-            query?: never;
-            header: {
-                "Idempotency-Key": string;
-            };
-            path: {
-                brandId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** @enum {string} */
-                    sourceKind: "RENIVET_CSV" | "RENIVET_XLSX" | "SHOPIFY_CSV" | "UNIWARE_CSV" | "GENERIC_CSV";
-                    /** Format: date-time */
-                    sourceAsOf: string;
-                    /** Format: uuid */
-                    fileUploadId: string;
-                    /** @enum {string} */
-                    mode: "CREATE_ONLY" | "UPDATE_MATCHED" | "SKIP_EXISTING" | "REVIEW_CONFLICT";
-                };
-            };
-        };
-        responses: {
-            /** @description Import batch accepted for review. */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        /** Format: uuid */
-                        batchId: string;
-                        /** @constant */
-                        status: "RECEIVED";
-                    };
-                };
-            };
-            /** @description Authentication is required. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        code: string;
-                        message: string;
-                        requestId: string;
-                        details?: {
-                            [key: string]: unknown;
-                        };
-                    };
-                };
-            };
-            /** @description Brand permission, MFA, or CSRF denied. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        code: string;
-                        message: string;
-                        requestId: string;
-                        details?: {
-                            [key: string]: unknown;
-                        };
-                    };
-                };
-            };
-            /** @description Upload is not accessible. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        code: string;
-                        message: string;
-                        requestId: string;
-                        details?: {
-                            [key: string]: unknown;
-                        };
-                    };
-                };
-            };
-            /** @description Upload was already consumed, expired, or conflicts with this request. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        code: string;
-                        message: string;
-                        requestId: string;
-                        details?: {
-                            [key: string]: unknown;
-                        };
-                    };
-                };
-            };
-            /** @description File metadata or content is invalid. */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        code: string;
-                        message: string;
-                        requestId: string;
-                        details?: {
-                            [key: string]: unknown;
-                        };
-                    };
-                };
-            };
-            /** @description Storage or database is unavailable. */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        code: string;
-                        message: string;
-                        requestId: string;
-                        details?: {
-                            [key: string]: unknown;
-                        };
-                    };
-                };
             };
         };
     };

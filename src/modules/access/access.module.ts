@@ -4,13 +4,14 @@ import { BrandAccessGuard } from './brand-access.guard';
 import { BrandAccessRepository } from './brand-access.repository';
 import { PlatformPermissionGuard } from './platform-permission.guard';
 import { BrandMembershipController } from './brand-membership.controller';
+import { AccessAuditController } from './access-audit.controller';
 import { BrandTeamController } from './brand-team.controller';
 import { BrandTeamService } from './brand-team.service';
 
 @Module({
   imports: [IdentityModule],
   providers: [BrandAccessRepository, BrandAccessGuard, PlatformPermissionGuard, BrandTeamService],
-  controllers: [BrandMembershipController, BrandTeamController],
+  controllers: [BrandMembershipController, AccessAuditController, BrandTeamController],
   exports: [BrandAccessGuard, BrandAccessRepository, PlatformPermissionGuard],
 })
 export class AccessModule {}

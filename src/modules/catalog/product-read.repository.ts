@@ -71,7 +71,7 @@ export class ProductReadPostgresRepository implements ProductReadRepository {
   private getPool(): Pool { const pool = this.infrastructure.pool; if (!pool) throw repoError('PRODUCT_READ_UNAVAILABLE'); return pool; }
 }
 
-function summary(row: ProductRow): Record<string, unknown> { return { id: row.id, brandId: row.brand_id, styleCode: row.style_code, title: row.title, publicationState: row.publication_state, contentVersion: row.content_version }; }
+function summary(row: ProductRow): Record<string, unknown> { return { id: row.id, brandId: row.brand_id, styleCode: row.style_code, title: row.title, categoryId: row.category_id, publicationState: row.publication_state, contentVersion: row.content_version, updatedAt: row.cursor_updated_at }; }
 function encodeCursor(updatedAt: string, id: string, filterHash: string): string { return Buffer.from(JSON.stringify({ updatedAt, id, filterHash }), 'utf8').toString('base64url'); }
 function decodeCursor(cursor: string, filterHash: string): { updatedAt: string; id: string } {
   let value: unknown; try { value = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')); } catch { throw repoError('PRODUCT_CURSOR_INVALID'); }
