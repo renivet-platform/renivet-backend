@@ -330,6 +330,20 @@
       "when": 1795050000000,
       "tag": "0046_ren2_117_team_invitations",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1795050060000,
+      "tag": "0047_ren2_119_admin_taxonomy_manage_role",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1795050120000,
+      "tag": "0048_ren2_125_brand_owner_media_write",
+      "breakpoints": true
     }
   ]
 }
