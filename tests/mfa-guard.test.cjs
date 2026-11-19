@@ -115,6 +115,7 @@ for (const action of ['taxonomy.manage', 'taxonomy.approve', 'pricing.approve'])
       { authenticate: async () => ({ userId: 'platform-admin', sessionId: 'session-admin', mfaVerifiedAt: new Date(950_000) }) },
       { auditPrivilegedDecision: async (input) => audited.push(input) },
       () => 1_000_000,
+      'enforced',
     );
     assert.equal(await guard.canActivate(contextFor(request)), true);
     assert.deepEqual(request.authSession, { userId: 'platform-admin', sessionId: 'session-admin' });
