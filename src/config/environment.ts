@@ -107,10 +107,13 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
   const inventoryApiEnabled = optionalBoolean(input, 'RENIVET_INVENTORY_API_ENABLED') ?? false;
   const requestedLocalImportStorageEnabled = optionalBoolean(input, 'RENIVET_LOCAL_IMPORT_STORAGE_ENABLED') ?? false;
   const localImportStorageDir = optionalConfigString(input, 'RENIVET_LOCAL_IMPORT_STORAGE_DIR');
+  const requestedLocalMediaStorageEnabled = optionalBoolean(input, 'RENIVET_LOCAL_MEDIA_STORAGE_ENABLED') ?? false;
+  const localMediaStorageDir = optionalConfigString(input, 'RENIVET_LOCAL_MEDIA_STORAGE_DIR');
   // A development .env is often loaded by test/staging harnesses as well. Keep the
   // local adapter strictly development-only without making those harnesses fail
   // startup: the flag is ignored outside development and can never activate there.
   const localImportStorageEnabled = requestedLocalImportStorageEnabled && envName === 'development';
+  const localMediaStorageEnabled = requestedLocalMediaStorageEnabled && envName === 'development';
   if (authImportUploadHmacKey && authImportUploadHmacKey.length < 32) {
     error('AUTH_IMPORT_UPLOAD_HMAC_KEY', 'must contain at least 32 characters');
   }
@@ -215,6 +218,8 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
     RENIVET_INVENTORY_API_ENABLED: inventoryApiEnabled,
     RENIVET_LOCAL_IMPORT_STORAGE_ENABLED: localImportStorageEnabled,
     RENIVET_LOCAL_IMPORT_STORAGE_DIR: localImportStorageDir,
+    RENIVET_LOCAL_MEDIA_STORAGE_ENABLED: localMediaStorageEnabled,
+    RENIVET_LOCAL_MEDIA_STORAGE_DIR: localMediaStorageDir,
     SMTP_HOST: smtpHost,
     SMTP_PORT: smtpPort,
     SMTP_SECURE: optionalBoolean(input, 'SMTP_SECURE'),
