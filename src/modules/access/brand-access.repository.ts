@@ -73,6 +73,7 @@ export class BrandAccessRepository {
     const result = await pool.query(`
       SELECT m.user_id AS "userId",
              COALESCE(NULLIF(btrim(u.display_name), ''), 'Member') AS "memberName",
+             u.email AS "memberEmail", m.valid_until AS "validUntil",
              m.membership_state AS "membershipState",
              COALESCE(jsonb_agg(DISTINCT jsonb_build_object('roleCode', ep.role_code, 'permissionCode', ep.permission_code))
                FILTER (WHERE ep.permission_code IS NOT NULL), '[]'::jsonb) AS permissions
@@ -80,7 +81,7 @@ export class BrandAccessRepository {
       JOIN identity.users u ON u.id=m.user_id
       LEFT JOIN access.effective_permissions ep ON ep.user_id=m.user_id AND ep.brand_id=m.brand_id
       WHERE m.brand_id=$1 AND m.membership_state <> 'revoked'
-      GROUP BY m.user_id, u.display_name, m.membership_state
+      GROUP BY m.user_id, u.display_name, u.email, m.membership_state, m.valid_until
       ORDER BY memberName, m.user_id`, [brandId]);
     return result.rows;
   }
