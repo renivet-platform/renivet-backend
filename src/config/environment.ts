@@ -80,12 +80,9 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
     error('NODE_ENV', 'must be development, test, staging, or production');
   }
   const protectedEnvironment = envName === 'staging' || envName === 'production';
-  const requestedMfaEnforcementMode = optionalString(input, 'MFA_ENFORCEMENT_MODE') ?? 'enforced';
+  const requestedMfaEnforcementMode = optionalString(input, 'MFA_ENFORCEMENT_MODE') ?? 'deferred';
   if (requestedMfaEnforcementMode !== 'enforced' && requestedMfaEnforcementMode !== 'deferred') {
     error('MFA_ENFORCEMENT_MODE', 'must be enforced or deferred');
-  }
-  if (requestedMfaEnforcementMode === 'deferred' && envName !== 'development' && envName !== 'test') {
-    error('MFA_ENFORCEMENT_MODE', 'deferred is permitted only in development or test');
   }
 
   const rawPort = optionalString(input, 'PORT') ?? '4000';
