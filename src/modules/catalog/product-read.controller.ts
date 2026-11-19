@@ -8,7 +8,9 @@ import { ProductListQuery, ProductReadService } from './product-read.service';
 interface ReadResponse { header(name: string, value: string): this; code(status: number): this; send(body?: unknown): unknown; }
 class ProductSummaryModel {
   @ApiProperty({ format: 'uuid' }) id!: string; @ApiProperty({ format: 'uuid' }) brandId!: string; @ApiProperty() styleCode!: string;
-  @ApiProperty() title!: string; @ApiProperty({ enum: ['DRAFT','INCOMPLETE','PENDING_REVIEW','APPROVED','PUBLISHED','RE_REVIEW','REJECTED','RESTRICTED','ARCHIVED'] }) publicationState!: string; @ApiProperty({ type: 'integer', minimum: 1 }) contentVersion!: number;
+  @ApiProperty() title!: string; @ApiProperty({ format: 'uuid', nullable: true, type: 'string', required: false }) categoryId?: string | null;
+  @ApiProperty({ format: 'date-time', required: false }) updatedAt?: string;
+  @ApiProperty({ enum: ['DRAFT','INCOMPLETE','PENDING_REVIEW','APPROVED','PUBLISHED','RE_REVIEW','REJECTED','RESTRICTED','ARCHIVED'] }) publicationState!: string; @ApiProperty({ type: 'integer', minimum: 1 }) contentVersion!: number;
 }
 class PriceVersionModel {
   @ApiProperty({ format: 'uuid' }) id!: string; @ApiProperty({ format: 'uuid' }) variantId!: string; @ApiProperty({ type: 'string', enum: ['INR'] }) currency!: string;

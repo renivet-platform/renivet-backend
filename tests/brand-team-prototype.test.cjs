@@ -17,7 +17,7 @@ test('SE-20C team query uses supplied authorized brandId, not a browser-controll
     assert.match(sql,/JOIN identity\.users u ON u\.id=m\.user_id/);
     assert.match(sql,/m\.brand_id=\$1/);
     assert.match(sql,/m\.valid_until AS "validUntil"/);
-    assert.match(sql,/u\.display_name AS "memberName"/);
+    assert.match(sql,/COALESCE\(NULLIF\(btrim\(u\.display_name\), ''\), 'Member'\) AS "memberName"/);
     assert.match(sql,/u\.email AS "memberEmail"/);
     return { rows: expected };
   }};
