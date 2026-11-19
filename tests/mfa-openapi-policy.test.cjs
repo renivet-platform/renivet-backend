@@ -11,8 +11,8 @@ test('every OpenAPI operation marked MFA-required documents the server-owned con
       if (!operation || typeof operation !== 'object' || operation['x-renivet-mfa-required'] !== true) continue;
       count += 1;
       assert.deepEqual(operation['x-renivet-mfa-enforcement'], {
-        default: 'enforced',
-        deferral: 'Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required.',
+        default: 'deferred',
+        deferral: 'Authenticator step-up is deferred platform-wide until explicitly enabled; authenticated sessions, scoped permissions, CSRF, audit and independent approval remain required.',
       });
     }
   }
