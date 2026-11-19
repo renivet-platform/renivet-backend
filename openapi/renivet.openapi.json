@@ -1644,8 +1644,8 @@
         ],
         "x-renivet-implementation-wave": "W1",
         "x-renivet-mfa-enforcement": {
-          "default": "enforced",
-          "deferral": "Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required."
+          "default": "deferred",
+          "deferral": "Authenticator step-up is deferred platform-wide until explicitly enabled; authenticated sessions, scoped permissions, CSRF, audit and independent approval remain required."
         },
         "x-renivet-mfa-required": true,
         "x-renivet-permission": "catalog.review"
@@ -1729,8 +1729,8 @@
         ],
         "x-renivet-implementation-wave": "W1",
         "x-renivet-mfa-enforcement": {
-          "default": "enforced",
-          "deferral": "Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required."
+          "default": "deferred",
+          "deferral": "Authenticator step-up is deferred platform-wide until explicitly enabled; authenticated sessions, scoped permissions, CSRF, audit and independent approval remain required."
         },
         "x-renivet-mfa-required": true,
         "x-renivet-permission": "catalog.publish"
@@ -1815,8 +1815,8 @@
         ],
         "x-renivet-implementation-wave": "W1",
         "x-renivet-mfa-enforcement": {
-          "default": "enforced",
-          "deferral": "Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required."
+          "default": "deferred",
+          "deferral": "Authenticator step-up is deferred platform-wide until explicitly enabled; authenticated sessions, scoped permissions, CSRF, audit and independent approval remain required."
         },
         "x-renivet-mfa-required": true,
         "x-renivet-permission": "catalog.restrict"
@@ -1901,8 +1901,8 @@
         ],
         "x-renivet-implementation-wave": "W1",
         "x-renivet-mfa-enforcement": {
-          "default": "enforced",
-          "deferral": "Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required."
+          "default": "deferred",
+          "deferral": "Authenticator step-up is deferred platform-wide until explicitly enabled; authenticated sessions, scoped permissions, CSRF, audit and independent approval remain required."
         },
         "x-renivet-mfa-required": true,
         "x-renivet-permission": "catalog.restrict"
@@ -2385,8 +2385,8 @@
         ],
         "x-renivet-implementation-wave": "W1",
         "x-renivet-mfa-enforcement": {
-          "default": "enforced",
-          "deferral": "Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required."
+          "default": "deferred",
+          "deferral": "Authenticator step-up is deferred platform-wide until explicitly enabled; authenticated sessions, scoped permissions, CSRF, audit and independent approval remain required."
         },
         "x-renivet-mfa-required": true,
         "x-renivet-permission": "brand_membership.review"
@@ -2577,8 +2577,8 @@
         "x-renivet-guard": "platform-global-admin",
         "x-renivet-implementation-wave": "W2",
         "x-renivet-mfa-enforcement": {
-          "default": "enforced",
-          "deferral": "Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required."
+          "default": "deferred",
+          "deferral": "Authenticator step-up is deferred platform-wide until explicitly enabled; authenticated sessions, scoped permissions, CSRF, audit and independent approval remain required."
         },
         "x-renivet-mfa-required": true,
         "x-renivet-permission": "taxonomy.manage"
@@ -2724,8 +2724,8 @@
         "x-renivet-guard": "platform-global-admin",
         "x-renivet-implementation-wave": "W2",
         "x-renivet-mfa-enforcement": {
-          "default": "enforced",
-          "deferral": "Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required."
+          "default": "deferred",
+          "deferral": "Authenticator step-up is deferred platform-wide until explicitly enabled; authenticated sessions, scoped permissions, CSRF, audit and independent approval remain required."
         },
         "x-renivet-mfa-required": true,
         "x-renivet-permission": "taxonomy.approve"
@@ -2851,8 +2851,8 @@
         "x-renivet-guard": "platform-global-admin",
         "x-renivet-implementation-wave": "W2",
         "x-renivet-mfa-enforcement": {
-          "default": "enforced",
-          "deferral": "Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required."
+          "default": "deferred",
+          "deferral": "Authenticator step-up is deferred platform-wide until explicitly enabled; authenticated sessions, scoped permissions, CSRF, audit and independent approval remain required."
         },
         "x-renivet-mfa-required": true,
         "x-renivet-permission": "taxonomy.manage"
@@ -6605,8 +6605,8 @@
         "x-renivet-guard": "platform-global-admin",
         "x-renivet-implementation-wave": "W2",
         "x-renivet-mfa-enforcement": {
-          "default": "enforced",
-          "deferral": "Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required."
+          "default": "deferred",
+          "deferral": "Authenticator step-up is deferred platform-wide until explicitly enabled; authenticated sessions, scoped permissions, CSRF, audit and independent approval remain required."
         },
         "x-renivet-mfa-required": true,
         "x-renivet-permission": "pricing.approve"
@@ -7634,8 +7634,8 @@
         "x-renivet-guard": "platform-global-admin",
         "x-renivet-implementation-wave": "W2",
         "x-renivet-mfa-enforcement": {
-          "default": "enforced",
-          "deferral": "Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required."
+          "default": "deferred",
+          "deferral": "Authenticator step-up is deferred platform-wide until explicitly enabled; authenticated sessions, scoped permissions, CSRF, audit and independent approval remain required."
         },
         "x-renivet-mfa-required": true,
         "x-renivet-permission": "catalog.review"
@@ -7938,8 +7938,8 @@
         "x-renivet-csrf-policy": "W1 session-bound X-CSRF-Token, allowlisted Origin, and Sec-Fetch-Site same-origin validation required; MFA step-up and live media.write permission are required.",
         "x-renivet-implementation-wave": "W2",
         "x-renivet-mfa-enforcement": {
-          "default": "enforced",
-          "deferral": "Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required."
+          "default": "deferred",
+          "deferral": "Authenticator step-up is deferred platform-wide until explicitly enabled; authenticated sessions, scoped permissions, CSRF, audit and independent approval remain required."
         },
         "x-renivet-permission": "media.write",
         "x-renivet-security-review": [
@@ -8294,8 +8294,8 @@
         "x-renivet-guard": "brand",
         "x-renivet-implementation-wave": "W2",
         "x-renivet-mfa-enforcement": {
-          "default": "enforced",
-          "deferral": "Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required."
+          "default": "deferred",
+          "deferral": "Authenticator step-up is deferred platform-wide until explicitly enabled; authenticated sessions, scoped permissions, CSRF, audit and independent approval remain required."
         },
         "x-renivet-permission": "catalog.write"
       }
@@ -10031,8 +10031,8 @@
         "x-renivet-csrf-policy": "W1 session-bound X-CSRF-Token, allowlisted Origin, and Sec-Fetch-Site same-origin validation required; imports.write permission and MFA step-up are required.",
         "x-renivet-implementation-wave": "W2",
         "x-renivet-mfa-enforcement": {
-          "default": "enforced",
-          "deferral": "Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required."
+          "default": "deferred",
+          "deferral": "Authenticator step-up is deferred platform-wide until explicitly enabled; authenticated sessions, scoped permissions, CSRF, audit and independent approval remain required."
         },
         "x-renivet-permission": "imports.write"
       }
@@ -10351,8 +10351,8 @@
         "x-renivet-csrf-policy": "W1 session-bound X-CSRF-Token, allowlisted Origin, and Sec-Fetch-Site same-origin validation required; imports.write permission and MFA step-up are required.",
         "x-renivet-implementation-wave": "W2",
         "x-renivet-mfa-enforcement": {
-          "default": "enforced",
-          "deferral": "Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required."
+          "default": "deferred",
+          "deferral": "Authenticator step-up is deferred platform-wide until explicitly enabled; authenticated sessions, scoped permissions, CSRF, audit and independent approval remain required."
         },
         "x-renivet-permission": "imports.write"
       }
@@ -10734,8 +10734,8 @@
         "x-renivet-csrf-policy": "W1 session validates x-csrf-token and allowlisted Origin; CSRF state is session-bound.",
         "x-renivet-implementation-wave": "W2",
         "x-renivet-mfa-enforcement": {
-          "default": "enforced",
-          "deferral": "Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required."
+          "default": "deferred",
+          "deferral": "Authenticator step-up is deferred platform-wide until explicitly enabled; authenticated sessions, scoped permissions, CSRF, audit and independent approval remain required."
         },
         "x-renivet-permission": "imports.write"
       }
@@ -11526,8 +11526,8 @@
         "x-renivet-csrf-policy": "W1 session validates x-csrf-token and allowlisted Origin; CSRF state is session-bound.",
         "x-renivet-implementation-wave": "W2",
         "x-renivet-mfa-enforcement": {
-          "default": "enforced",
-          "deferral": "Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required."
+          "default": "deferred",
+          "deferral": "Authenticator step-up is deferred platform-wide until explicitly enabled; authenticated sessions, scoped permissions, CSRF, audit and independent approval remain required."
         },
         "x-renivet-permission": "imports.confirm"
       }
@@ -12184,8 +12184,8 @@
         "x-renivet-csrf-policy": "W1 session-bound x-csrf-token, allowlisted Origin, same-origin fetch metadata, and MFA step-up required.",
         "x-renivet-implementation-wave": "W2",
         "x-renivet-mfa-enforcement": {
-          "default": "enforced",
-          "deferral": "Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required."
+          "default": "deferred",
+          "deferral": "Authenticator step-up is deferred platform-wide until explicitly enabled; authenticated sessions, scoped permissions, CSRF, audit and independent approval remain required."
         },
         "x-renivet-permission": "imports.write"
       }
