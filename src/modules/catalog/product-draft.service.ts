@@ -168,29 +168,32 @@ function productError(code: string, details?: Record<string, unknown>): Error & 
 export class ProductDraftService {
   constructor(@Inject(PRODUCT_DRAFT_REPOSITORY) private readonly repository: ProductDraftPostgresRepository) {}
 
+  // Nest ValidationPipe({ transform: true }) creates DTO instances. Turn only
+  // validated DTO instances into plain data; the strict normalizers still
+  // reject unknown keys, invalid nested values and malformed primitives.
   async create(input: CreateProductDraftDto | unknown, context: ProductMutationContext): Promise<Record<string, unknown>> {
-    try { return await this.repository.create(normalizeProductCreate(input), context); }
+    try { return await this.repository.create(normalizeProductCreate(input instanceof CreateProductDraftDto ? { ...input } : input), context); }
     catch (error) { throw mapProductError(error); }
   }
 
   async update(productId: string, input: UpdateProductDraftDto | unknown, ifMatch: string | string[] | undefined,
     context: ProductMutationContext): Promise<Record<string, unknown>> {
     if (!UUID.test(productId)) throw new NotFoundException({ code: 'PRODUCT_NOT_FOUND', message: 'The requested product was not found.' });
-    try { return await this.repository.update(productId, normalizeProductPatch(input), parseProductIfMatch(ifMatch), context); }
+    try { return await this.repository.update(productId, normalizeProductPatch(input instanceof UpdateProductDraftDto ? { ...input } : input), parseProductIfMatch(ifMatch), context); }
     catch (error) { throw mapProductError(error); }
   }
 
   async createVariant(productId: string, input: CreateProductVariantDto | unknown, ifMatch: string | string[] | undefined,
     context: ProductMutationContext): Promise<Record<string, unknown>> {
     if (!UUID.test(productId)) throw new NotFoundException({ code: 'PRODUCT_NOT_FOUND', message: 'The requested product was not found.' });
-    try { return await this.repository.createVariant(productId, normalizeVariantCreate(input), parseProductIfMatch(ifMatch), context); }
+    try { return await this.repository.createVariant(productId, normalizeVariantCreate(input instanceof CreateProductVariantDto ? { ...input } : input), parseProductIfMatch(ifMatch), context); }
     catch (error) { throw mapProductError(error); }
   }
 
   async updateVariant(productId: string, variantId: string, input: UpdateProductVariantDto | unknown,
     ifMatch: string | string[] | undefined, context: ProductMutationContext): Promise<Record<string, unknown>> {
     if (!UUID.test(productId) || !UUID.test(variantId)) throw new NotFoundException({ code: 'PRODUCT_NOT_FOUND', message: 'The requested variant was not found.' });
-    try { return await this.repository.updateVariant(productId, variantId, normalizeVariantPatch(input), parseVariantIfMatch(ifMatch), context); }
+    try { return await this.repository.updateVariant(productId, variantId, normalizeVariantPatch(input instanceof UpdateProductVariantDto ? { ...input } : input), parseVariantIfMatch(ifMatch), context); }
     catch (error) { throw mapProductError(error); }
   }
 
@@ -198,7 +201,7 @@ export class ProductDraftService {
     ifMatch: string | string[] | undefined, context: ProductMutationContext): Promise<Record<string, unknown>> {
     if (!UUID.test(productId) || !UUID.test(variantId)) throw new NotFoundException({ code: 'PRODUCT_NOT_FOUND', message: 'The requested variant was not found.' });
     try {
-      const normalized = normalizeVariantDeactivate(input);
+      const normalized = normalizeVariantDeactivate(input instanceof DeactivateProductVariantDto ? { ...input } : input);
       const expectedVersion = parseVariantIfMatch(ifMatch);
       return await this.repository.deactivateVariant(productId, variantId, normalized, expectedVersion, context);
     }
