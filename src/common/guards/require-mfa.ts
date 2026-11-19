@@ -28,8 +28,8 @@ export function RequireMfa(action: PrivilegedAction): MethodDecorator & ClassDec
   return applyDecorators(
     SetMetadata(REQUIRE_MFA_ACTION, action),
     ApiExtension('x-renivet-mfa-enforcement', {
-      default: 'enforced',
-      deferral: 'Only when MFA_ENFORCEMENT_MODE=deferred and NODE_ENV is development or test; session and business authorization remain required.',
+      default: 'deferred',
+      deferral: 'Authenticator step-up is deferred platform-wide until explicitly enabled; authenticated sessions, scoped permissions, CSRF, audit and independent approval remain required.',
     }),
   );
 }
@@ -58,11 +58,11 @@ export class MfaGuard implements CanActivate {
     private readonly now: () => number = Date.now,
     @Optional()
     @Inject(ConfigService)
-    configurationOrMode: ConfigService | MfaEnforcementMode = 'enforced',
+    configurationOrMode: ConfigService | MfaEnforcementMode = 'deferred',
   ) {
     this.enforcementMode = typeof configurationOrMode === 'string'
       ? configurationOrMode
-      : configurationOrMode.get<MfaEnforcementMode>('MFA_ENFORCEMENT_MODE') ?? 'enforced';
+      : configurationOrMode.get<MfaEnforcementMode>('MFA_ENFORCEMENT_MODE') ?? 'deferred';
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
