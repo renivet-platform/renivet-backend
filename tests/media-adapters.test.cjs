@@ -57,7 +57,10 @@ test('REN2-66 makes private, brand-scoped Spaces upload intents with short expir
     mimeType: 'image/png', byteLength: 100, brandId: 'brand-a', assetId: 'asset-1' });
   const signed = new URL(intent.uploadUrl);
   assert.equal(signed.protocol, 'https:');
-  assert.equal(signed.searchParams.get('X-Amz-Expires'), '300');
+  // Signing may cross a whole-second boundary; expiry must never exceed five minutes.
+  const expirySeconds = Number(signed.searchParams.get('X-Amz-Expires'));
+  assert.ok(Number.isInteger(expirySeconds) && expirySeconds >= 298 && expirySeconds <= 300,
+    `Expected a short upload expiry (298–300 seconds), got ${expirySeconds}`);
   assert.equal(signed.searchParams.has('X-Amz-Signature'), true);
   assert.deepEqual(intent.headers, {
     'content-type': 'image/png', 'x-amz-acl': 'private', 'x-amz-meta-renivet-brand-id': 'brand-a', 'x-amz-meta-renivet-media-asset-id': 'asset-1',

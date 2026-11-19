@@ -137,7 +137,7 @@ export class AuthController {
     );
     return {
       authenticationState: 'authenticated', user: { id: session.userId }, csrfToken: session.csrfToken,
-      mfaEnforcementMode: this.configuration.get<'enforced' | 'deferred'>('MFA_ENFORCEMENT_MODE') ?? 'enforced',
+      mfaEnforcementMode: this.configuration.get<'enforced' | 'deferred'>('MFA_ENFORCEMENT_MODE') ?? 'deferred',
       account: session.account,
       profile: session.profile,
       destination: session.destination,

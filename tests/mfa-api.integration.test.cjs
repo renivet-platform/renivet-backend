@@ -177,7 +177,9 @@ test('REN2-24 MFA API enrolls, rejects invalid/replayed factors, rotates session
 
     // There are no business/admin handlers in this foundation. Exercise the real
     // reusable guard against a test-only action context and its real PostgreSQL audit sink.
-    const guard = new MfaGuard({ get: () => 'staff.manage' }, app.get(SessionService), app.get(MfaService));
+    // The integration test deliberately exercises the explicit enforced security mode,
+    // even though application workflows now default to deferred MFA.
+    const guard = new MfaGuard({ get: () => 'staff.manage' }, app.get(SessionService), app.get(MfaService), Date.now, 'enforced');
     const actionContext = (token) => {
       const request = {
         headers: { cookie: `__Host-renivet_session=${token}` },

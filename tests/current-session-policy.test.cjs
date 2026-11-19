@@ -27,10 +27,10 @@ test('current session exposes server-owned MFA policy and retains no-store respo
   assert.ok(headers.some(([name, value]) => name === 'Cache-Control' && value === 'no-store'));
 });
 
-test('current session reports enforced when policy is absent', async () => {
+test('current session reports deferred when policy is absent', async () => {
   const response = await controller(undefined).getSession(
     { headers: { cookie: '__Host-renivet_session=' + 'R'.repeat(43) } },
     { header: () => undefined },
   );
-  assert.equal(response.mfaEnforcementMode, 'enforced');
+  assert.equal(response.mfaEnforcementMode, 'deferred');
 });

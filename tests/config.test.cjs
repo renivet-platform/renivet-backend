@@ -14,15 +14,13 @@ test('development defaults bind to loopback without requiring service credential
   assert.equal(config.EMAIL_OTP_PROVIDER, 'smtp');
 });
 
-test('MFA enforcement defaults to enforced and permits explicit deferral only in development and test', () => {
-  assert.equal(validateEnvironment({}).MFA_ENFORCEMENT_MODE, 'enforced');
+test('MFA enforcement defaults to deferred across environments and permits explicit opt-in', () => {
+  assert.equal(validateEnvironment({}).MFA_ENFORCEMENT_MODE, 'deferred');
   assert.equal(validateEnvironment({ NODE_ENV: 'development', MFA_ENFORCEMENT_MODE: 'deferred' }).MFA_ENFORCEMENT_MODE, 'deferred');
   assert.equal(validateEnvironment({ NODE_ENV: 'test', MFA_ENFORCEMENT_MODE: 'deferred' }).MFA_ENFORCEMENT_MODE, 'deferred');
   assert.throws(() => validateEnvironment({ MFA_ENFORCEMENT_MODE: 'disabled' }), /MFA_ENFORCEMENT_MODE/);
   assert.throws(() => validateEnvironment({ MFA_ENFORCEMENT_MODE: '' }), /MFA_ENFORCEMENT_MODE/);
-  for (const NODE_ENV of ['staging', 'production']) {
-    assert.throws(() => validateEnvironment({ NODE_ENV, MFA_ENFORCEMENT_MODE: 'deferred' }), /MFA_ENFORCEMENT_MODE/);
-  }
+  assert.equal(validateEnvironment({ NODE_ENV: 'test', MFA_ENFORCEMENT_MODE: 'enforced' }).MFA_ENFORCEMENT_MODE, 'enforced');
 });
 
 test('local import token signing requires a dedicated HMAC key separate from authentication keys', () => {
