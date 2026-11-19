@@ -213,7 +213,15 @@ export class TaxonomyAdminService {
   }
 
   async propose(input: CategorySchemaProposalInput, context: TaxonomyMutationContext): Promise<Record<string, unknown>> {
-    const normalized = normalizeCategorySchemaProposal(input);
+    // Nest ValidationPipe({ transform: true }) supplies a class instance here.
+    // Reconstruct the declared fields into a plain value before the strict
+    // plain-object schema normalizer checks the request contract.
+    const normalized = normalizeCategorySchemaProposal({
+      categoryId: input.categoryId,
+      version: input.version,
+      validatorVersion: input.validatorVersion,
+      ruleset: input.ruleset,
+    });
     try { return await this.repository.propose(normalized, context); }
     catch (error) { throw mapTaxonomyError(error); }
   }
