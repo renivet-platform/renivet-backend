@@ -33,7 +33,7 @@
     const existing=await client.query("SELECT 1 FROM brands.brands WHERE slug=$1",['ren2-117-demo-approved']);
     if(existing.rowCount){await client.query('COMMIT');client.release();client=null;console.log('Synthetic cases already initialized; nothing changed.');return;}
     async function user(name){
-      return (await client.query("INSERT INTO identity.users(email,display_name,state) VALUES($1,$2,'active') RETURNING id",[`${label}_${name}_${suffix}@example.invalid`,`REN2-117 DEMO ${name}`])).rows[0].id;
+      return (await client.query("INSERT INTO identity.users(email,display_name,state,email_verified_at) VALUES($1,$2,'active',CASE WHEN $3='reviewer' THEN now() ELSE NULL END) RETURNING id",[`${label}_${name}_${suffix}@example.invalid`,`REN2-117 DEMO ${name}`,name])).rows[0].id;
     }
     const maker=await user('maker'),reviewer=await user('reviewer'),applicant=await user('applicant'),grantor=await user('grantor');
     const pending=(await client.query("INSERT INTO brands.brands(slug,legal_name,display_name,onboarding_state) VALUES($1,$2,$3,'pending') RETURNING id",['ren2-117-demo-pending','REN2-117 demo application','REN2-117 Demo — Pending brand'])).rows[0].id;
