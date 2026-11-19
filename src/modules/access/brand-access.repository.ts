@@ -56,7 +56,6 @@ export class BrandAccessRepository {
     if (!pool) throw new Error('Authorization database is unavailable');
     const result = await pool.query(`
       SELECT b.id AS "brandId", b.display_name AS "brandName", b.onboarding_state AS "brandState",
-             u.email AS "memberEmail", m.valid_until AS "validUntil",
              m.membership_state AS "membershipState", m.valid_from AS "validFrom", m.valid_until AS "validUntil",
              COALESCE(jsonb_agg(DISTINCT jsonb_build_object('roleCode', ep.role_code, 'permissionCode', ep.permission_code))
                FILTER (WHERE ep.permission_code IS NOT NULL), '[]'::jsonb) AS permissions
@@ -74,6 +73,7 @@ export class BrandAccessRepository {
     const result = await pool.query(`
       SELECT m.user_id AS "userId",
              COALESCE(NULLIF(btrim(u.display_name), ''), 'Member') AS "memberName",
+             u.email AS "memberEmail", m.valid_until AS "validUntil",
              m.membership_state AS "membershipState",
              COALESCE(jsonb_agg(DISTINCT jsonb_build_object('roleCode', ep.role_code, 'permissionCode', ep.permission_code))
                FILTER (WHERE ep.permission_code IS NOT NULL), '[]'::jsonb) AS permissions
