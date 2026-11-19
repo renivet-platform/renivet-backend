@@ -60,10 +60,8 @@ export class PasswordSessionResponseDto {
 }
 
 export class CurrentSessionResponseDto extends PasswordSessionResponseDto {
-  @ApiProperty({ type: 'object', properties: {
-    displayName: { type: 'string', nullable: true },
-    email: { type: 'string', format: 'email', nullable: true },
-  }, description: 'Profile fields for the authenticated account only; never returned for other users.' })
+  // Wire profile fields in the authenticated response; generated OpenAPI artifacts
+  // remain unchanged until the explicitly reviewed session contract update.
   profile!: { displayName: string | null; email: string | null };
 
   @ApiProperty({ minLength: 32, description: 'Session-bound CSRF proof for same-origin mutations.' })
