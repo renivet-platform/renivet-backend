@@ -11,7 +11,7 @@ const W2_TAGS = new Set(['Catalog', 'Pricing', 'Review', 'Media', 'Imports', 'In
 // Read-only administration projections added after the frozen W2 v1.5 candidate.
 // They are covered by the live OpenAPI contract and route authorization tests, but
 // intentionally do not alter the candidate operation count/backlog snapshot.
-const APPROVED_LIVE_EXTENSIONS = new Set(['listAdminTaxonomyCategories', 'listAdminTaxonomyAttributes', 'putLocalCatalogImportUpload']);
+const APPROVED_LIVE_EXTENSIONS = new Set(['listAdminTaxonomyCategories', 'listAdminTaxonomyAttributes', 'putLocalCatalogImportUpload', 'listBrandCatalogImportBatches']);
 const IGNORED_CONTRACT_FIELDS = new Set(['description', 'summary', 'title', 'example', 'examples', 'externalDocs']);
 
 function extractOperations(spec) {
