@@ -30,15 +30,15 @@
     client=await pool.connect();
     await client.query('BEGIN');
     await client.query("SELECT pg_advisory_xact_lock(hashtextextended('ren2-117-disposable-demo',0))");
-    const existing=await client.query("SELECT 1 FROM brands.brands WHERE slug=$1",[label+'_approved']);
+    const existing=await client.query("SELECT 1 FROM brands.brands WHERE slug=$1",['ren2-117-demo-approved']);
     if(existing.rowCount){await client.query('COMMIT');client.release();client=null;console.log('Synthetic cases already initialized; nothing changed.');return;}
     async function user(name){
       return (await client.query("INSERT INTO identity.users(email,display_name,state) VALUES($1,$2,'active') RETURNING id",[`${label}_${name}_${suffix}@example.invalid`,`REN2-117 DEMO ${name}`])).rows[0].id;
     }
     const maker=await user('maker'),reviewer=await user('reviewer'),applicant=await user('applicant'),grantor=await user('grantor');
-    const pending=(await client.query("INSERT INTO brands.brands(slug,legal_name,display_name,onboarding_state) VALUES($1,$2,$3,'pending') RETURNING id",[label+'_pending','REN2-117 demo application','REN2-117 Demo — Pending brand'])).rows[0].id;
+    const pending=(await client.query("INSERT INTO brands.brands(slug,legal_name,display_name,onboarding_state) VALUES($1,$2,$3,'pending') RETURNING id",['ren2-117-demo-pending','REN2-117 demo application','REN2-117 Demo — Pending brand'])).rows[0].id;
     await client.query("INSERT INTO brands.brand_memberships(brand_id,user_id,membership_state,invited_by_id) VALUES($1,$2,'pending',$3)",[pending,applicant,grantor]);
-    const brand=(await client.query("INSERT INTO brands.brands(slug,legal_name,display_name,onboarding_state) VALUES($1,$2,$3,'approved') RETURNING id",[label+'_approved','REN2-117 Demo Products','REN2-117 Demo — Review brand'])).rows[0].id;
+    const brand=(await client.query("INSERT INTO brands.brands(slug,legal_name,display_name,onboarding_state) VALUES($1,$2,$3,'approved') RETURNING id",['ren2-117-demo-approved','REN2-117 Demo Products','REN2-117 Demo — Review brand'])).rows[0].id;
     const category=(await client.query("INSERT INTO catalogue.categories(code,name,active,schema_version) VALUES($1,$2,false,NULL) RETURNING id",[label+'_clothing','REN2-117 Demo Clothing'])).rows[0].id;
     await client.query("INSERT INTO catalogue.category_schema_versions(category_id,version,ruleset_sha256,validator_version) VALUES($1,1,repeat('a',64),'ren2-117-demo')",[category]);
     const rule=(await client.query("INSERT INTO catalogue.attributes(code,label,value_type,scope_type,allowed_values) VALUES($1,'Fabric','enum','product','[\"cotton\",\"linen\"]'::jsonb) RETURNING id,code",[label+'_fabric'])).rows[0];
