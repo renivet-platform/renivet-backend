@@ -157,3 +157,28 @@ test('guard reports missing authentication separately from missing MFA elevation
   assert.equal(audited[0].allowed, false);
   assert.equal(audited[0].userId, null);
 });
+
+for (const action of ['taxonomy.manage', 'imports.write', 'imports.confirm', 'media.write']) {
+  test(`ordinary create/import action ${action} requires a valid session, but no authenticator step-up`, async () => {
+    const audited=[];
+    const request={headers:{cookie:'__Host-renivet_session='+'G'.repeat(43)},ip:'127.0.0.1'};
+    const guard=new MfaGuard(
+      {get:()=>action},
+      {authenticate:async()=>({userId:'verified-account',sessionId:'verified-session',mfaVerifiedAt:null})},
+      {auditPrivilegedDecision:async input=>audited.push(input)},
+      ()=>1_000_000,'enforced',
+    );
+    assert.equal(await guard.canActivate(contextFor(request)),true);
+    assert.equal(audited[0].allowed,true);
+    assert.equal(audited[0].action,action);
+    assert.deepEqual(request.authSession,{userId:'verified-account',sessionId:'verified-session'});
+    await assert.rejects(guard.canActivate(contextFor({headers:{},ip:'127.0.0.1'})),error=>error.getStatus()===401);
+  });
+}
+test('approval actions still require a fresh verifier',async()=>{
+  const guard=new MfaGuard(
+    {get:()=> 'taxonomy.approve'},
+    {authenticate:async()=>({userId:'verified-account',sessionId:'verified-session',mfaVerifiedAt:null})},
+    {auditPrivilegedDecision:async()=>{}},()=>1_000_000,'enforced');
+  await assert.rejects(guard.canActivate(contextFor({headers:{cookie:'__Host-renivet_session='+'H'.repeat(43)},ip:'127.0.0.1'})),error=>error.getStatus()===403);
+});

@@ -21,6 +21,9 @@ export type MfaEnforcementMode = 'enforced' | 'deferred';
 export const REQUIRE_MFA_ACTION = 'renivet:require-mfa-action';
 export const MFA_STEP_UP_MAX_AGE_SECONDS = 300;
 
+/** Creation/import operations use authenticated sessions + scoped permissions + CSRF, without authenticator prompts. */
+export const NO_STEP_UP_ACTIONS = new Set<PrivilegedAction>(['taxonomy.manage', 'imports.write', 'imports.confirm', 'media.write']);
+
 export function RequireMfa(action: PrivilegedAction): MethodDecorator & ClassDecorator {
   return applyDecorators(
     SetMetadata(REQUIRE_MFA_ACTION, action),
@@ -80,7 +83,7 @@ export class MfaGuard implements CanActivate {
       throw this.sessionError(error);
     });
 
-    const allowed = Boolean(session && (this.enforcementMode === 'deferred'
+    const allowed = Boolean(session && ((this.enforcementMode === 'deferred' || NO_STEP_UP_ACTIONS.has(action))
       || hasRecentMfa(session.mfaVerifiedAt, MFA_STEP_UP_MAX_AGE_SECONDS, this.now())));
     await this.audit(action, session?.userId ?? null, session?.sessionId ?? null, allowed, request.ip ?? 'unknown');
     if (!allowed || !session) {

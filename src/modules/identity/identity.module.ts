@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import { MfaGuard } from '../../common/guards/require-mfa';
 import { AuthController } from './auth.controller';
+import { BrandApplicationsController } from './brand-applications.controller';
 import { AuthService } from './auth.service';
 import { PhoneContactController } from './phone-contact.controller';
 import { PhoneContactService } from './phone-contact.service';
@@ -23,7 +24,7 @@ import { BRAND_CATALOG_ELIGIBILITY_REPOSITORY, BrandCatalogEligibilityService } 
 import { BrandCatalogEligibilityPostgresRepository } from './brand-catalog-eligibility.repository';
 
 @Module({
-  controllers: [AuthController, PhoneContactController, OtpController, MfaController],
+  controllers: [AuthController, PhoneContactController, OtpController, MfaController, BrandApplicationsController],
   providers: [
     IdentityInfrastructure,
     IdentityRepository,
