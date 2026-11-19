@@ -23,9 +23,17 @@ export class TaxonomyAdminPostgresRepository implements TaxonomyAdminRepository 
     const pool = this.infrastructure.pool;
     if (!pool) throw taxonomyError('TAXONOMY_DATABASE_UNAVAILABLE');
     const result = await pool.query(`
-      SELECT c.id, c.code, c.name, c.active, c.schema_version AS "schemaVersion",
+      SELECT c.id, c.code, c.name, c.parent_id AS "parentId", c.active, c.schema_version AS "schemaVersion",
              NOT EXISTS (SELECT 1 FROM catalogue.categories child WHERE child.parent_id=c.id) AS "isLeaf",
-             EXISTS (SELECT 1 FROM catalogue.category_schema_versions v WHERE v.category_id=c.id AND v.state='DRAFT') AS "hasDraft"
+             EXISTS (SELECT 1 FROM catalogue.category_schema_versions v WHERE v.category_id=c.id AND v.state='DRAFT') AS "hasDraft",
+             (NOT c.active AND EXISTS (
+               SELECT 1 FROM catalogue.category_availability_events e
+               WHERE e.category_id=c.id AND e.active_after=false
+             )) AS retired,
+             (SELECT v.ruleset
+               FROM catalogue.category_schema_versions v
+               WHERE v.category_id=c.id AND v.version=c.schema_version AND v.state='PUBLISHED'
+               LIMIT 1) AS "publishedRuleset"
       FROM catalogue.categories c ORDER BY c.code`);
     return result.rows;
   }
