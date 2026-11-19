@@ -323,6 +323,13 @@
       "when": 1794701040000,
       "tag": "0045_ren2_115_taxonomy_activation_event",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1795050000000,
+      "tag": "0046_ren2_117_team_invitations",
+      "breakpoints": true
     }
   ]
 }

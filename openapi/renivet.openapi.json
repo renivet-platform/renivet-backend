@@ -1388,6 +1388,171 @@
         "x-renivet-implementation-wave": "W1"
       }
     },
+    "/api/v1/brands/{brandId}/access/team-v2": {
+      "get": {
+        "operationId": "getBrandTeamMembersWithInvitations",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "Read real brand members and invited staff in owner-friendly presentation",
+        "tags": [
+          "Brand team"
+        ],
+        "x-renivet-implementation-wave": "W1"
+      }
+    },
+    "/api/v1/brands/{brandId}/access/invitations": {
+      "post": {
+        "operationId": "inviteBrandTeamMember",
+        "parameters": [
+          {
+            "name": "x-csrf-token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "Send a seven-day invitation to a limited brand role",
+        "tags": [
+          "Brand team"
+        ],
+        "x-renivet-implementation-wave": "W1"
+      }
+    },
+    "/api/v1/brands/{brandId}/access/invitations/{invitationId}/cancel": {
+      "post": {
+        "operationId": "cancelBrandTeamInvitation",
+        "parameters": [
+          {
+            "name": "invitationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-csrf-token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "Brand team"
+        ],
+        "x-renivet-implementation-wave": "W1"
+      }
+    },
+    "/api/v1/brands/{brandId}/access/team/{userId}/revoke": {
+      "post": {
+        "operationId": "revokeBrandTeamMember",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-csrf-token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "Brand team"
+        ],
+        "x-renivet-implementation-wave": "W1"
+      }
+    },
+    "/api/v1/brands/{brandId}/access/invitations/accept": {
+      "post": {
+        "operationId": "acceptBrandTeamInvitation",
+        "parameters": [
+          {
+            "name": "brandId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-csrf-token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "renivetSession": []
+          }
+        ],
+        "summary": "Verified invited email accepts scoped role after sign-in",
+        "tags": [
+          "Brand team"
+        ],
+        "x-renivet-implementation-wave": "W1"
+      }
+    },
     "/api/v1/admin/brands/{brandId}/products/{productId}/review": {
       "post": {
         "description": "Requires a global W1 catalog.review grant, recent MFA, session-bound CSRF and an idempotency key. The frozen revision and row version are compared by the transaction.",
