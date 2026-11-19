@@ -52,6 +52,6 @@ test('W1 seller application persists pending brand and membership, and appears i
   const otherController=new BrandApplicationsController({pool},auth(other),config);
   await assert.rejects(otherController.apply(body,request),e=>e.getStatus?.()===409);
   await assert.rejects(controller.apply({...body,pan:'NOT_ALLOWED'},request),e=>e.getStatus?.()===422);
-  await assert.rejects(controller.apply(body,{headers:{...request.headers,'x-csrf-token':'wrong'}}),e=>e.getStatus?.()===403);
+  await assert.rejects(controller.apply(body,{headers:{...request.headers,'x-csrf-token':'wrong'}}),e=>e.status===403 || e.getStatus?.()===403);
   assert.equal((await pool.query('SELECT count(*)::int AS count FROM brands.brands WHERE id=$1',[first.brandId])).rows[0].count,1);
 });
