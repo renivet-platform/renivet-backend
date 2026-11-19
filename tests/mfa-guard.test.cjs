@@ -34,6 +34,7 @@ test('guard denies absent elevation even when client submits admin and MFA claim
     { authenticate: async () => ({ userId: 'user-a', sessionId: 'session-a', mfaVerifiedAt: null }) },
     { auditPrivilegedDecision: async (input) => audited.push(input) },
     () => 1_000_000,
+    'enforced',
   );
   await assert.rejects(guard.canActivate(contextFor(request)), (error) => error.getStatus() === 403);
   assert.equal(audited.length, 1);
@@ -42,7 +43,7 @@ test('guard denies absent elevation even when client submits admin and MFA claim
   assert.equal(audited[0].userId, 'user-a');
 });
 
-test('guard admits only the server-authenticated session with fresh persisted elevation', async () => {
+test('guard admits authenticated sessions with fresh persisted elevation', async () => {
   const audited = [];
   const request = { headers: { cookie: '__Host-renivet_session=' + 'B'.repeat(43) }, body: { role: 'customer' }, ip: '127.0.0.1' };
   const guard = new MfaGuard(
@@ -181,4 +182,19 @@ test('approval actions still require a fresh verifier',async()=>{
     {authenticate:async()=>({userId:'verified-account',sessionId:'verified-session',mfaVerifiedAt:null})},
     {auditPrivilegedDecision:async()=>{}},()=>1_000_000,'enforced');
   await assert.rejects(guard.canActivate(contextFor({headers:{cookie:'__Host-renivet_session='+'H'.repeat(43)},ip:'127.0.0.1'})),error=>error.getStatus()===403);
+});
+
+test('default deferred platform policy allows authenticated approval without step-up while auditing the decision', async () => {
+  const audited = [];
+  const request = {headers: {cookie: '__Host-renivet_session=' + 'J'.repeat(43)}, ip: '127.0.0.1'};
+  const guard = new MfaGuard(
+    {get: () => 'taxonomy.approve'},
+    {authenticate: async () => ({userId: 'reviewer', sessionId: 'reviewer-session', mfaVerifiedAt: null})},
+    {auditPrivilegedDecision: async (decision) => audited.push(decision)},
+    () => 1_000_000,
+  );
+  assert.equal(await guard.canActivate(contextFor(request)), true);
+  assert.deepEqual(request.authSession, {userId: 'reviewer', sessionId: 'reviewer-session'});
+  assert.equal(audited[0].allowed, true);
+  assert.equal(audited[0].mfaEnforcementMode, 'deferred');
 });
