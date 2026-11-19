@@ -27,6 +27,12 @@ export interface TaxonomyRuleInput {
   readonly maxValues?: number | null;
 }
 
+export interface NewCategoryInput {
+  readonly code: string;
+  readonly name: string;
+  readonly parentId?: string;
+}
+
 export interface CategorySchemaProposalInput {
   readonly categoryId: string;
   readonly version: number;
@@ -48,6 +54,7 @@ export interface TaxonomyMutationContext {
 export interface TaxonomyAdminRepository {
   listCategories(): Promise<Record<string, unknown>[]>;
   listAttributes(): Promise<Record<string, unknown>[]>;
+  createCategory(input: NewCategoryInput, context: TaxonomyMutationContext): Promise<Record<string, unknown>>;
   propose(input: CategorySchemaProposalInput, context: TaxonomyMutationContext): Promise<Record<string, unknown>>;
   publish(input: { categoryId: string; version: number }, context: TaxonomyMutationContext): Promise<Record<string, unknown>>;
   activate(input: CategoryActivationInput, context: TaxonomyMutationContext): Promise<Record<string, unknown>>;
@@ -194,6 +201,17 @@ export class TaxonomyAdminService {
     return this.repository.listAttributes();
   }
 
+  async createCategory(input: NewCategoryInput, context: TaxonomyMutationContext): Promise<Record<string, unknown>> {
+    const code = input.code?.trim();
+    const name = input.name?.trim();
+    if (!code || !/^[a-z][a-z0-9_]{2,63}$/.test(code) || !name || name.length < 3 || name.length > 100
+      || (input.parentId != null && !UUID.test(input.parentId))) {
+      throw new BadRequestException({ code: 'CATEGORY_CREATE_INVALID', message: 'Enter a valid category name and code.' });
+    }
+    try { return await this.repository.createCategory({ code, name, ...(input.parentId ? {parentId:input.parentId} : {}) }, context); }
+    catch(error) { throw mapTaxonomyError(error); }
+  }
+
   async propose(input: CategorySchemaProposalInput, context: TaxonomyMutationContext): Promise<Record<string, unknown>> {
     const normalized = normalizeCategorySchemaProposal(input);
     try { return await this.repository.propose(normalized, context); }
@@ -224,6 +242,9 @@ export class TaxonomyAdminService {
 
 function mapTaxonomyError(error: unknown): unknown {
   const code = (error as { code?: string } | null)?.code;
+  if (code === 'TAXONOMY_CATEGORY_CREATE_CONFLICT') {
+    return new ConflictException({ code, message: 'This category already exists or cannot be placed under that parent.' });
+  }
   if (code === 'TAXONOMY_VERSION_CONFLICT' || code === 'TAXONOMY_IDEMPOTENCY_CONFLICT' || code === 'TAXONOMY_APPROVER_MUST_DIFFER' || code === 'TAXONOMY_CATEGORY_ALREADY_ACTIVE') {
     return new ConflictException({ code, message: 'The taxonomy version changed or the request conflicts with an earlier operation.' });
   }

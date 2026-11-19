@@ -6,6 +6,7 @@ import { CategoryAttributeRule, compileCategorySchema, SUPPORTED_CATEGORY_VALIDA
 import {
   buildCategorySchemaDiff,
   CategorySchemaProposalInput,
+  NewCategoryInput,
   CategoryActivationInput,
   TaxonomyAdminRepository,
   TaxonomyMutationContext,
@@ -34,6 +35,39 @@ export class TaxonomyAdminPostgresRepository implements TaxonomyAdminRepository 
     if (!pool) throw taxonomyError('TAXONOMY_DATABASE_UNAVAILABLE');
     const result = await pool.query(`SELECT id, code, label, value_type AS "valueType", scope_type AS "scopeType", allowed_values AS "allowedValues", unit_code AS "unitCode" FROM catalogue.attributes ORDER BY code`);
     return result.rows;
+  }
+
+  async createCategory(input: NewCategoryInput, context: TaxonomyMutationContext): Promise<Record<string, unknown>> {
+    return this.transaction(async (client) => {
+      // Preserve category hierarchy and idempotency under the same advisory lock as publish.
+      await client.query('SELECT pg_catalog.pg_advisory_xact_lock($1::bigint)', [ADVISORY_TAXONOMY_LOCK]);
+      const payloadHash = hash(input);
+      const prior = await client.query<{subject_id:string; payload_hash:string}>(
+        "SELECT subject_id,payload_hash FROM access.security_audit_events WHERE actor_user_id=$1 AND action='taxonomy.category_created' AND request_id=$2 ORDER BY occurred_at DESC LIMIT 1",
+        [context.actorId,context.idempotencyKey],
+      );
+      if(prior.rows[0]){
+        if(prior.rows[0].payload_hash !== payloadHash) throw taxonomyError('TAXONOMY_IDEMPOTENCY_CONFLICT');
+        return {id:prior.rows[0].subject_id,status:'created_inactive',requestId:context.requestId};
+      }
+      if(input.parentId){
+        const parent = await client.query<{active:boolean; schema_version:number|null}>(
+          'SELECT active,schema_version FROM catalogue.categories WHERE id=$1 FOR UPDATE',[input.parentId]);
+        // A published leaf may not silently become a parent: that would break existing products.
+        if(!parent.rows[0] || parent.rows[0].active || parent.rows[0].schema_version !== null)
+          throw taxonomyError('TAXONOMY_CATEGORY_CREATE_CONFLICT');
+      }
+      const inserted = await client.query<{id:string}>(
+        "INSERT INTO catalogue.categories(code,name,parent_id,active,schema_version) VALUES ($1,$2,$3,false,NULL) RETURNING id",
+        [input.code,input.name,input.parentId??null],
+      );
+      const id=inserted.rows[0].id;
+      await client.query(
+        "INSERT INTO access.security_audit_events(actor_user_id,action,subject_type,subject_id,request_id,payload_hash) VALUES($1,'taxonomy.category_created','category',$2,$3,$4)",
+        [context.actorId,id,context.idempotencyKey,payloadHash],
+      );
+      return {id,status:'created_inactive',requestId:context.requestId};
+    }).catch((error:unknown)=>{throw normalizeDbError(error);});
   }
 
   async propose(input: CategorySchemaProposalInput, context: TaxonomyMutationContext): Promise<Record<string, unknown>> {
