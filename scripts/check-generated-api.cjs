@@ -34,11 +34,6 @@ try {
     const generated = normalizeLineEndings(readFileSync(generatedPath, 'utf8'));
     if (tracked !== generated) {
       process.stderr.write(`${trackedRelativePath} is out of date. Run npm run api:generate and review the diff.\n`);
-      // Temporary review-only contract diagnostic for this PR. Avoid logging
-      // secret values; only generated API spec/types contain static contract.
-      const { spawnSync: diffSpawn } = require('node:child_process');
-      const d = diffSpawn('diff', ['-u', join(root, trackedRelativePath), generatedPath], { encoding: 'utf8' });
-      process.stderr.write((d.stdout ?? '').slice(0, 9000) + '\n');
       process.exitCode = 1;
     }
   }
