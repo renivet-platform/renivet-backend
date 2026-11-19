@@ -13016,6 +13016,15 @@
           "title": {
             "type": "string"
           },
+          "categoryId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
           "publicationState": {
             "type": "string",
             "enum": [

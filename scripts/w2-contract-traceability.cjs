@@ -111,6 +111,31 @@ function compareOperationContracts(expected, actual, expectedSpec, actualSpec, e
         if (schema && schema.type !== 'string') errors.push(`response 200 ${name} cache header must be a string`);
       }
       if (isProductRead) {
+        // REN2-117 adds only brand-scoped, persisted product-summary metadata.
+        // Validate the exact optional shapes, then compare the remaining frozen
+        // W2 v1.5 response against the candidate without relaxing any other field.
+        const responseSchema = actualResponse.content?.['application/json']?.schema;
+        const summary = expected.operationId === 'listBrandProducts'
+          ? responseSchema?.properties?.items?.items
+          : responseSchema?.allOf?.[0];
+        const extensions = {
+          categoryId: { type: 'string', format: 'uuid', nullable: true },
+          updatedAt: { type: 'string', format: 'date-time' },
+        };
+        // The frozen test fixtures intentionally have no extensions; preserve
+        // their behavior. If either field appears in a live response, require
+        // both fields in the exact reviewed optional form.
+        const hasExtension = summary?.properties
+          && Object.keys(extensions).some((field) => Object.hasOwn(summary.properties, field));
+        if (hasExtension) {
+          for (const [field, approved] of Object.entries(extensions)) {
+            if (JSON.stringify(normalizeContract(summary.properties[field]))
+              !== JSON.stringify(normalizeContract(approved)) || summary.required?.includes(field)) {
+              errors.push(`product summary ${field} must remain correctly typed and optional`);
+            }
+            delete summary.properties[field];
+          }
+        }
         expectedResponse.headers ??= {};
         expectedResponse.headers.ETag = { schema: { type: 'string' } };
         expectedResponse.headers['Cache-Control'] = { schema: { type: 'string' } };
