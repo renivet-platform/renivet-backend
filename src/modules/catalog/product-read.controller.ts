@@ -57,7 +57,7 @@ export class ProductReadController {
   @ApiOkResponse({ schema: { allOf: [
     { $ref: getSchemaPath(ProductSummaryModel) },
     { type: 'object', required: ['categoryId','categorySchemaVersion','rowVersion','variants','mediaLinks','attributes','qcState'], properties: {
-      categoryId: { type: 'string', format: 'uuid' }, categorySchemaVersion: { type: 'integer', minimum: 1 }, description: { type: 'string', required: false }, rowVersion: { type: 'integer', minimum: 1 }, qcState: { type: 'string' },
+      categoryId: { type: 'string', format: 'uuid' }, categorySchemaVersion: { type: 'integer', minimum: 1 }, description: { type: 'string' }, rowVersion: { type: 'integer', minimum: 1 }, qcState: { type: 'string' },
       draftRevisionId: { type: 'string', nullable: true, format: 'uuid' }, publishedRevisionId: { type: 'string', nullable: true, format: 'uuid' }, approvedReviewId: { type: 'string', nullable: true, format: 'uuid' },
       variants: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['id','productId','brandId','sku','options','variantState'], properties: {
         id: { type: 'string', format: 'uuid' }, productId: { type: 'string', format: 'uuid' }, brandId: { type: 'string', format: 'uuid' }, sku: { type: 'string' },
