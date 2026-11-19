@@ -188,11 +188,12 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
   async findAndTouchSession(tokenHash: string, idleTtlSeconds: number): Promise<{
     sessionId: string; userId: string; expiresAt: Date; mfaVerifiedAt: Date | null;
     signInMethod: 'phone' | 'email_password'; phoneVerified: boolean;
+    displayName: string | null; email: string | null;
     destination: { kind: 'storefront' } | { kind: 'operations' } | { kind: 'brands'; brands: Array<{ id: string; name: string }> };
   } | null> {
     const result = await this.requirePool().query<{
       id: string; user_id: string; expires_at: Date; mfa_verified_at: Date | null;
-      is_phone_only: boolean; phone_verified: boolean; is_admin: boolean; eligible_brands: Array<{ id: string; name: string }>;
+      is_phone_only: boolean; phone_verified: boolean; display_name: string | null; email: string | null; is_admin: boolean; eligible_brands: Array<{ id: string; name: string }>;
     }>(
       `WITH refreshed AS (
          UPDATE identity.user_sessions AS session
@@ -205,6 +206,7 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
           RETURNING id, user_id, expires_at, mfa_verified_at
        )
        SELECT refreshed.id, refreshed.user_id, refreshed.expires_at, refreshed.mfa_verified_at,
+              NULLIF(btrim(account.display_name), '') AS display_name, account.email,
               (account.email IS NULL AND account.phone_verified_at IS NOT NULL AND NOT EXISTS (
                 SELECT 1 FROM identity.user_credentials AS credential
                  WHERE credential.user_id = account.id AND credential.disabled_at IS NULL
@@ -245,6 +247,8 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
       mfaVerifiedAt: result.rows[0].mfa_verified_at,
       signInMethod: result.rows[0].is_phone_only ? 'phone' : 'email_password',
       phoneVerified: result.rows[0].phone_verified,
+      displayName: result.rows[0].display_name,
+      email: result.rows[0].email,
       destination: result.rows[0].is_admin
         ? { kind: 'operations' }
         : result.rows[0].eligible_brands.length
