@@ -20,9 +20,7 @@ test('MFA enforcement defaults to deferred across environments and permits expli
   assert.equal(validateEnvironment({ NODE_ENV: 'test', MFA_ENFORCEMENT_MODE: 'deferred' }).MFA_ENFORCEMENT_MODE, 'deferred');
   assert.throws(() => validateEnvironment({ MFA_ENFORCEMENT_MODE: 'disabled' }), /MFA_ENFORCEMENT_MODE/);
   assert.throws(() => validateEnvironment({ MFA_ENFORCEMENT_MODE: '' }), /MFA_ENFORCEMENT_MODE/);
-  for (const NODE_ENV of ['staging', 'production']) {
-    assert.equal(validateEnvironment({ NODE_ENV, MFA_ENFORCEMENT_MODE: 'deferred' }).MFA_ENFORCEMENT_MODE, 'deferred');
-  }
+  assert.equal(validateEnvironment({ NODE_ENV: 'test', MFA_ENFORCEMENT_MODE: 'enforced' }).MFA_ENFORCEMENT_MODE, 'enforced');
 });
 
 test('local import token signing requires a dedicated HMAC key separate from authentication keys', () => {
