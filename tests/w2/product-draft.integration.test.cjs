@@ -8,7 +8,8 @@ const { ProductDraftPostgresRepository } = require('../../dist/modules/catalog/p
 const { CatalogSubmissionPostgresRepository } = require('../../dist/modules/catalog/catalog-submission.repository.js');
 const { snapshotSha256 } = require('../../dist/modules/catalog/catalog-submission.js');
 const { TaxonomyAdminPostgresRepository } = require('../../dist/modules/catalog/taxonomy-admin.repository.js');
-const { normalizeProductCreate, normalizeProductPatch } = require('../../dist/modules/catalog/product-draft.service.js');
+const { normalizeProductCreate, normalizeProductPatch, ProductDraftService } = require('../../dist/modules/catalog/product-draft.service.js');
+const { CreateProductDraftDto } = require('../../dist/modules/catalog/product-draft.dto.js');
 
 const url = process.env.RENIVET_TEST_DATABASE_URL;
 function assertDisposable(value) {
@@ -108,6 +109,21 @@ test('REN2-61/62 product drafts and SKU variants enforce category pins, CAS, ide
   assert.deepEqual(draft.variantIds, [], 'variants are optional for draft creation');
   const emptyAttributes = await pool.query('SELECT count(*)::int AS count FROM catalogue.product_attribute_values WHERE product_id=$1', [draft.productId]);
   assert.equal(emptyAttributes.rows[0].count, 0, 'required submission attributes do not block draft creation');
+  // Browser/Nest ValidationPipe creates a DTO instance. Verify that the
+  // production service accepts it and actually persists a new draft in PG16.
+  const transformedDto = Object.assign(new CreateProductDraftDto(), {
+    title: 'DTO-backed product', styleCode: `dto-${suffix}`,
+    categoryCode: `r61-${suffix}`, categorySchemaVersion: 2,
+  });
+  const dtoReceipt = await new ProductDraftService(repository).create(transformedDto,
+    { ...accessContext, idempotencyKey: `dto-create-${suffix}` });
+  assert.equal(dtoReceipt.publicationState, 'DRAFT');
+  const persistedDto = await pool.query(
+    'SELECT title,style_code,category_schema_version FROM catalogue.products WHERE id=$1', [dtoReceipt.productId]);
+  assert.equal(persistedDto.rows[0].title, 'DTO-backed product');
+  assert.equal(persistedDto.rows[0].style_code, `dto-${suffix}`);
+  assert.equal(persistedDto.rows[0].category_schema_version, 2);
+
   const replay = await repository.create(normalizedCreate, createContext);
   assert.equal(replay.productId, draft.productId);
   await assert.rejects(repository.create(normalizeProductCreate({ ...create, title: 'different content' }), createContext), expectCode('PRODUCT_IDEMPOTENCY_CONFLICT'));
