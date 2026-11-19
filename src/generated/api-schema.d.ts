@@ -1549,6 +1549,10 @@ export interface components {
             brandId: string;
             styleCode: string;
             title: string;
+            /** Format: uuid */
+            categoryId?: string | null;
+            /** Format: date-time */
+            updatedAt?: string;
             /** @enum {string} */
             publicationState: "DRAFT" | "INCOMPLETE" | "PENDING_REVIEW" | "APPROVED" | "PUBLISHED" | "RE_REVIEW" | "REJECTED" | "RESTRICTED" | "ARCHIVED";
             contentVersion: number;
