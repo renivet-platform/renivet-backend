@@ -1,11 +1,11 @@
-import { Body, ConflictException, Controller, ForbiddenException, Get, Header, HttpCode, Post, Req, ServiceUnavailableException, UnprocessableEntityException } from '@nestjs/common';
+import { Body, ConflictException, Controller, Get, Header, HttpCode, Post, Req, ServiceUnavailableException, UnprocessableEntityException } from '@nestjs/common';
 import { ApiCookieAuth, ApiExcludeController } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { IdentityInfrastructure } from './identity-infrastructure';
 import { CsrfRejectedError, csrfMatches, readSessionToken, SessionService } from './session.service';
 
 interface ApplicationRequest { headers: Record<string, string | string[] | undefined>; }
-const NAME = /^[^\u0000-\u001f\u007f]{3,100}$/;
+const NAME = /^.{3,100}$/u;
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /**
