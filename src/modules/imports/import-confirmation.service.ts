@@ -143,7 +143,7 @@ export class ImportConfirmationService {
       const response = { confirmationId, batchId: input.batchId, previewRevision: input.previewRevision,
         previewHash: input.previewHash, state, appliedRows: applied.length,
         failedRows: new Set(failed.map((row) => row.sourceRowNumber)).size,
-        stagedRows: stagedRows.length, noopRows, effectsApplied: applied.reduce((total, row) => total + Number(row.effectCount), 0), applied, failed };
+        noopRows, effectsApplied: applied.reduce((total, row) => total + Number(row.effectCount), 0), applied, failed };
       await client.query(`UPDATE imports.import_batches SET job_state=$3,updated_at=now() WHERE id=$1 AND brand_id=$2`, [input.batchId, input.brandId, state]);
       await client.query(`INSERT INTO imports.import_confirmations
         (id,brand_id,batch_id,preview_revision,preview_hash,idempotency_key,request_hash,confirmation_state,confirmed_by,response_payload)
