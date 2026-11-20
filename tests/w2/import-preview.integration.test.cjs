@@ -178,7 +178,8 @@ test('REN2-77/78 persist immutable previews and atomically confirm per-target ef
   const shopifyMapping = await service.saveMapping(shopifyRequest);
   const shopifyPreview = await service.getPreview({ brandId: brand, batchId: shopifyBatch, userId: owner, requestId: `shopify-read-${suffix}` });
   assert.equal(shopifyPreview.previewHash, shopifyMapping.previewHash);
-  assert.equal(shopifyPreview.rows[0].action, 'NEEDS_REVIEW');
+  assert.equal(shopifyPreview.rows[0].action, 'CREATE', 'source review metadata must not prevent private draft creation');
+  assert.ok(shopifyPreview.rows[0].proposed.importDraftSafe, 'safe canonical draft fields are frozen alongside the complete source');
   assert.deepEqual(shopifyPreview.rows[0].proposed.variants, shopifyVariants);
   assert.deepEqual(shopifyPreview.rows[0].proposed.sourceIdentity,
     { productKey: shopifyHandle, recordKey: shopifyHandle, variantKeys: shopifyVariants.map(({ sku }) => sku) });
