@@ -108,8 +108,21 @@ export class ImportConfirmationService {
           // Keep all original source values and validation details for later
           // correction. They are accepted into import staging, not applied to
           // the catalog and never made public.
+          const needsCategory = row.conflicts?.some((issue) => issue.code === 'CATEGORY_UNMAPPED');
+          const sourceCategory = typeof row.proposed?.categoryCode === 'string'
+            ? row.proposed.categoryCode.normalize('NFC').trim() : '';
+          if (needsCategory && sourceCategory && sourceCategory.length <= 128) {
+            // Sellers request global taxonomy additions; they never create,
+            // activate or publish shared categories through an import.
+            await client.query(`INSERT INTO imports.import_category_requests
+              (brand_id,batch_id,source_category_code,source_category_name,source_row_number,requested_by)
+              SELECT $1,$2,$3,$3,$4,$5
+              WHERE NOT EXISTS (SELECT 1 FROM catalogue.categories c WHERE lower(c.code)=lower($3))
+              ON CONFLICT (brand_id,batch_id,source_category_code) DO NOTHING`,
+              [input.brandId,input.batchId,sourceCategory,row.sourceRowNumber,input.actorUserId]);
+          }
           await client.query(`UPDATE imports.import_rows SET row_state='STAGED',result_receipt=$3::jsonb WHERE id=$1 AND batch_id=$2 AND brand_id=$4`,
-            [rowId, input.batchId, JSON.stringify({ status: 'STAGED', reason: 'CATALOG_FIELDS_NEED_CORRECTION',
+            [rowId, input.batchId, JSON.stringify({ status: 'STAGED', reason: needsCategory ? 'CATEGORY_REQUESTED' : 'CATALOG_FIELDS_NEED_CORRECTION',
               issues: Array.isArray(row.conflicts) ? row.conflicts.map((conflict) => conflict.code) : [] }), input.brandId]);
         }
       }
