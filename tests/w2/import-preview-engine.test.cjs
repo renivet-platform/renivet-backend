@@ -274,3 +274,46 @@ test('REN2-77 sends mapped attributes to review when the pinned category schema 
   assert.equal(preview.rows[0].action, 'NEEDS_REVIEW');
   assert.ok(preview.rows[0].conflicts.some(({ code }) => code === 'CATEGORY_SCHEMA_UNAVAILABLE'));
 });
+
+test('Renivet template resolves already-active category codes without explicit category mappings', () => {
+  const input = {
+    batch: { id: 'batch-direct-category', brandId: 'brand-direct', sourceSha256: 'a'.repeat(64), sourceAsOf: '2026-11-20T00:00:00.000Z' },
+    mapping: { version: 1, fields: { styleCode: 'styleCode', title: 'title', sku: 'sku', categoryCode: 'categoryCode' }, categories: {} },
+    taxonomy: { version: 2, snapshotSha256: 'b'.repeat(64), categories: [{
+      code: 'test', active: true, categoryId: '11111111-1111-4111-8111-111111111111',
+      schemaVersionId: '22222222-2222-4222-8222-222222222222', schemaVersion: 2,
+      validatorVersion: 'w2-attribute-validator-v1', attributes: [],
+    }] },
+    sourceRows: [{ rowNumber: 2, rawRecord: { styleCode: '123434', title: 'TESTR', sku: '1234R', categoryCode: 'test' } }],
+    targets: [],
+  };
+  const preview = buildImportPreview(input);
+  assert.equal(preview.rows[0].action, 'CREATE');
+  assert.equal(preview.rows[0].proposed.categoryCode, 'test');
+  assert.deepEqual(preview.rows[0].conflicts, []);
+  assert.equal(preview.counts.create, 1);
+
+  const unknown = buildImportPreview({ ...input, sourceRows: [{ rowNumber: 2, rawRecord: { ...input.sourceRows[0].rawRecord, categoryCode: 'does-not-exist' } }] });
+  assert.equal(unknown.rows[0].action, 'NEEDS_REVIEW');
+  assert.ok(unknown.rows[0].conflicts.some(({ code }) => code === 'CATEGORY_UNMAPPED'));
+
+  const inactive = buildImportPreview({ ...input, taxonomy: { ...input.taxonomy, categories: [{ ...input.taxonomy.categories[0], active: false }] } });
+  assert.equal(inactive.rows[0].action, 'NEEDS_REVIEW');
+  assert.ok(inactive.rows[0].conflicts.some(({ code }) => code === 'CATEGORY_INACTIVE'));
+});
+
+test('explicit source category mapping takes precedence over direct matching', () => {
+  const preview = buildImportPreview({
+    batch: { id: 'batch-mapped', brandId: 'brand-mapped', sourceSha256: 'a'.repeat(64), sourceAsOf: '2026-11-20T00:00:00.000Z' },
+    mapping: { version: 1, fields: { styleCode:'styleCode', title:'title', sku:'sku', categoryCode:'categoryCode' }, categories: { 'external-tops': 'test' } },
+    taxonomy: { version: 2, snapshotSha256: 'b'.repeat(64), categories: [{
+      code: 'test', active: true, categoryId: '11111111-1111-4111-8111-111111111111',
+      schemaVersionId: '22222222-2222-4222-8222-222222222222', schemaVersion: 2,
+      validatorVersion: 'w2-attribute-validator-v1', attributes: [],
+    }] },
+    sourceRows: [{ rowNumber: 2, rawRecord: { styleCode: '123434', title:'TESTR', sku:'1234R', categoryCode:'external-tops' } }],
+    targets: [],
+  });
+  assert.equal(preview.rows[0].action, 'CREATE');
+  assert.equal(preview.rows[0].proposed.categoryCode, 'test');
+});
