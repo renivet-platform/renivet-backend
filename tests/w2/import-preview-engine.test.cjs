@@ -155,7 +155,8 @@ test('REN2-80 keeps Shopify price and image provenance visible while requiring m
     targets: [],
   });
   const row = preview.rows[0];
-  assert.equal(row.action, 'NEEDS_REVIEW');
+  assert.equal(row.action, 'CREATE', 'supported source fields may create a private draft even when other columns require review');
+  assert.ok(row.proposed.importDraftSafe, 'the review payload retains a sanitized private-draft projection');
   assert.deepEqual(row.proposed.variants, [{ sku: 'SHIRT-BLUE-S', options: { color: 'Blue', size: 'S' } }]);
   assert.deepEqual(row.proposed.sourceImageUrls, [{ url: 'https://cdn.shopify.example/front.webp', sourceRowNumber: 2 }]);
   assert.deepEqual(row.proposed.sourceRowNumbers, [2, 3]);
@@ -254,13 +255,17 @@ test('REN2-77 validates mapped attributes against the pinned category schema and
   const base = { batch: { id: 'batch-1', brandId: 'brand-1', sourceSha256: 'a'.repeat(64), sourceAsOf: '2026-11-09T00:00:00.000Z' },
     mapping, taxonomy: schemaTaxonomy, sourceRows: [sourceRows[0]], targets: [] };
   const invalidValue = buildImportPreview({ ...base, sourceRows: [{ ...sourceRows[0], rawRecord: { ...sourceRows[0].rawRecord, color: 'Green' } }] });
-  assert.equal(invalidValue.rows[0].action, 'INVALID');
+  assert.equal(invalidValue.rows[0].action, 'CREATE', 'invalid attribute values must not block saving the private draft');
+  assert.equal(invalidValue.rows[0].proposed.options.color, 'Green', 'original invalid value retained in source');
+  assert.deepEqual({ ...invalidValue.rows[0].proposed.importDraftSafe.variants[0].options }, {}, 'invalid category option is excluded from canonical draft');
   assert.ok(invalidValue.rows[0].conflicts.some(({ code }) => code === 'ATTRIBUTE_VALUE_INVALID'));
   const unknownAttribute = buildImportPreview({ ...base,
     mapping: { ...mapping, fields: { ...mapping.fields, Unknown: 'attributes.unknown' } },
     sourceRows: [{ ...sourceRows[0], rawRecord: { ...sourceRows[0].rawRecord, Unknown: 'value' } }],
   });
-  assert.equal(unknownAttribute.rows[0].action, 'NEEDS_REVIEW');
+  assert.equal(unknownAttribute.rows[0].action, 'CREATE', 'unknown source attributes are retained but not applied to canonical draft');
+  assert.equal(unknownAttribute.rows[0].proposed.attributes.unknown, 'value');
+  assert.ok(!Object.hasOwn(unknownAttribute.rows[0].proposed.importDraftSafe.attributes, 'unknown'));
   assert.ok(unknownAttribute.rows[0].conflicts.some(({ code }) => code === 'ATTRIBUTE_NOT_IN_SCHEMA'));
 });
 
