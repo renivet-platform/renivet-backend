@@ -367,8 +367,9 @@ test('invalid colour in an existing category still permits a private product dra
   assert.ok(preview.rows[0].conflicts.some((issue) => issue.code === 'ATTRIBUTE_VALUE_INVALID'));
   assert.equal(preview.rows[0].proposed.options.color, 'BLACK', 'original option remains in the frozen preview');
   assert.deepEqual({ ...preview.rows[0].proposed.importDraftSafe.attributes }, { fabric: 'Linen' });
-  assert.equal(preview.rows[0].proposed.importDraftSafe.variants[0].sku, 'IMPORT-TEE-M');
-  assert.deepEqual({ ...preview.rows[0].proposed.importDraftSafe.variants[0].options }, {}, 'unsupported option is not written to canonical variant attributes');
+  assert.deepEqual(preview.rows[0].proposed.importDraftSafe.variants, [], 'empty-option variant is not written to canonical draft');
+  assert.equal(preview.rows[0].proposed.sku, 'IMPORT-TEE-M', 'original SKU remains in frozen source preview');
+  assert.ok(preview.rows[0].conflicts.some((issue) => issue.code === 'IMPORT_VARIANTS_NEED_EDITING'));
   assert.equal(preview.rows[0].proposed.categoryCode, 'apparel-tops');
 });
 
