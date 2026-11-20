@@ -386,3 +386,55 @@ test('unknown category still stages the source for an automatic category request
   assert.ok(preview.rows[0].conflicts.some((issue) => issue.code === 'CATEGORY_UNMAPPED'));
   assert.equal(preview.rows[0].proposed.importDraftSafe, undefined, 'unknown taxonomy can never be used to make a canonical draft');
 });
+
+
+test('Unicommerce sample CSV fields create four private drafts without a styleCode column', () => {
+  const { parseCatalogCsv } = require('../../dist/modules/imports/import-csv-parser.js');
+  const csv = [
+    'categoryCode,skuCode,name,type,color,size,maxRetailPrice,basePrice,imageUrl,externalItemId',
+    'TSHIRTS,BAND-TEE-GRN-S,The Band Graphic T-Shirt - Green - Small,SIMPLE,Green,S,2499,1999,https://example.com/band.jpg,BAND-TEE',
+    'TSHIRTS,BASIC-TEE-BLK-M,Essential Cotton T-Shirt - Black - Medium,SIMPLE,Black,M,1299,899,https://example.com/basic.jpg,BASIC-TEE',
+    'TSHIRTS,OVERSIZED-TEE-BLU-L,Oversized Everyday T-Shirt - Blue - Large,SIMPLE,Blue,L,1899,1399,https://example.com/oversized.jpg,OVERSIZED-TEE',
+    'TSHIRTS,GRAPHIC-TEE-WHT-XL,Abstract Graphic T-Shirt - White - Extra Large,SIMPLE,White,XL,1799,1199,https://example.com/graphic.jpg,GRAPHIC-TEE',
+  ].join('\n') + '\n';
+  const parsed = parseCatalogCsv({ bytes: Buffer.from(csv), sourceKind: 'UNIWARE_CSV', sourceAsOf: '2026-11-20T00:00:00.000Z' });
+  assert.equal(parsed.catalogRows.length, 4);
+  assert.deepEqual(parsed.rowErrors, []);
+  const preview = buildImportPreview({
+    batch: { id: 'uniware-template-four', brandId: 'brand-1', sourceSha256: 'f'.repeat(64), sourceAsOf: '2026-11-20T00:00:00.000Z' },
+    mapping: { version: 1, fields: {
+      skuCode: 'sku', name: 'title', categoryCode: 'categoryCode', color: 'options.color',
+      size: 'options.size', maxRetailPrice: 'sourceMrp', imageUrl: 'imageUrl',
+    }, categories: { TSHIRTS: 'apparel-tops' } },
+    taxonomy: taxonomy(), targets: [],
+    sourceRows: parsed.rawRows.map((r) => ({
+      rowNumber: r.sourceRowNumber, rawRecord: r.rawRecord,
+      canonicalRecord: parsed.catalogRows[parsed.catalogRowNumbers.indexOf(r.sourceRowNumber)],
+    })),
+  });
+  assert.equal(preview.counts.create, 4);
+  assert.equal(preview.counts.invalid, 0);
+  assert.deepEqual(preview.rows.map((row) => row.proposed.styleCode), [
+    'BAND-TEE', 'BASIC-TEE', 'OVERSIZED-TEE', 'GRAPHIC-TEE',
+  ]);
+  assert.ok(preview.rows.every((row) => row.proposed.sourceMrp > 0));
+  assert.ok(preview.rows.every((row) => row.proposed.importDraftSafe));
+});
+
+test('Uniware can fall back to SKU when externalItemId is empty, but generic CSV still needs a mapped style', () => {
+  const batch = { id: 'missing-style', brandId: 'brand-1', sourceSha256: 'a'.repeat(64), sourceAsOf: '2026-11-20T00:00:00.000Z' };
+  const common = { batch, taxonomy: taxonomy(), targets: [],
+    mapping: { version: 1, fields: { skuCode: 'sku', name: 'title', categoryCode: 'categoryCode' }, categories: { TSHIRTS: 'apparel-tops' } } };
+  const uniware = buildImportPreview({ ...common, sourceRows: [{
+    rowNumber: 2, rawRecord: { skucode: 'SKU-ONLY', name: 'SKU only', categorycode: 'TSHIRTS', externalitemid: '' },
+  }] });
+  assert.equal(uniware.rows[0].action, 'CREATE');
+  assert.equal(uniware.rows[0].proposed.styleCode, 'SKU-ONLY');
+
+  const generic = buildImportPreview({ ...common,
+    mapping: { ...common.mapping, fields: { sku: 'sku', title: 'title', category: 'categoryCode' } },
+    sourceRows: [{ rowNumber: 2, rawRecord: { sku: 'GENERIC-1', title: 'Generic item', category: 'TSHIRTS' } }],
+  });
+  assert.equal(generic.rows[0].action, 'INVALID');
+  assert.ok(generic.rows[0].conflicts.some((issue) => issue.code === 'IMPORT_REQUIRED_FIELD'));
+});
