@@ -342,10 +342,15 @@ export function buildImportPreview(input: {
           // their source SKUs without inserting ambiguous live variant identities.
           const allSkusValid = safeVariants.every((variant) => typeof variant.sku === 'string'
             && /^[A-Za-z0-9_.-]{1,40}$/.test(variant.sku));
-          const uniqueVariants = allSkusValid && signatures.length === new Set(signatures).size ? safeVariants : [];
+          // Canonical variants require at least one valid option axis.
+          // Never send an empty options object to ProductDraft's variant DTO:
+          // that would make the entire otherwise-valid product draft fail.
+          const incompleteVariants = safeVariants.some((variant) => Object.keys(variant.options).length === 0);
+          const uniqueVariants = allSkusValid && !incompleteVariants
+            && signatures.length === new Set(signatures).size ? safeVariants : [];
           if (uniqueVariants.length !== safeVariants.length) conflicts.push({
             code: 'IMPORT_VARIANTS_NEED_EDITING',
-            message: 'Variant options collide after normalization. Source SKUs are retained; add distinct variants to the private draft later.',
+            message: 'Some variant options are missing or incompatible with the category. Original SKUs and values are retained for editing; the private product draft can be saved without these variants.',
           });
           proposed.importDraftSafe = {
             attributes: validation.normalizedValues.product,
