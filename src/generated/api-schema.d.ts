@@ -4064,6 +4064,7 @@ export interface operations {
                                 [key: string]: string;
                             };
                             variantState: string;
+                            rowVersion: number;
                             priceVersions?: components["schemas"]["PriceVersionModel"][];
                             mediaLinks?: components["schemas"]["MediaLinkModel"][];
                         }[];

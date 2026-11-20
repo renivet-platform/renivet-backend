@@ -41,7 +41,8 @@ export class BrandTeamController {
     const body = 'You were invited to join a brand team on Renivet. Sign in with this verified email address and follow this link within 7 days: '+url.toString()+'\n\nIf you did not expect this invitation, ignore this message.';
     const provider = this.config.get<string>('EMAIL_OTP_PROVIDER');
     if (provider === 'resend') {
-      const key = this.config.get<string>('RESEND_API_KEY');
+      const key = this.config.get<string>('RESEND_API_KEY') ||
+        (this.config.get<string>('SMTP_HOST') === 'smtp.resend.com' ? this.config.get<string>('SMTP_PASSWORD') : undefined);
       if (!key || !from) throw new ServiceUnavailableException({code:'TEAM_INVITE_DELIVERY_UNAVAILABLE',message:'Invitation email is not configured.'});
       const response = await fetch('https://api.resend.com/emails', {
         method:'POST', headers:{ Authorization:'Bearer '+key,'Content-Type':'application/json' },

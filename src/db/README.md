@@ -49,7 +49,7 @@ The seeded first-slice matrix is intentionally narrow:
 | `brand_owner` | One brand | `brand_membership.read`, `brand_membership.invite`, `brand_membership.revoke`, `brand_role.assign_staff`, `brand_access_audit.read` |
 | `brand_staff` | One brand | `brand_membership.read_self` |
 
-These permissions cover access administration only. They do not imply access to product, order, payment, or finance operations. Brand Owners cannot assign global roles or promote another member to owner. Sensitive membership/role mutations require the existing privileged-MFA guard when runtime handlers are implemented. All other permissions default deny.
+This is the initial REN2-26 seed matrix; later reviewed migrations add specific W2 grants. Migration 0049 grants `catalog.submit` to `brand_owner`, allowing an owner to submit a completed draft for independent review. It does not grant review, approval, or publication authority. Brand Owners cannot assign global roles or promote another member to owner. Sensitive membership/role mutations require the existing privileged-MFA guard when runtime handlers are implemented. All other permissions default deny.
 
 `access.security_audit_events` follows the ERD's append-only privileged-event shape and a PostgreSQL trigger rejects updates and deletes. Access audit rows have no cleanup job and are retained permanently per the owner decision. Actor foreign keys do not cascade deletion; hard deletion of an identity that is referenced by an access event is blocked so the actor reference remains intact. Store only allow-listed event metadata as its SHA-256 payload hash, never raw secrets or unnecessary personal data. Application-level audit writes and authorization checks are not implemented by this schema story.
 

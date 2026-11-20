@@ -344,6 +344,20 @@
       "when": 1795050120000,
       "tag": "0048_ren2_125_brand_owner_media_write",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1795176000000,
+      "tag": "0049_brand_owner_catalog_submit",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1795176060000,
+      "tag": "0050_brand_import_read",
+      "breakpoints": true
     }
   ]
 }

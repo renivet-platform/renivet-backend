@@ -1,6 +1,6 @@
 # REN2-49 — W1 Identity and W2 Authorization Reconciliation
 
-**Status:** implementation reconciliation for review; proposed W2 grants are not owner-approved runtime grants.
+**Status:** historical implementation reconciliation. `catalog.submit` is now owner-approved for `brand_owner` by migration 0049; other unmapped permissions remain deny-by-default.
 
 **Linear:** REN2-49 (W2-F0.01). **Prerequisites:** REN2-26 and REN2-27 are Done and present in `origin/main` at the task branch base (`a058cd2`).
 
@@ -16,7 +16,7 @@ This record reconciles the 47 candidate operations in the Engineering OS W2 v1.5
 |---|---|---|
 | Identity and session | `identity.users`; opaque `__Host-renivet_session`; `SessionService` resolves the authenticated user. Request body, query, and caller-supplied user/role claims are not authority. | Reuse the existing user/session; do not add a second identity system or accept a client-selected principal. |
 | Brand and membership | Canonical `brands.brands` and `brands.brand_memberships`; `access.effective_permissions` resolves active user, current assignment window, approved brand, and active joined membership. | Reference canonical brand/user keys. Do not introduce parallel W2 brand or membership roots. |
-| Permission catalog | Seeded W1 role codes are `renivet_admin`, `renivet_support`, `brand_owner`, and `brand_staff`. Their current grants are access-administration/status/membership grants only; no W2 catalog, media, import, inventory, pricing, or taxonomy grants are seeded. | Every W2 permission remains deny-by-default until an explicit reviewed migration maps it to roles. Do not infer grants from role labels. |
+| Permission catalog | W1 role codes are `renivet_admin`, `renivet_support`, `brand_owner`, and `brand_staff`; additive migrations explicitly map approved W2 permissions to brand roles. | Every W2 permission remains deny-by-default until an explicit reviewed migration maps it to roles. Do not infer grants from role labels. |
 | Request guard | `BrandAccessGuard` reads the session, requires a UUID `brandId`, and checks `access.effective_permissions`. Missing policy, bad scope, no grant, or repository failure fails closed. `BrandAccessContext` is server-issued. `PlatformPermissionGuard` separately checks a global W1 permission with `scope_type='global'` and `brand_id IS NULL`; it has no brand fallback. | Every brand operation must declare its permission and use the brand guard before business logic. `/admin/brands/{brandId}` remains brand-scoped; the `admin` path segment is not authority. Taxonomy operations use `PlatformPermissionGuard`; no global permission is seeded for taxonomy, so those operations remain denied. |
 | Query/data isolation | `buildBrandScopePredicate(alias, context)` binds the brand, user, and permission and rechecks current permission in the same SQL statement. | Apply it to every parent/child alias and detail, list, search, count, export, bulk read/write, and mutation. A guard-only check is insufficient. |
 | Revocation | Permission is not cached in the guard; the SQL predicate consults the current effective-permission view. Existing integration evidence exercises revocation/suspension at the next statement boundary. | A previously issued context must not preserve access after a committed permission or membership revocation. |
@@ -40,7 +40,7 @@ Guard lane: `brand` means W1 `BrandAccessGuard` plus same-statement scoped repos
 | 7 | POST `/brands/{brandId}/products/{productId}/variants` | `createProductVariant` | `catalog.write` | brand | Brand catalog editor (proposed); exact W1 role/grant UNMAPPED |
 | 8 | PATCH `/brands/{brandId}/variants/{variantId}/prices` | `proposeVariantPrice` | `pricing.write` | brand | Brand pricing writer (proposed); exact W1 role/grant UNMAPPED |
 | 9 | GET `/brands/{brandId}/variants/{variantId}/prices` | `listVariantPrices` | `pricing.read` | brand | UNMAPPED; v1.5 candidate role map names no pricing reader permission |
-| 10 | POST `/brands/{brandId}/products/{productId}/submit` | `submitProductForReview` | `catalog.submit` | brand | UNMAPPED; not equivalent to `catalog.write` without approval |
+| 10 | POST `/brands/{brandId}/products/{productId}/submit` | `submitProductForReview` | `catalog.submit` | brand | `brand_owner` approved in migration 0049; `catalogue_editor` remains mapped by migration 0046 |
 | 11 | POST `/brands/{brandId}/products/{productId}/publish` | `publishApprovedProduct` | `catalog.publish` | brand | UNMAPPED; publication authority requires explicit decision |
 | 12 | POST `/brands/{brandId}/products/{productId}/restrict` | `restrictPublishedProduct` | `catalog.restrict` | brand | UNMAPPED; restriction authority requires explicit decision |
 | 13 | POST `/brands/{brandId}/media/uploads` | `beginMediaUpload` | `media.write` | brand | UNMAPPED; v1.5 candidate role map has no media permission |
