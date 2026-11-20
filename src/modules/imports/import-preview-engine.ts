@@ -195,7 +195,11 @@ function mappedRecord(row: ImportPreviewSourceRow, mapping: ImportPreviewMapping
       && Object.entries(mapping.categories).some(([sourceCode, targetCode]) => sourceCode.trim().toLocaleLowerCase('en-US')
         === String(source.get(sourceName.trim().toLocaleLowerCase('en-US')) ?? '').trim().toLocaleLowerCase('en-US')
         && Boolean(targetCode)));
-    result.sourceReviewCodes = canonicalRecord.reviewCodes.filter((code) => code !== 'UNIWARE_CATEGORY_MAPPING_REQUIRED' || !explicitCategoryMapping);
+    result.sourceReviewCodes = canonicalRecord.reviewCodes.filter((code) => {
+      if (code === 'UNIWARE_STYLE_CODE_MAPPING_REQUIRED' && normalizeText(result.styleCode)) return false;
+      if (code === 'UNIWARE_CATEGORY_MAPPING_REQUIRED' && explicitCategoryMapping) return false;
+      return true;
+    });
   }
   const canonicalAttributes = isRecord(canonicalRecord.attributes) ? canonicalRecord.attributes : {};
   if (typeof canonicalAttributes.material === 'string' && canonicalAttributes.material.trim()
@@ -275,7 +279,10 @@ export function buildImportPreview(input: {
     if (proposed.categoryUnmapped) conflicts.push({ code: 'CATEGORY_UNMAPPED', message: 'Map this source category to an active Renivet category.' });
     for (const code of Array.isArray(proposed.sourceReviewCodes) ? proposed.sourceReviewCodes as string[] : []) {
       if (typeof code === 'string' && /^(?:SHOPIFY|UNIWARE)_[A-Z_]+$/.test(code)) {
-        if (code === 'UNIWARE_CATEGORY_MAPPING_REQUIRED' && proposed.categoryUnmapped) continue;
+        if (code === 'UNIWARE_CATEGORY_MAPPING_REQUIRED' && (proposed.categoryUnmapped
+          || input.taxonomy.categories.some((category) => category.active
+            && category.code.toLocaleLowerCase('en-US') === normalizeText(proposed.categoryCode).toLocaleLowerCase('en-US')))) continue;
+        if (code === 'UNIWARE_STYLE_CODE_MAPPING_REQUIRED' && normalizeText(proposed.styleCode)) continue;
         const source = code.startsWith('SHOPIFY_') ? 'Shopify' : 'Uniware';
         conflicts.push({ code, message: code.endsWith('_UNMAPPED_FIELDS')
           ? `Some non-empty ${source} columns are retained as source data but are not represented in the Renivet catalog.`
@@ -315,7 +322,7 @@ export function buildImportPreview(input: {
     }
     if (category && !hasPinnedCategorySchema(category)) {
       conflicts.push({ code: 'CATEGORY_SCHEMA_UNAVAILABLE', message: 'The pinned category attribute schema is not available for this preview.' });
-    } else if (category && (Object.keys(mappedAttributes).length > 0 || Object.keys(mappedOptions).length > 0 || Array.isArray(proposed.variants))) {
+    } else if (category && (!target || Object.keys(mappedAttributes).length > 0 || Object.keys(mappedOptions).length > 0 || Array.isArray(proposed.variants))) {
         let validator = schemaValidators.get(category.code);
         if (!validator) {
           validator = compileCategorySchema({ categoryId: category.categoryId, categorySchemaVersionId: category.schemaVersionId,
