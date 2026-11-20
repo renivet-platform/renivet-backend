@@ -297,7 +297,7 @@ export function buildImportPreview(input: {
     }
     if (category && !hasPinnedCategorySchema(category)) {
       conflicts.push({ code: 'CATEGORY_SCHEMA_UNAVAILABLE', message: 'The pinned category attribute schema is not available for this preview.' });
-    } else if (category && (Object.keys(mappedAttributes).length > 0 || Object.keys(mappedOptions).length > 0)) {
+    } else if (category && (Object.keys(mappedAttributes).length > 0 || Object.keys(mappedOptions).length > 0 || Array.isArray(proposed.variants))) {
         let validator = schemaValidators.get(category.code);
         if (!validator) {
           validator = compileCategorySchema({ categoryId: category.categoryId, categorySchemaVersionId: category.schemaVersionId,
@@ -305,8 +305,35 @@ export function buildImportPreview(input: {
           schemaValidators.set(category.code, validator);
         }
         const validation = validator.validate({ product: mappedAttributes, variant: mappedOptions }, { mode: 'draft' });
+        // Keep every original source field in proposed/raw_record. When a published
+        // category exists, a private draft can use the subset of values accepted
+        // by that category; disallowed values remain staged for later correction.
+        if (!target && category.active) {
+          const originalVariants = Array.isArray(proposed.variants) ? proposed.variants : [{ sku: proposed.sku, options: mappedOptions }];
+          const safeVariants = originalVariants.filter(isRecord).map((item) => {
+            const options = isRecord(item.options) ? item.options : {};
+            const checked = validator!.validate({ variant: options }, { mode: 'draft' });
+            for (const issue of checked.issues) conflicts.push({
+              code: issue.code, message: 'The original variant option is saved for later catalog editing.',
+            });
+            return { sku: item.sku, options: checked.normalizedValues.variant,
+              ...(item.weightG === undefined ? {} : { weightG: item.weightG }) };
+          });
+          const signatures = safeVariants.map((variant) => canonical(variant.options));
+          // If two original variants normalize to identical option axes, retain
+          // their source SKUs without inserting ambiguous live variant identities.
+          const uniqueVariants = signatures.length === new Set(signatures).size ? safeVariants : [];
+          if (uniqueVariants.length !== safeVariants.length) conflicts.push({
+            code: 'IMPORT_VARIANTS_NEED_EDITING',
+            message: 'Variant options collide after normalization. Source SKUs are retained; add distinct variants to the private draft later.',
+          });
+          proposed.importDraftSafe = {
+            attributes: validation.normalizedValues.product,
+            variants: uniqueVariants,
+          };
+        }
         for (const issue of validation.issues) {
-          conflicts.push({ code: issue.code, message: 'A mapped attribute does not match the pinned category schema.' });
+          conflicts.push({ code: issue.code, message: 'The original attribute value is saved for later catalog editing.' });
           if (issue.code === 'ATTRIBUTE_VALUE_INVALID') invalidAttributeValue = true;
         }
     }
@@ -327,7 +354,10 @@ export function buildImportPreview(input: {
     // values and review codes remain in the immutable preview/source rows; only
     // catalog-safe fields are applied by import confirmation.
     const blockingConflicts = conflicts.filter(({ code }) =>
-      code !== 'PRICE_REVIEW_REQUIRED' && code !== 'MEDIA_REVIEW_REQUIRED');
+      code !== 'PRICE_REVIEW_REQUIRED' && code !== 'MEDIA_REVIEW_REQUIRED'
+      && !( !target && category?.active && isRecord(proposed.importDraftSafe)
+        && ['ATTRIBUTE_VALUE_INVALID', 'ATTRIBUTE_NOT_IN_SCHEMA', 'ATTRIBUTE_SCOPE_MISMATCH',
+          'IMPORT_VARIANTS_NEED_EDITING', 'SHOPIFY_MATERIAL_MAPPING_REQUIRED'].includes(code)));
     if (blockingConflicts.length) {
       if (invalidAttributeValue) return { sourceRowNumber: source.rowNumber, action: 'INVALID', proposed, fieldMask: rowFieldMasks,
         targetVersion: target ? { productId: target.productId, variantId: target.variantId ?? null,
