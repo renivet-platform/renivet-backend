@@ -108,8 +108,21 @@ export class ImportConfirmationService {
           // Keep all original source values and validation details for later
           // correction. They are accepted into import staging, not applied to
           // the catalog and never made public.
+          const needsCategory = row.conflicts?.some((issue) => issue.code === 'CATEGORY_UNMAPPED');
+          const sourceCategory = typeof row.proposed?.categoryCode === 'string'
+            ? row.proposed.categoryCode.normalize('NFC').trim() : '';
+          if (needsCategory && sourceCategory && sourceCategory.length <= 128) {
+            // Sellers request global taxonomy additions; they never create,
+            // activate or publish shared categories through an import.
+            await client.query(`INSERT INTO imports.import_category_requests
+              (brand_id,batch_id,source_category_code,source_category_name,source_row_number,requested_by)
+              SELECT $1,$2,$3,$3,$4,$5
+              WHERE NOT EXISTS (SELECT 1 FROM catalogue.categories c WHERE lower(c.code)=lower($3))
+              ON CONFLICT (brand_id,batch_id,source_category_code) DO NOTHING`,
+              [input.brandId,input.batchId,sourceCategory,row.sourceRowNumber,input.actorUserId]);
+          }
           await client.query(`UPDATE imports.import_rows SET row_state='STAGED',result_receipt=$3::jsonb WHERE id=$1 AND batch_id=$2 AND brand_id=$4`,
-            [rowId, input.batchId, JSON.stringify({ status: 'STAGED', reason: 'CATALOG_FIELDS_NEED_CORRECTION',
+            [rowId, input.batchId, JSON.stringify({ status: 'STAGED', reason: needsCategory ? 'CATEGORY_REQUESTED' : 'CATALOG_FIELDS_NEED_CORRECTION',
               issues: Array.isArray(row.conflicts) ? row.conflicts.map((conflict) => conflict.code) : [] }), input.brandId]);
         }
       }
@@ -124,15 +137,27 @@ export class ImportConfirmationService {
           const rowState = outcome.failures.length ? 'PARTIAL' : 'APPLIED';
           await client.query(`UPDATE imports.import_rows SET row_state=$7,target_product_id=$3,target_variant_id=$4,result_receipt=$5::jsonb
             WHERE id=$1 AND batch_id=$2 AND brand_id=$6`, [rowId, input.batchId, outcome.productId ?? null, outcome.variantId ?? null,
-            JSON.stringify({ effectCount: outcome.effectCount, failedEffectCount: outcome.failures.length, failures: outcome.failures, status: rowState }), input.brandId, rowState]);
+            JSON.stringify({ effectCount: outcome.effectCount, failedEffectCount: outcome.failures.length, failures: outcome.failures,
+              issues: row.conflicts?.map((conflict) => conflict.code) ?? [], status: rowState }), input.brandId, rowState]);
           await client.query('RELEASE SAVEPOINT import_row_effect');
           applied.push({ sourceRowNumber: row.sourceRowNumber, effectCount: outcome.effectCount, productId: outcome.productId ?? null });
           failed.push(...outcome.failures.map((failure) => ({ sourceRowNumber: row.sourceRowNumber, ...failure })));
         } catch (error) {
           await client.query('ROLLBACK TO SAVEPOINT import_row_effect');
           await client.query('RELEASE SAVEPOINT import_row_effect');
-          if (!input.allowPartial) throw new UnprocessableEntityException({ code: apiError(error).code, message: 'An import row could not be applied; no confirmation effects were saved.' });
           const code = apiError(error).code;
+          // A product-level schema/identity problem must never discard an
+          // accepted source import. The source record and original fields are
+          // still available to repair without ever creating a public product.
+          if (['PRODUCT_DRAFT_INVALID','PRODUCT_ATTRIBUTE_INVALID','VARIANT_ATTRIBUTE_INVALID',
+            'PRODUCT_CATEGORY_INVALID','IMPORT_VARIANT_RECEIPT_MISMATCH','IMPORT_UPDATE_FIELDS_EMPTY'].includes(code)) {
+            await client.query(`UPDATE imports.import_rows SET row_state='STAGED',result_receipt=$3::jsonb
+              WHERE id=$1 AND batch_id=$2 AND brand_id=$4`,
+              [rowId,input.batchId,JSON.stringify({ status:'STAGED', reason:'CATALOG_FIELDS_NEED_CORRECTION',
+                issues: [...(row.conflicts?.map((conflict) => conflict.code) ?? []), code] }),input.brandId]);
+            continue;
+          }
+          if (!input.allowPartial) throw new UnprocessableEntityException({ code, message: 'An import row could not be applied; no confirmation effects were saved.' });
           failed.push({ sourceRowNumber: row.sourceRowNumber, code });
           await client.query(`UPDATE imports.import_rows SET row_state='FAILED',result_receipt=$3::jsonb WHERE id=$1 AND batch_id=$2 AND brand_id=$4`,
             [rowId, input.batchId, JSON.stringify({ status: 'FAILED', code }), input.brandId]);
@@ -264,14 +289,20 @@ export class ImportConfirmationService {
     if (row.action === 'CREATE') {
       const category = await client.query(`SELECT c.schema_version FROM catalogue.categories c WHERE c.code=$1 AND c.active=true`, [String(proposed.categoryCode)]);
       if (!category.rows[0]) throw new UnprocessableEntityException({ code: 'PRODUCT_CATEGORY_INVALID', message: 'The mapped category is no longer available.' });
-      const variants = Array.isArray(proposed.variants) ? proposed.variants as Array<Record<string, unknown>> : [{ sku: proposed.sku, options: asRecord(proposed.options) }];
+      // A valid published category may be used to save a private draft even if
+      // some source options are not permitted by its current rules. Full source
+      // values remain immutable in the import batch for later corrections.
+      const draftSafe = asRecord(proposed.importDraftSafe);
+      const variants = Array.isArray(draftSafe.variants) ? draftSafe.variants as Array<Record<string, unknown>>
+        : Array.isArray(proposed.variants) ? proposed.variants as Array<Record<string, unknown>>
+          : [{ sku: proposed.sku, options: asRecord(proposed.options) }];
       const normalized = normalizeProductCreate({ styleCode: proposed.styleCode, categoryCode: proposed.categoryCode,
         categorySchemaVersion: Number(category.rows[0].schema_version), title: proposed.title, description: proposed.description ?? '',
-        attributes: proposed.attributes ?? {}, variants });
+        attributes: draftSafe.attributes ?? proposed.attributes ?? {}, variants });
       const created = await this.products.createInTransaction(normalized, productContext, client);
       productId = String(created.productId);
       variantIds = Array.isArray(created.variantIds) ? created.variantIds.map(String) : [];
-      if (variantIds.length !== variants.length || !variantIds.length) throw new UnprocessableEntityException({ code: 'IMPORT_VARIANT_RECEIPT_MISMATCH', message: 'The created variants could not be reconciled.' });
+      if (variantIds.length !== variants.length) throw new UnprocessableEntityException({ code: 'IMPORT_VARIANT_RECEIPT_MISMATCH', message: 'The created variants could not be reconciled.' });
     } else {
       if (!row.targetVersion?.productId) throw new ConflictException({ code: 'PREVIEW_STALE', message: 'The update target is missing from the frozen preview.' });
       productId = row.targetVersion.productId;

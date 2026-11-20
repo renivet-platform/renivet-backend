@@ -155,7 +155,8 @@ test('REN2-80 keeps Shopify price and image provenance visible while requiring m
     targets: [],
   });
   const row = preview.rows[0];
-  assert.equal(row.action, 'NEEDS_REVIEW');
+  assert.equal(row.action, 'CREATE', 'supported source fields may create a private draft even when other columns require review');
+  assert.ok(row.proposed.importDraftSafe, 'the review payload retains a sanitized private-draft projection');
   assert.deepEqual(row.proposed.variants, [{ sku: 'SHIRT-BLUE-S', options: { color: 'Blue', size: 'S' } }]);
   assert.deepEqual(row.proposed.sourceImageUrls, [{ url: 'https://cdn.shopify.example/front.webp', sourceRowNumber: 2 }]);
   assert.deepEqual(row.proposed.sourceRowNumbers, [2, 3]);
@@ -254,13 +255,17 @@ test('REN2-77 validates mapped attributes against the pinned category schema and
   const base = { batch: { id: 'batch-1', brandId: 'brand-1', sourceSha256: 'a'.repeat(64), sourceAsOf: '2026-11-09T00:00:00.000Z' },
     mapping, taxonomy: schemaTaxonomy, sourceRows: [sourceRows[0]], targets: [] };
   const invalidValue = buildImportPreview({ ...base, sourceRows: [{ ...sourceRows[0], rawRecord: { ...sourceRows[0].rawRecord, color: 'Green' } }] });
-  assert.equal(invalidValue.rows[0].action, 'INVALID');
+  assert.equal(invalidValue.rows[0].action, 'CREATE', 'invalid attribute values must not block saving the private draft');
+  assert.equal(invalidValue.rows[0].proposed.options.color, 'Green', 'original invalid value retained in source');
+  assert.deepEqual({ ...invalidValue.rows[0].proposed.importDraftSafe.variants[0].options }, {}, 'invalid category option is excluded from canonical draft');
   assert.ok(invalidValue.rows[0].conflicts.some(({ code }) => code === 'ATTRIBUTE_VALUE_INVALID'));
   const unknownAttribute = buildImportPreview({ ...base,
     mapping: { ...mapping, fields: { ...mapping.fields, Unknown: 'attributes.unknown' } },
     sourceRows: [{ ...sourceRows[0], rawRecord: { ...sourceRows[0].rawRecord, Unknown: 'value' } }],
   });
-  assert.equal(unknownAttribute.rows[0].action, 'NEEDS_REVIEW');
+  assert.equal(unknownAttribute.rows[0].action, 'CREATE', 'unknown source attributes are retained but not applied to canonical draft');
+  assert.equal(unknownAttribute.rows[0].proposed.attributes.unknown, 'value');
+  assert.ok(!Object.hasOwn(unknownAttribute.rows[0].proposed.importDraftSafe.attributes, 'unknown'));
   assert.ok(unknownAttribute.rows[0].conflicts.some(({ code }) => code === 'ATTRIBUTE_NOT_IN_SCHEMA'));
 });
 
@@ -345,4 +350,39 @@ test('price review does not bypass invalid category validation', () => {
   assert.equal(preview.rows[0].action, 'NEEDS_REVIEW');
   assert.ok(preview.rows[0].conflicts.some(c => c.code === 'CATEGORY_UNMAPPED'));
   assert.ok(preview.rows[0].conflicts.some(c => c.code === 'PRICE_REVIEW_REQUIRED'));
+});
+
+test('invalid colour in an existing category still permits a private product draft with original values retained', () => {
+  const input = {
+    batch: { id: 'brand-import-options', brandId: 'brand-test', sourceSha256: 'a'.repeat(64), sourceAsOf: '2026-11-20T00:00:00.000Z' },
+    mapping, taxonomy: taxonomy(), targets: [],
+    sourceRows: [{ rowNumber: 2, rawRecord: {
+      'product name': 'Imported shirt', 'style code': 'IMPORT-TEE', sku: 'IMPORT-TEE-M',
+      category: 'Tops', color: 'BLACK', fabric: 'Linen',
+    } }],
+  };
+  const preview = buildImportPreview(input);
+  assert.equal(preview.rows[0].action, 'CREATE');
+  assert.equal(preview.counts.create, 1);
+  assert.ok(preview.rows[0].conflicts.some((issue) => issue.code === 'ATTRIBUTE_VALUE_INVALID'));
+  assert.equal(preview.rows[0].proposed.options.color, 'BLACK', 'original option remains in the frozen preview');
+  assert.deepEqual({ ...preview.rows[0].proposed.importDraftSafe.attributes }, { fabric: 'Linen' });
+  assert.equal(preview.rows[0].proposed.importDraftSafe.variants[0].sku, 'IMPORT-TEE-M');
+  assert.deepEqual({ ...preview.rows[0].proposed.importDraftSafe.variants[0].options }, {}, 'unsupported option is not written to canonical variant attributes');
+  assert.equal(preview.rows[0].proposed.categoryCode, 'apparel-tops');
+});
+
+test('unknown category still stages the source for an automatic category request', () => {
+  const input = {
+    batch: { id: 'unknown-category', brandId: 'brand-test', sourceSha256: 'a'.repeat(64), sourceAsOf: '2026-11-20T00:00:00.000Z' },
+    mapping: { ...mapping, categories: {} }, taxonomy: taxonomy(), targets: [],
+    sourceRows: [{ rowNumber: 2, rawRecord: {
+      'product name': 'Novel item', 'style code': 'NOVEL-001', sku: 'NOVEL-001-M', category: 'never-created', color: 'Blue',
+    } }],
+  };
+  const preview = buildImportPreview(input);
+  assert.equal(preview.rows[0].action, 'NEEDS_REVIEW');
+  assert.equal(preview.rows[0].proposed.categoryCode, 'never-created');
+  assert.ok(preview.rows[0].conflicts.some((issue) => issue.code === 'CATEGORY_UNMAPPED'));
+  assert.equal(preview.rows[0].proposed.importDraftSafe, undefined, 'unknown taxonomy can never be used to make a canonical draft');
 });

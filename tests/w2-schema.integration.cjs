@@ -24,7 +24,7 @@ const W2_TABLES = [
   'media.media_assets', 'media.media_derivatives', 'media.upload_audit_events', 'media.product_media', 'media.product_media_audit_events',
   'media.zip_import_audit_events', 'media.zip_import_batches', 'media.zip_import_effects',
   'media.zip_import_remote_items', 'media.zip_mapping_manifest_items', 'media.zip_mapping_manifests',
-  'imports.import_batches', 'imports.import_rows', 'imports.import_uploads',
+  'imports.import_batches', 'imports.import_rows', 'imports.import_uploads', 'imports.import_category_requests',
   'imports.import_mapping_profiles',
   'imports.external_product_maps', 'imports.external_variant_maps', 'imports.import_previews',
   'imports.import_confirmations', 'imports.import_effect_receipts', 'imports.import_retry_requests',

@@ -358,6 +358,13 @@
       "when": 1795176060000,
       "tag": "0050_brand_import_read",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1795180000000,
+      "tag": "0051_import_category_requests",
+      "breakpoints": true
     }
   ]
 }
