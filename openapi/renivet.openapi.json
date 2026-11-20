@@ -4040,7 +4040,8 @@
                               "brandId",
                               "sku",
                               "options",
-                              "variantState"
+                              "variantState",
+                              "rowVersion"
                             ],
                             "properties": {
                               "id": {
@@ -4066,6 +4067,10 @@
                               },
                               "variantState": {
                                 "type": "string"
+                              },
+                              "rowVersion": {
+                                "type": "integer",
+                                "minimum": 1
                               },
                               "priceVersions": {
                                 "type": "array",
