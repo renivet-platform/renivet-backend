@@ -25,6 +25,11 @@ function errorCodes(receipt: unknown): string[] {
   const value = receipt && typeof receipt === 'object' ? receipt as Record<string, unknown> : {};
   const codes = new Set<string>();
   if (typeof value.code === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(value.code)) codes.add(value.code);
+  // Staged rows retain all validation findings in receipt. Surface them
+  // without marking an accepted source row as a failed catalog operation.
+  if (Array.isArray(value.issues)) for (const code of value.issues) {
+    if (typeof code === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(code)) codes.add(code);
+  }
   if (Array.isArray(value.failures)) for (const failure of value.failures) {
     const code = failure && typeof failure === 'object' ? (failure as Record<string, unknown>).code : undefined;
     if (typeof code === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(code)) codes.add(code);
