@@ -151,6 +151,24 @@ function mappedRecord(row: ImportPreviewSourceRow, mapping: ImportPreviewMapping
     result.categoryCode = mapped ?? result.categoryCode;
   }
   const canonicalRecord = isRecord(row.canonicalRecord) ? row.canonicalRecord : {};
+  // Shopify/Uniware exports have their own product identifiers rather than
+  // a Renivet-specific 'styleCode'. Recover one only for recognizable source
+  // formats when the importer was not given an explicit style mapping.
+  if (!normalizeText(result.styleCode)) {
+    const isUniware = source.has('skucode') && source.has('name');
+    const isShopify = source.has('url handle') || source.has('handle')
+      || typeof canonicalRecord.sourceProductKey === 'string';
+    if (isUniware || isShopify) {
+      const inferredStyle = isUniware
+        ? normalizeText(source.get('externalitemid'))
+          || normalizeText(source.get('itemtypeid'))
+          || normalizeText(result.sku)
+        : normalizeText(source.get('url handle'))
+          || normalizeText(source.get('handle'))
+          || normalizeText(canonicalRecord.sourceProductKey);
+      if (inferredStyle) result.styleCode = inferredStyle;
+    }
+  }
   if (Array.isArray(canonicalRecord.variants)) {
     if (canonicalRecord.variants.length < 1 || canonicalRecord.variants.length > 100 || !canonicalRecord.variants.every((item) => isRecord(item)
       && typeof item.sku === 'string' && isRecord(item.options))) fail('IMPORT_VARIANTS_INVALID');
