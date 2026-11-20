@@ -327,9 +327,10 @@ export class ImportConfirmationService {
         failures.push({ target: `media-${index + 1}`, code: apiError(error).code });
       }
     }
-    if (typeof proposed.imageUrl === 'string' && proposed.imageUrl.trim()) {
-      throw new UnprocessableEntityException({ code: 'IMPORT_MEDIA_REQUIRES_APPROVED_ASSET', message: 'An image URL must pass the approved media intake and rights checks before import confirmation.' });
-    }
+    // Raw third-party image URLs stay in imports.import_rows.raw_record and
+    // the immutable preview. They cannot become approved media links directly,
+    // but they must not fail a valid private draft import.
+    // The media intake pathway can validate and attach these later.
     return { effectCount, failures, productId, variantId: variantIds[0] ?? row.targetVersion?.variantId ?? null };
   }
 
