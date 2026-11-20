@@ -257,7 +257,7 @@ test('REN2-77 validates mapped attributes against the pinned category schema and
   const invalidValue = buildImportPreview({ ...base, sourceRows: [{ ...sourceRows[0], rawRecord: { ...sourceRows[0].rawRecord, color: 'Green' } }] });
   assert.equal(invalidValue.rows[0].action, 'CREATE', 'invalid attribute values must not block saving the private draft');
   assert.equal(invalidValue.rows[0].proposed.options.color, 'Green', 'original invalid value retained in source');
-  assert.deepEqual({ ...invalidValue.rows[0].proposed.importDraftSafe.variants[0].options }, {}, 'invalid category option is excluded from canonical draft');
+  assert.deepEqual(invalidValue.rows[0].proposed.importDraftSafe.variants, [], 'invalid empty-option variant is not inserted into the canonical draft');
   assert.ok(invalidValue.rows[0].conflicts.some(({ code }) => code === 'ATTRIBUTE_VALUE_INVALID'));
   const unknownAttribute = buildImportPreview({ ...base,
     mapping: { ...mapping, fields: { ...mapping.fields, Unknown: 'attributes.unknown' } },
