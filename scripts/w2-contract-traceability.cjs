@@ -136,6 +136,16 @@ function compareOperationContracts(expected, actual, expectedSpec, actualSpec, e
             delete summary.properties[field];
           }
         }
+        if (expected.operationId === 'getBrandProduct') {
+          const variant = responseSchema?.allOf?.[1]?.properties?.variants?.items;
+          if (variant?.properties?.rowVersion) {
+            if (JSON.stringify(normalizeContract(variant.properties.rowVersion)) !== JSON.stringify(normalizeContract({ type: 'integer', minimum: 1 })) || !variant.required?.includes('rowVersion')) {
+              errors.push('product variant rowVersion must be a required positive integer');
+            }
+            delete variant.properties.rowVersion;
+            variant.required = variant.required.filter((field) => field !== 'rowVersion');
+          }
+        }
         expectedResponse.headers ??= {};
         expectedResponse.headers.ETag = { schema: { type: 'string' } };
         expectedResponse.headers['Cache-Control'] = { schema: { type: 'string' } };
