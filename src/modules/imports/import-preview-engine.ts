@@ -145,8 +145,10 @@ function mappedRecord(row: ImportPreviewSourceRow, mapping: ImportPreviewMapping
   if (typeof result.categoryCode === 'string') {
     const categoryMap = new Map(Object.entries(mapping.categories).map(([sourceCode, targetCode]) => [sourceCode.trim().toLocaleLowerCase('en-US'), targetCode]));
     const mapped = categoryMap.get(result.categoryCode.trim().toLocaleLowerCase('en-US'));
+    // Native Renivet CSV files may already contain the exact active category code.
+    // Validate it against the pinned taxonomy below instead of demanding a redundant
+    // explicit mapping. Unknown or inactive codes remain review-blocked.
     result.categoryCode = mapped ?? result.categoryCode;
-    if (!mapped) result.categoryUnmapped = true;
   }
   const canonicalRecord = isRecord(row.canonicalRecord) ? row.canonicalRecord : {};
   if (Array.isArray(canonicalRecord.variants)) {
