@@ -83,18 +83,19 @@ export class ImportConfirmationService {
       await this.assertMappingAndTaxonomyCurrent(client, input, Number(previewRow.mapping_version), String(previewRow.taxonomy_snapshot_sha256).trim());
       await this.assertTargetsCurrent(client, input.brandId, Array.isArray(snapshot.targetVersions) ? snapshot.targetVersions as TargetVersion[] : []);
 
-      const blockedRows = rows.filter((row) => !['CREATE', 'UPDATE', 'NOOP'].includes(row.action));
-      if (blockedRows.length && !input.allowPartial) {
-        throw new UnprocessableEntityException({ code: 'IMPORT_PREVIEW_HAS_BLOCKED_ROWS', message: 'Resolve preview conflicts and create a new preview before confirming all rows.' });
-      }
+      // Staging and catalog application are separate operations. Unsupported or
+      // schema-invalid rows have already been persisted with their full source
+      // record; confirming an import must not misreport them as lost/failed.
+      // Only rows with a safe catalog action are applied to product drafts.
+      const stagedRows = rows.filter((row) => !['CREATE', 'UPDATE', 'NOOP'].includes(row.action));
 
       const confirmationId = randomUUID();
       const applied: Array<Record<string, unknown>> = [];
-      const failed: Array<Record<string, unknown>> = blockedRows.map((row) => ({ sourceRowNumber: row.sourceRowNumber, code: row.conflicts?.[0]?.code ?? 'IMPORT_ROW_BLOCKED' }));
+      const failed: Array<Record<string, unknown>> = [];
       const importRows = await client.query(`SELECT id,source_row_number FROM imports.import_rows WHERE batch_id=$1 AND brand_id=$2 ORDER BY source_row_number FOR UPDATE`, [input.batchId, input.brandId]);
       const rowIds = new Map<number, string>(importRows.rows.map((row: { id: string; source_row_number: number }) => [Number(row.source_row_number), row.id]));
       let noopRows = 0;
-      for (const row of rows.filter((candidate) => candidate.action === 'NOOP' || blockedRows.includes(candidate))) {
+      for (const row of rows.filter((candidate) => candidate.action === 'NOOP' || stagedRows.includes(candidate))) {
         const rowId = rowIds.get(Number(row.sourceRowNumber));
         if (!rowId) throw new ConflictException({ code: 'PREVIEW_STALE', message: 'A staged source row is missing. Generate a fresh preview.' });
         if (row.action === 'NOOP') {
@@ -103,13 +104,17 @@ export class ImportConfirmationService {
             WHERE id=$1 AND batch_id=$2 AND brand_id=$6`, [rowId, input.batchId, row.targetVersion?.productId ?? null,
             row.targetVersion?.variantId ?? null, JSON.stringify({ status: 'NOOP' }), input.brandId]);
         } else {
-          await client.query(`UPDATE imports.import_rows SET row_state='FAILED',result_receipt=$3::jsonb WHERE id=$1 AND batch_id=$2 AND brand_id=$4`,
-            [rowId, input.batchId, JSON.stringify({ status: 'FAILED', code: row.conflicts?.[0]?.code ?? 'IMPORT_ROW_BLOCKED' }), input.brandId]);
+          // Keep all original source values and validation details for later
+          // correction. They are accepted into import staging, not applied to
+          // the catalog and never made public.
+          await client.query(`UPDATE imports.import_rows SET row_state='STAGED',result_receipt=$3::jsonb WHERE id=$1 AND batch_id=$2 AND brand_id=$4`,
+            [rowId, input.batchId, JSON.stringify({ status: 'STAGED', reason: 'CATALOG_FIELDS_NEED_CORRECTION',
+              issues: Array.isArray(row.conflicts) ? row.conflicts.map((conflict) => conflict.code) : [] }), input.brandId]);
         }
       }
 
       for (const row of rows) {
-        if (row.action === 'NOOP' || blockedRows.includes(row)) continue;
+        if (row.action === 'NOOP' || stagedRows.includes(row)) continue;
         const rowId = rowIds.get(Number(row.sourceRowNumber));
         if (!rowId) throw new ConflictException({ code: 'PREVIEW_STALE', message: 'A staged source row is missing. Generate a fresh preview.' });
         await client.query('SAVEPOINT import_row_effect');
@@ -137,14 +142,14 @@ export class ImportConfirmationService {
       const response = { confirmationId, batchId: input.batchId, previewRevision: input.previewRevision,
         previewHash: input.previewHash, state, appliedRows: applied.length,
         failedRows: new Set(failed.map((row) => row.sourceRowNumber)).size,
-        noopRows, effectsApplied: applied.reduce((total, row) => total + Number(row.effectCount), 0), applied, failed };
+        stagedRows: stagedRows.length, noopRows, effectsApplied: applied.reduce((total, row) => total + Number(row.effectCount), 0), applied, failed };
       await client.query(`UPDATE imports.import_batches SET job_state=$3,updated_at=now() WHERE id=$1 AND brand_id=$2`, [input.batchId, input.brandId, state]);
       await client.query(`INSERT INTO imports.import_confirmations
         (id,brand_id,batch_id,preview_revision,preview_hash,idempotency_key,request_hash,confirmation_state,confirmed_by,response_payload)
         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)`, [confirmationId, input.brandId, input.batchId, input.previewRevision,
         input.previewHash, input.idempotencyKey, requestHash, state, input.actorUserId, JSON.stringify(response)]);
       await client.query(`INSERT INTO access.security_audit_events(actor_user_id,action,subject_type,subject_id,request_id,payload_hash)
-        VALUES($1,'imports.confirmed','imports.batch',$2,$3,$4)`, [input.actorUserId, input.batchId, input.requestId, digest({ requestHash, state, appliedRows: applied.length, failedRows: failed.length })]);
+        VALUES($1,'imports.confirmed','imports.batch',$2,$3,$4)`, [input.actorUserId, input.batchId, input.requestId, digest({ requestHash, state, appliedRows: applied.length, failedRows: failed.length, stagedRows: stagedRows.length })]);
       await client.query('COMMIT');
       return response;
     } catch (error) {
