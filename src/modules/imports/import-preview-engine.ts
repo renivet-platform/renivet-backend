@@ -244,9 +244,13 @@ export function buildImportPreview(input: {
     if (!Number.isSafeInteger(source.rowNumber) || source.rowNumber < 1 || !isRecord(source.rawRecord)) fail('IMPORT_PREVIEW_INVALID');
     return { source, proposed: mappedRecord(source, input.mapping) };
   });
-  const requestedMasks = input.fieldMasks ?? [...new Set(mappedRows.flatMap(({ proposed }) => flattenTargets(proposed)))].sort();
-  const fieldMasks = [...new Set(requestedMasks)].sort();
   const mappedTargets = Object.values(input.mapping.fields);
+  // A source-specific style identifier inferred by the adapter is an internal
+  // create-draft identity, not a user-mapped update field. Never treat it as
+  // an explicitly selected update mask or reject the otherwise valid import.
+  const requestedMasks = input.fieldMasks ?? [...new Set(mappedRows.flatMap(({ proposed }) =>
+    flattenTargets(proposed).filter((field) => field !== 'styleCode' || mappedTargets.includes('styleCode'))))].sort();
+  const fieldMasks = [...new Set(requestedMasks)].sort();
   if (fieldMasks.some((field) => !allowedTarget(field)
     || !mappedTargets.includes(field) && !mappedTargets.some((target) => target.startsWith(`${field}.`)))) fail('IMPORT_MAPPING_INVALID');
 
@@ -334,7 +338,8 @@ export function buildImportPreview(input: {
         // category exists, a private draft can use the subset of values accepted
         // by that category; disallowed values remain staged for later correction.
         if (!target && category.active) {
-          const originalVariants = Array.isArray(proposed.variants) ? proposed.variants : [{ sku: proposed.sku, options: mappedOptions }];
+          const originalVariants = Array.isArray(proposed.variants) ? proposed.variants
+            : Object.keys(mappedOptions).length > 0 ? [{ sku: proposed.sku, options: mappedOptions }] : [];
           const safeVariants = originalVariants.filter(isRecord).map((item) => {
             const options = isRecord(item.options) ? item.options : {};
             const checked = validator!.validate({ variant: options }, { mode: 'draft' });
