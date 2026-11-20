@@ -292,6 +292,17 @@ export function buildImportPreview(input: {
     }
     const mappedAttributes = isRecord(proposed.attributes) ? proposed.attributes : {};
     const mappedOptions = isRecord(proposed.options) ? proposed.options : {};
+    if (category && hasPinnedCategorySchema(category)) {
+      for (const rule of category.attributes) {
+        if (rule.valueType !== 'enum' || !Array.isArray(rule.allowedValues)) continue;
+        const fields = rule.scope === 'product' ? mappedAttributes : rule.scope === 'variant' ? mappedOptions : null;
+        const value = fields?.[rule.code];
+        if (typeof value !== 'string' || !fields) continue;
+        const matches = rule.allowedValues.filter((allowed): allowed is string => typeof allowed === 'string'
+          && allowed.normalize('NFC').toLocaleLowerCase('en-US') === value.normalize('NFC').toLocaleLowerCase('en-US'));
+        if (matches.length === 1) fields[rule.code] = matches[0];
+      }
+    }
     if (target && Object.entries(mappedOptions).some(([code, value]) => canonical(target.options?.[code]) !== canonical(value))) {
       conflicts.push({ code: 'SKU_ATTR_CONFLICT', message: 'Changing size, color, or another variant option requires a new SKU or an approved correction.' });
     }
