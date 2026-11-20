@@ -8,6 +8,7 @@ import { ProductMediaPostgresRepository } from '../media/product-media.repositor
 import { ProductMediaMutationContext } from '../media/product-media.service';
 import { IdentityInfrastructure } from '../identity/identity-infrastructure';
 import { deriveImportEffectKey, ImportEffectKind } from './import-effect-keys';
+import { shouldStageForCatalogEdit } from './import-staging-policy';
 
 export type ConfirmInput = { brandId: string; batchId: string; actorUserId: string; idempotencyKey: string;
   previewRevision: number; previewHash: string; allowPartial: boolean; requestId: string };
@@ -87,7 +88,7 @@ export class ImportConfirmationService {
       // schema-invalid rows have already been persisted with their full source
       // record; confirming an import must not misreport them as lost/failed.
       // Only rows with a safe catalog action are applied to product drafts.
-      const stagedRows = rows.filter((row) => !['CREATE', 'UPDATE', 'NOOP'].includes(row.action));
+      const stagedRows = rows.filter((row) => shouldStageForCatalogEdit(row.action));
 
       const confirmationId = randomUUID();
       const applied: Array<Record<string, unknown>> = [];
