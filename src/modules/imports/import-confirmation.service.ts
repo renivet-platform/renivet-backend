@@ -124,7 +124,8 @@ export class ImportConfirmationService {
           const rowState = outcome.failures.length ? 'PARTIAL' : 'APPLIED';
           await client.query(`UPDATE imports.import_rows SET row_state=$7,target_product_id=$3,target_variant_id=$4,result_receipt=$5::jsonb
             WHERE id=$1 AND batch_id=$2 AND brand_id=$6`, [rowId, input.batchId, outcome.productId ?? null, outcome.variantId ?? null,
-            JSON.stringify({ effectCount: outcome.effectCount, failedEffectCount: outcome.failures.length, failures: outcome.failures, status: rowState }), input.brandId, rowState]);
+            JSON.stringify({ effectCount: outcome.effectCount, failedEffectCount: outcome.failures.length, failures: outcome.failures,
+              issues: row.conflicts?.map((conflict) => conflict.code) ?? [], status: rowState }), input.brandId, rowState]);
           await client.query('RELEASE SAVEPOINT import_row_effect');
           applied.push({ sourceRowNumber: row.sourceRowNumber, effectCount: outcome.effectCount, productId: outcome.productId ?? null });
           failed.push(...outcome.failures.map((failure) => ({ sourceRowNumber: row.sourceRowNumber, ...failure })));
@@ -264,10 +265,16 @@ export class ImportConfirmationService {
     if (row.action === 'CREATE') {
       const category = await client.query(`SELECT c.schema_version FROM catalogue.categories c WHERE c.code=$1 AND c.active=true`, [String(proposed.categoryCode)]);
       if (!category.rows[0]) throw new UnprocessableEntityException({ code: 'PRODUCT_CATEGORY_INVALID', message: 'The mapped category is no longer available.' });
-      const variants = Array.isArray(proposed.variants) ? proposed.variants as Array<Record<string, unknown>> : [{ sku: proposed.sku, options: asRecord(proposed.options) }];
+      // A valid published category may be used to save a private draft even if
+      // some source options are not permitted by its current rules. Full source
+      // values remain immutable in the import batch for later corrections.
+      const draftSafe = asRecord(proposed.importDraftSafe);
+      const variants = Array.isArray(draftSafe.variants) ? draftSafe.variants as Array<Record<string, unknown>>
+        : Array.isArray(proposed.variants) ? proposed.variants as Array<Record<string, unknown>>
+          : [{ sku: proposed.sku, options: asRecord(proposed.options) }];
       const normalized = normalizeProductCreate({ styleCode: proposed.styleCode, categoryCode: proposed.categoryCode,
         categorySchemaVersion: Number(category.rows[0].schema_version), title: proposed.title, description: proposed.description ?? '',
-        attributes: proposed.attributes ?? {}, variants });
+        attributes: draftSafe.attributes ?? proposed.attributes ?? {}, variants });
       const created = await this.products.createInTransaction(normalized, productContext, client);
       productId = String(created.productId);
       variantIds = Array.isArray(created.variantIds) ? created.variantIds.map(String) : [];
