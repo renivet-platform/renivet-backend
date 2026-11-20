@@ -322,7 +322,9 @@ export function buildImportPreview(input: {
           const signatures = safeVariants.map((variant) => canonical(variant.options));
           // If two original variants normalize to identical option axes, retain
           // their source SKUs without inserting ambiguous live variant identities.
-          const uniqueVariants = signatures.length === new Set(signatures).size ? safeVariants : [];
+          const allSkusValid = safeVariants.every((variant) => typeof variant.sku === 'string'
+            && /^[A-Za-z0-9_.-]{1,40}$/.test(variant.sku));
+          const uniqueVariants = allSkusValid && signatures.length === new Set(signatures).size ? safeVariants : [];
           if (uniqueVariants.length !== safeVariants.length) conflicts.push({
             code: 'IMPORT_VARIANTS_NEED_EDITING',
             message: 'Variant options collide after normalization. Source SKUs are retained; add distinct variants to the private draft later.',
@@ -356,8 +358,8 @@ export function buildImportPreview(input: {
     const blockingConflicts = conflicts.filter(({ code }) =>
       code !== 'PRICE_REVIEW_REQUIRED' && code !== 'MEDIA_REVIEW_REQUIRED'
       && !( !target && category?.active && isRecord(proposed.importDraftSafe)
-        && ['ATTRIBUTE_VALUE_INVALID', 'ATTRIBUTE_NOT_IN_SCHEMA', 'ATTRIBUTE_SCOPE_MISMATCH',
-          'IMPORT_VARIANTS_NEED_EDITING', 'SHOPIFY_MATERIAL_MAPPING_REQUIRED'].includes(code)));
+        && (['ATTRIBUTE_VALUE_INVALID', 'ATTRIBUTE_NOT_IN_SCHEMA', 'ATTRIBUTE_SCOPE_MISMATCH',
+          'IMPORT_VARIANTS_NEED_EDITING'].includes(code) || code.startsWith('SHOPIFY_') || code.startsWith('UNIWARE_'))));
     if (blockingConflicts.length) {
       if (invalidAttributeValue) return { sourceRowNumber: source.rowNumber, action: 'INVALID', proposed, fieldMask: rowFieldMasks,
         targetVersion: target ? { productId: target.productId, variantId: target.variantId ?? null,
