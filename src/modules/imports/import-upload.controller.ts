@@ -40,7 +40,6 @@ function auditRequestId(requestId: string | undefined, fallback: string): string
 @ApiTags('Imports')
 @ApiCookieAuth('sessionCookie')
 @Controller('brands/:brandId/product-imports')
-@UseGuards(BrandAccessGuard)
 @UseFilters(ImportExceptionFilter)
 export class ImportUploadController {
   private client: S3Client | null = null;
@@ -49,7 +48,7 @@ export class ImportUploadController {
 
   @Post('uploads')
   @HttpCode(201)
-  @UseGuards(MfaGuard)
+  @UseGuards(BrandAccessGuard, MfaGuard)
   @UsePipes(VALIDATION)
   @RequireBrandPermission('imports.write')
   @RequireMfa('imports.write')
@@ -104,7 +103,8 @@ export class ImportUploadController {
     const region = this.config.get<string>('MEDIA_SPACES_REGION')?.trim();
     const accessKeyId = this.config.get<string>('MEDIA_SPACES_ACCESS_KEY_ID')?.trim();
     const secretAccessKey = this.config.get<string>('MEDIA_SPACES_SECRET_ACCESS_KEY')?.trim();
-    let parsedEndpoint: URL;
+    let parsedEndpoint: URL | undefined;
+    if (!localRoot) {
     try { parsedEndpoint = new URL(endpoint ?? ''); } catch { throw new ServiceUnavailableException({ code: 'IMPORT_STORAGE_UNAVAILABLE', message: 'Import storage is unavailable.' }); }
     if (parsedEndpoint.protocol !== 'https:' || !(parsedEndpoint.hostname === 'digitaloceanspaces.com'
       || parsedEndpoint.hostname.endsWith('.digitaloceanspaces.com'))
@@ -112,6 +112,7 @@ export class ImportUploadController {
       || parsedEndpoint.pathname !== '/' || !bucket || !/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(bucket)
       || !region || !/^[a-z0-9-]{2,32}$/.test(region) || !accessKeyId || !secretAccessKey) {
       throw new ServiceUnavailableException({ code: 'IMPORT_STORAGE_UNAVAILABLE', message: 'Import storage is unavailable.' });
+    }
     }
     const pool = this.infrastructure.pool;
     if (!pool) throw new ServiceUnavailableException({ code: 'IMPORT_DATABASE_UNAVAILABLE', message: 'Import storage is unavailable.' });
@@ -167,8 +168,11 @@ export class ImportUploadController {
       const host = this.config.get<string>('HOST') ?? '127.0.0.1';
       const port = this.config.get<number>('PORT') ?? 4000;
       return { fileUploadId, uploadMethod: 'PUT', uploadUrl: `http://${host}:${port}/api/v1/brands/${access.brandId}/product-imports/uploads/${fileUploadId}/content`, expiresAt: expiresAt.toISOString(), headers: {
-        'content-type': input.mimeType, 'content-length': String(input.byteLength), 'x-renivet-local-upload-token': token,
+        'content-type': input.mimeType, 'x-renivet-local-upload-token': token,
       } };
+    }
+    if (!parsedEndpoint || !accessKeyId || !secretAccessKey || !region || !bucket) {
+      throw new ServiceUnavailableException({ code: 'IMPORT_STORAGE_UNAVAILABLE', message: 'Import storage is unavailable.' });
     }
     this.client ??= new S3Client({ endpoint: parsedEndpoint.origin, region, forcePathStyle: false,
       credentials: { accessKeyId, secretAccessKey } });
@@ -215,18 +219,10 @@ export class ImportUploadController {
     if (contentType !== upload.mime_type || Number(contentLength) !== upload.byte_length || upload.byte_length > MAX_IMPORT_FILE_BYTES) {
       throw new UnprocessableEntityException({ code: 'IMPORT_UPLOAD_METADATA_MISMATCH', message: 'The uploaded file failed verification.' });
     }
-    const raw = (request as ImportRequest & { raw?: AsyncIterable<Uint8Array> }).raw;
-    if (!raw) throw new UnprocessableEntityException({ code: 'IMPORT_UPLOAD_INVALID', message: 'The upload body is invalid.' });
+    const bytes = (request as ImportRequest & { body?: unknown }).body;
+    if (!Buffer.isBuffer(bytes)) throw new UnprocessableEntityException({ code: 'IMPORT_UPLOAD_INVALID', message: 'The upload body is invalid.' });
     const objectPath = localImportObjectPath(localRoot, brandId, fileUploadId);
     await fs.mkdir(path.dirname(objectPath), { recursive: true });
-    const chunks: Buffer[] = [];
-    let size = 0;
-    for await (const chunk of raw) {
-      size += chunk.length;
-      if (size > MAX_IMPORT_FILE_BYTES) throw new UnprocessableEntityException({ code: 'IMPORT_FILE_LIMIT_EXCEEDED', message: 'The uploaded file is too large.' });
-      chunks.push(Buffer.from(chunk));
-    }
-    const bytes = Buffer.concat(chunks, size);
     if (bytes.length !== upload.byte_length || createHash('sha256').update(bytes).digest('hex') !== upload.source_sha256.trim()) {
       throw new UnprocessableEntityException({ code: 'IMPORT_CHECKSUM_MISMATCH', message: 'The uploaded file failed verification.' });
     }
@@ -238,7 +234,7 @@ export class ImportUploadController {
 
   @Post()
   @HttpCode(202)
-  @UseGuards(MfaGuard)
+  @UseGuards(BrandAccessGuard, MfaGuard)
   @UsePipes(VALIDATION)
   @RequireBrandPermission('imports.write')
   @RequireMfa('imports.write')

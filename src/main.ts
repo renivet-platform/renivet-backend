@@ -8,11 +8,15 @@ import { shouldExposeSwagger } from './config/swagger';
 import { createOpenApiConfig } from './config/openapi';
 import { FASTIFY_BODY_LIMIT_BYTES } from './config/http-limits';
 import { MAX_MEDIA_UPLOAD_BYTES } from './modules/media/media-validation';
+import { MAX_IMPORT_FILE_BYTES } from './modules/imports/import-workbook-reader';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter({ bodyLimit: FASTIFY_BODY_LIMIT_BYTES }), { bufferLogs: true });
   app.getHttpAdapter().getInstance().addContentTypeParser(/^image\/(?:jpeg|png|webp)$/, {
     parseAs: 'buffer', bodyLimit: MAX_MEDIA_UPLOAD_BYTES,
+  }, (_request, body, done) => done(null, body));
+  app.getHttpAdapter().getInstance().addContentTypeParser(/^(?:text\/csv|application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet)$/, {
+    parseAs: 'buffer', bodyLimit: MAX_IMPORT_FILE_BYTES,
   }, (_request, body, done) => done(null, body));
   const configuration = app.get(ConfigService);
   app.setGlobalPrefix('api/v1');
