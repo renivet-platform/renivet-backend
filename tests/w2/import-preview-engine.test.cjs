@@ -439,3 +439,22 @@ test('Uniware can fall back to SKU when externalItemId is empty, but generic CSV
   assert.equal(generic.rows[0].action, 'INVALID');
   assert.ok(generic.rows[0].conflicts.some((issue) => issue.code === 'IMPORT_REQUIRED_FIELD'));
 });
+
+test('Uniware active category code and missing option columns do not require manual category/style remapping', () => {
+  const preview = buildImportPreview({
+    batch: { id:'uniware-direct-category', brandId:'brand-direct', sourceSha256:'b'.repeat(64), sourceAsOf:'2026-11-20T00:00:00.000Z' },
+    mapping: { version:1, fields: { skuCode:'sku', name:'title', categoryCode:'categoryCode' }, categories:{} },
+    taxonomy: taxonomy(), targets: [],
+    sourceRows: [{ rowNumber:2,
+      rawRecord: { skucode:'DIRECT-SKU', name:'Direct category test', categorycode:'apparel-tops',
+        externalitemid:'DIRECT-STYLE' },
+      canonicalRecord: { sourceProductKey:'DIRECT-STYLE',
+        reviewCodes:['UNIWARE_CATEGORY_MAPPING_REQUIRED','UNIWARE_STYLE_CODE_MAPPING_REQUIRED'] },
+    }],
+  });
+  assert.equal(preview.rows[0].action, 'CREATE');
+  assert.equal(preview.rows[0].proposed.styleCode, 'DIRECT-STYLE');
+  assert.deepEqual(preview.rows[0].proposed.importDraftSafe.variants, []);
+  assert.ok(!preview.rows[0].conflicts.some((issue) =>
+    ['UNIWARE_CATEGORY_MAPPING_REQUIRED','UNIWARE_STYLE_CODE_MAPPING_REQUIRED'].includes(issue.code)));
+});
