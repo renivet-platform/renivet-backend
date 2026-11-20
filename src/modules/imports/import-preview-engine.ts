@@ -322,12 +322,18 @@ export function buildImportPreview(input: {
     if (target && proposed.styleCode && target.styleCode && normalizeText(proposed.styleCode).toLocaleUpperCase('en-US') !== normalizeText(target.styleCode).toLocaleUpperCase('en-US')) {
       conflicts.push({ code: 'SKU_TARGET_CONFLICT', message: 'The source SKU is already attached to a different product style.' });
     }
-    if (conflicts.length) {
+    // Price and source-media review are publication/domain-approval requirements,
+    // not reasons to fail otherwise valid product draft imports. The proposed
+    // values and review codes remain in the immutable preview/source rows; only
+    // catalog-safe fields are applied by import confirmation.
+    const blockingConflicts = conflicts.filter(({ code }) =>
+      code !== 'PRICE_REVIEW_REQUIRED' && code !== 'MEDIA_REVIEW_REQUIRED');
+    if (blockingConflicts.length) {
       if (invalidAttributeValue) return { sourceRowNumber: source.rowNumber, action: 'INVALID', proposed, fieldMask: rowFieldMasks,
         targetVersion: target ? { productId: target.productId, variantId: target.variantId ?? null,
           productRowVersion: target.productRowVersion ?? target.rowVersion, variantRowVersion: target.variantRowVersion ?? target.rowVersion,
           contentVersion: target.contentVersion ?? 1 } : null, conflicts };
-      const needsReview = conflicts.every(({ code }) => ['CATEGORY_UNMAPPED','CATEGORY_INACTIVE','CATEGORY_REQUIRED','CATEGORY_SCHEMA_UNAVAILABLE',
+      const needsReview = blockingConflicts.every(({ code }) => ['CATEGORY_UNMAPPED','CATEGORY_INACTIVE','CATEGORY_REQUIRED','CATEGORY_SCHEMA_UNAVAILABLE',
         'ATTRIBUTE_NOT_IN_SCHEMA','ATTRIBUTE_SCOPE_MISMATCH','CATEGORY_CHANGE_REQUIRES_REVIEW','PRICE_REVIEW_REQUIRED','MEDIA_REVIEW_REQUIRED'].includes(code)
         || code.startsWith('SHOPIFY_'));
       return { sourceRowNumber: source.rowNumber, action: needsReview ? 'NEEDS_REVIEW' : 'CONFLICT', proposed,
@@ -337,15 +343,15 @@ export function buildImportPreview(input: {
     }
     if (!target) return { sourceRowNumber: source.rowNumber, action: input.batch.mode === 'UPDATE_MATCHED' ? 'CONFLICT' : 'CREATE', proposed,
       fieldMask: rowFieldMasks, targetVersion: null, conflicts: input.batch.mode === 'UPDATE_MATCHED'
-        ? [{ code: 'TARGET_NOT_FOUND', message: 'No brand-owned target matches this row.' }] : [] };
+        ? [{ code: 'TARGET_NOT_FOUND', message: 'No brand-owned target matches this row.' }, ...conflicts] : conflicts };
     if (input.batch.mode === 'CREATE_ONLY') return { sourceRowNumber: source.rowNumber, action: 'CONFLICT', proposed, fieldMask: rowFieldMasks,
       targetVersion: { productId: target.productId, variantId: target.variantId ?? null,
         productRowVersion: target.productRowVersion ?? target.rowVersion, variantRowVersion: target.variantRowVersion ?? target.rowVersion,
-        contentVersion: target.contentVersion ?? 1 }, conflicts: [{ code: 'TARGET_EXISTS', message: 'Create-only imports cannot overwrite a matching target.' }] };
+        contentVersion: target.contentVersion ?? 1 }, conflicts: [{ code: 'TARGET_EXISTS', message: 'Create-only imports cannot overwrite a matching target.' }, ...conflicts] };
     if (input.batch.mode === 'REVIEW_CONFLICT') return { sourceRowNumber: source.rowNumber, action: 'CONFLICT', proposed, fieldMask: rowFieldMasks,
       targetVersion: { productId: target.productId, variantId: target.variantId ?? null,
         productRowVersion: target.productRowVersion ?? target.rowVersion, variantRowVersion: target.variantRowVersion ?? target.rowVersion,
-        contentVersion: target.contentVersion ?? 1 }, conflicts: [{ code: 'TARGET_REQUIRES_REVIEW', message: 'Review the existing target before selecting update fields.' }] };
+        contentVersion: target.contentVersion ?? 1 }, conflicts: [{ code: 'TARGET_REQUIRES_REVIEW', message: 'Review the existing target before selecting update fields.' }, ...conflicts] };
     const projected = Object.fromEntries(rowFieldMasks.map((mask) => [mask, mask.split('.').reduce<unknown>((current, part) => isRecord(current) ? current[part] : undefined, proposed)]));
     const current = Object.fromEntries(rowFieldMasks.map((mask) => {
       if (mask.startsWith('attributes.')) return [mask, target.attributes?.[mask.slice('attributes.'.length)]];
@@ -356,7 +362,7 @@ export function buildImportPreview(input: {
     return { sourceRowNumber: source.rowNumber, action, proposed, fieldMask: rowFieldMasks,
       targetVersion: { productId: target.productId, variantId: target.variantId ?? null,
         productRowVersion: target.productRowVersion ?? target.rowVersion, variantRowVersion: target.variantRowVersion ?? target.rowVersion,
-        contentVersion: target.contentVersion ?? 1 }, conflicts: [] };
+        contentVersion: target.contentVersion ?? 1 }, conflicts };
   });
   const targetVersions = rows.flatMap((row) => row.targetVersion ? [{ sourceRowNumber: row.sourceRowNumber, ...row.targetVersion }] : []);
   const counts = actionCounts(rows);
