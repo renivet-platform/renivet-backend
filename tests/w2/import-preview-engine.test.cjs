@@ -133,7 +133,9 @@ test('REN2-78 keeps source price and image URL out of confirmation until their r
       category: 'Tops', color: 'Blue', fabric: 'Linen', MRP: '2500', Image: 'https://merchant.example/image.jpg' } }],
     targets: [],
   });
-  assert.equal(preview.rows[0].action, 'NEEDS_REVIEW');
+  assert.equal(preview.rows[0].action, 'CREATE');
+  assert.equal(preview.rows[0].proposed.sourceMrp, 2500);
+  assert.equal(preview.rows[0].proposed.imageUrl, 'https://merchant.example/image.jpg');
   assert.deepEqual(preview.rows[0].conflicts.map((conflict) => conflict.code).sort(), ['MEDIA_REVIEW_REQUIRED', 'PRICE_REVIEW_REQUIRED']);
 });
 
@@ -316,4 +318,31 @@ test('explicit source category mapping takes precedence over direct matching', (
   });
   assert.equal(preview.rows[0].action, 'CREATE');
   assert.equal(preview.rows[0].proposed.categoryCode, 'test');
+});
+
+test('price-only Renivet import creates a private draft with price provenance pending review', () => {
+  const preview = buildImportPreview({
+    batch: { id: 'batch-price', brandId: 'brand-price', sourceSha256: 'a'.repeat(64), sourceAsOf: '2026-11-20T00:00:00.000Z' },
+    mapping: { version: 1, fields: { 'product name': 'title', 'style code': 'styleCode', sku: 'sku', category: 'categoryCode', MRP: 'sourceMrp' }, categories: { tops: 'apparel-tops' } },
+    taxonomy: taxonomy(),
+    sourceRows: [{ rowNumber: 2, rawRecord: { 'product name': 'Priced shirt', 'style code': 'SHIRT-PRICE', sku: 'SHIRT-PRICE-M', category: 'tops', MRP: '1233' } }],
+    targets: [],
+  });
+  assert.equal(preview.counts.create, 1);
+  assert.equal(preview.counts.review, 0);
+  assert.deepEqual(preview.rows[0].conflicts.map(c => c.code), ['PRICE_REVIEW_REQUIRED']);
+  assert.equal(preview.rows[0].proposed.sourceMrp, 1233);
+});
+
+test('price review does not bypass invalid category validation', () => {
+  const preview = buildImportPreview({
+    batch: { id: 'batch-badcategory', brandId: 'brand-price', sourceSha256: 'a'.repeat(64), sourceAsOf: '2026-11-20T00:00:00.000Z' },
+    mapping: { version: 1, fields: { 'product name': 'title', 'style code': 'styleCode', sku: 'sku', category: 'categoryCode', MRP: 'sourceMrp' }, categories: {} },
+    taxonomy: taxonomy(),
+    sourceRows: [{ rowNumber: 2, rawRecord: { 'product name': 'Priced shirt', 'style code': 'SHIRT-PRICE', sku: 'SHIRT-PRICE-M', category: 'missing', MRP: '1233' } }],
+    targets: [],
+  });
+  assert.equal(preview.rows[0].action, 'NEEDS_REVIEW');
+  assert.ok(preview.rows[0].conflicts.some(c => c.code === 'CATEGORY_UNMAPPED'));
+  assert.ok(preview.rows[0].conflicts.some(c => c.code === 'PRICE_REVIEW_REQUIRED'));
 });
