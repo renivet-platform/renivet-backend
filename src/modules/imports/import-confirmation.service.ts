@@ -145,8 +145,19 @@ export class ImportConfirmationService {
         } catch (error) {
           await client.query('ROLLBACK TO SAVEPOINT import_row_effect');
           await client.query('RELEASE SAVEPOINT import_row_effect');
-          if (!input.allowPartial) throw new UnprocessableEntityException({ code: apiError(error).code, message: 'An import row could not be applied; no confirmation effects were saved.' });
           const code = apiError(error).code;
+          // A product-level schema/identity problem must never discard an
+          // accepted source import. The source record and original fields are
+          // still available to repair without ever creating a public product.
+          if (['PRODUCT_DRAFT_INVALID','PRODUCT_ATTRIBUTE_INVALID','VARIANT_ATTRIBUTE_INVALID',
+            'PRODUCT_CATEGORY_INVALID','IMPORT_VARIANT_RECEIPT_MISMATCH','IMPORT_UPDATE_FIELDS_EMPTY'].includes(code)) {
+            await client.query(`UPDATE imports.import_rows SET row_state='STAGED',result_receipt=$3::jsonb
+              WHERE id=$1 AND batch_id=$2 AND brand_id=$4`,
+              [rowId,input.batchId,JSON.stringify({ status:'STAGED', reason:'CATALOG_FIELDS_NEED_CORRECTION',
+                issues: [...(row.conflicts?.map((conflict) => conflict.code) ?? []), code] }),input.brandId]);
+            continue;
+          }
+          if (!input.allowPartial) throw new UnprocessableEntityException({ code, message: 'An import row could not be applied; no confirmation effects were saved.' });
           failed.push({ sourceRowNumber: row.sourceRowNumber, code });
           await client.query(`UPDATE imports.import_rows SET row_state='FAILED',result_receipt=$3::jsonb WHERE id=$1 AND batch_id=$2 AND brand_id=$4`,
             [rowId, input.batchId, JSON.stringify({ status: 'FAILED', code }), input.brandId]);
@@ -291,7 +302,7 @@ export class ImportConfirmationService {
       const created = await this.products.createInTransaction(normalized, productContext, client);
       productId = String(created.productId);
       variantIds = Array.isArray(created.variantIds) ? created.variantIds.map(String) : [];
-      if (variantIds.length !== variants.length || !variantIds.length) throw new UnprocessableEntityException({ code: 'IMPORT_VARIANT_RECEIPT_MISMATCH', message: 'The created variants could not be reconciled.' });
+      if (variantIds.length !== variants.length) throw new UnprocessableEntityException({ code: 'IMPORT_VARIANT_RECEIPT_MISMATCH', message: 'The created variants could not be reconciled.' });
     } else {
       if (!row.targetVersion?.productId) throw new ConflictException({ code: 'PREVIEW_STALE', message: 'The update target is missing from the frozen preview.' });
       productId = row.targetVersion.productId;
