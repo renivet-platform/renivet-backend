@@ -151,6 +151,24 @@ function mappedRecord(row: ImportPreviewSourceRow, mapping: ImportPreviewMapping
     result.categoryCode = mapped ?? result.categoryCode;
   }
   const canonicalRecord = isRecord(row.canonicalRecord) ? row.canonicalRecord : {};
+  // Shopify/Uniware exports have their own product identifiers rather than
+  // a Renivet-specific 'styleCode'. Recover one only for recognizable source
+  // formats when the importer was not given an explicit style mapping.
+  if (!normalizeText(result.styleCode)) {
+    const isUniware = source.has('skucode') && source.has('name');
+    const isShopify = source.has('url handle') || source.has('handle')
+      || typeof canonicalRecord.sourceProductKey === 'string';
+    if (isUniware || isShopify) {
+      const inferredStyle = isUniware
+        ? normalizeText(source.get('externalitemid'))
+          || normalizeText(source.get('itemtypeid'))
+          || normalizeText(result.sku)
+        : normalizeText(source.get('url handle'))
+          || normalizeText(source.get('handle'))
+          || normalizeText(canonicalRecord.sourceProductKey);
+      if (inferredStyle) result.styleCode = inferredStyle;
+    }
+  }
   if (Array.isArray(canonicalRecord.variants)) {
     if (canonicalRecord.variants.length < 1 || canonicalRecord.variants.length > 100 || !canonicalRecord.variants.every((item) => isRecord(item)
       && typeof item.sku === 'string' && isRecord(item.options))) fail('IMPORT_VARIANTS_INVALID');
@@ -177,7 +195,11 @@ function mappedRecord(row: ImportPreviewSourceRow, mapping: ImportPreviewMapping
       && Object.entries(mapping.categories).some(([sourceCode, targetCode]) => sourceCode.trim().toLocaleLowerCase('en-US')
         === String(source.get(sourceName.trim().toLocaleLowerCase('en-US')) ?? '').trim().toLocaleLowerCase('en-US')
         && Boolean(targetCode)));
-    result.sourceReviewCodes = canonicalRecord.reviewCodes.filter((code) => code !== 'UNIWARE_CATEGORY_MAPPING_REQUIRED' || !explicitCategoryMapping);
+    result.sourceReviewCodes = canonicalRecord.reviewCodes.filter((code) => {
+      if (code === 'UNIWARE_STYLE_CODE_MAPPING_REQUIRED' && normalizeText(result.styleCode)) return false;
+      if (code === 'UNIWARE_CATEGORY_MAPPING_REQUIRED' && explicitCategoryMapping) return false;
+      return true;
+    });
   }
   const canonicalAttributes = isRecord(canonicalRecord.attributes) ? canonicalRecord.attributes : {};
   if (typeof canonicalAttributes.material === 'string' && canonicalAttributes.material.trim()
@@ -222,9 +244,13 @@ export function buildImportPreview(input: {
     if (!Number.isSafeInteger(source.rowNumber) || source.rowNumber < 1 || !isRecord(source.rawRecord)) fail('IMPORT_PREVIEW_INVALID');
     return { source, proposed: mappedRecord(source, input.mapping) };
   });
-  const requestedMasks = input.fieldMasks ?? [...new Set(mappedRows.flatMap(({ proposed }) => flattenTargets(proposed)))].sort();
-  const fieldMasks = [...new Set(requestedMasks)].sort();
   const mappedTargets = Object.values(input.mapping.fields);
+  // A source-specific style identifier inferred by the adapter is an internal
+  // create-draft identity, not a user-mapped update field. Never treat it as
+  // an explicitly selected update mask or reject the otherwise valid import.
+  const requestedMasks = input.fieldMasks ?? [...new Set(mappedRows.flatMap(({ proposed }) =>
+    flattenTargets(proposed).filter((field) => field !== 'styleCode' || mappedTargets.includes('styleCode'))))].sort();
+  const fieldMasks = [...new Set(requestedMasks)].sort();
   if (fieldMasks.some((field) => !allowedTarget(field)
     || !mappedTargets.includes(field) && !mappedTargets.some((target) => target.startsWith(`${field}.`)))) fail('IMPORT_MAPPING_INVALID');
 
@@ -257,7 +283,10 @@ export function buildImportPreview(input: {
     if (proposed.categoryUnmapped) conflicts.push({ code: 'CATEGORY_UNMAPPED', message: 'Map this source category to an active Renivet category.' });
     for (const code of Array.isArray(proposed.sourceReviewCodes) ? proposed.sourceReviewCodes as string[] : []) {
       if (typeof code === 'string' && /^(?:SHOPIFY|UNIWARE)_[A-Z_]+$/.test(code)) {
-        if (code === 'UNIWARE_CATEGORY_MAPPING_REQUIRED' && proposed.categoryUnmapped) continue;
+        if (code === 'UNIWARE_CATEGORY_MAPPING_REQUIRED' && (proposed.categoryUnmapped
+          || input.taxonomy.categories.some((category) => category.active
+            && category.code.toLocaleLowerCase('en-US') === normalizeText(proposed.categoryCode).toLocaleLowerCase('en-US')))) continue;
+        if (code === 'UNIWARE_STYLE_CODE_MAPPING_REQUIRED' && normalizeText(proposed.styleCode)) continue;
         const source = code.startsWith('SHOPIFY_') ? 'Shopify' : 'Uniware';
         conflicts.push({ code, message: code.endsWith('_UNMAPPED_FIELDS')
           ? `Some non-empty ${source} columns are retained as source data but are not represented in the Renivet catalog.`
@@ -297,7 +326,7 @@ export function buildImportPreview(input: {
     }
     if (category && !hasPinnedCategorySchema(category)) {
       conflicts.push({ code: 'CATEGORY_SCHEMA_UNAVAILABLE', message: 'The pinned category attribute schema is not available for this preview.' });
-    } else if (category && (Object.keys(mappedAttributes).length > 0 || Object.keys(mappedOptions).length > 0 || Array.isArray(proposed.variants))) {
+    } else if (category && (!target || Object.keys(mappedAttributes).length > 0 || Object.keys(mappedOptions).length > 0 || Array.isArray(proposed.variants))) {
         let validator = schemaValidators.get(category.code);
         if (!validator) {
           validator = compileCategorySchema({ categoryId: category.categoryId, categorySchemaVersionId: category.schemaVersionId,
@@ -309,7 +338,8 @@ export function buildImportPreview(input: {
         // category exists, a private draft can use the subset of values accepted
         // by that category; disallowed values remain staged for later correction.
         if (!target && category.active) {
-          const originalVariants = Array.isArray(proposed.variants) ? proposed.variants : [{ sku: proposed.sku, options: mappedOptions }];
+          const originalVariants = Array.isArray(proposed.variants) ? proposed.variants
+            : Object.keys(mappedOptions).length > 0 ? [{ sku: proposed.sku, options: mappedOptions }] : [];
           const safeVariants = originalVariants.filter(isRecord).map((item) => {
             const options = isRecord(item.options) ? item.options : {};
             const checked = validator!.validate({ variant: options }, { mode: 'draft' });
@@ -324,10 +354,15 @@ export function buildImportPreview(input: {
           // their source SKUs without inserting ambiguous live variant identities.
           const allSkusValid = safeVariants.every((variant) => typeof variant.sku === 'string'
             && /^[A-Za-z0-9_.-]{1,40}$/.test(variant.sku));
-          const uniqueVariants = allSkusValid && signatures.length === new Set(signatures).size ? safeVariants : [];
+          // Canonical variants require at least one valid option axis.
+          // Never send an empty options object to ProductDraft's variant DTO:
+          // that would make the entire otherwise-valid product draft fail.
+          const incompleteVariants = safeVariants.some((variant) => Object.keys(variant.options).length === 0);
+          const uniqueVariants = allSkusValid && !incompleteVariants
+            && signatures.length === new Set(signatures).size ? safeVariants : [];
           if (uniqueVariants.length !== safeVariants.length) conflicts.push({
             code: 'IMPORT_VARIANTS_NEED_EDITING',
-            message: 'Variant options collide after normalization. Source SKUs are retained; add distinct variants to the private draft later.',
+            message: 'Some variant options are missing or incompatible with the category. Original SKUs and values are retained for editing; the private product draft can be saved without these variants.',
           });
           proposed.importDraftSafe = {
             attributes: validation.normalizedValues.product,
