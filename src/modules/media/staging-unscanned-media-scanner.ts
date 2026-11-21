@@ -15,7 +15,8 @@ export class StagingUnscannedMediaScanner implements MediaScannerPort {
 
   isConfigured(): boolean { return true; }
 
-  async scan(_bytes: Buffer): Promise<'CLEAN'> {
+  async scan(bytes: Buffer): Promise<'CLEAN'> {
+    void bytes;
     // Filename, size, magic-byte and image decoding checks still run in MediaService.
     return 'CLEAN';
   }
