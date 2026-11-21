@@ -80,6 +80,13 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
     error('NODE_ENV', 'must be development, test, staging, or production');
   }
   const protectedEnvironment = envName === 'staging' || envName === 'production';
+  const mediaMalwareScanMode = optionalString(input, 'MEDIA_MALWARE_SCAN_MODE') ?? 'required';
+  if (mediaMalwareScanMode !== 'required' && mediaMalwareScanMode !== 'skip-staging') {
+    error('MEDIA_MALWARE_SCAN_MODE', 'must be required or skip-staging');
+  }
+  if (mediaMalwareScanMode === 'skip-staging' && envName !== 'staging') {
+    error('MEDIA_MALWARE_SCAN_MODE', 'skip-staging is permitted only when NODE_ENV=staging');
+  }
   const requestedMfaEnforcementMode = optionalString(input, 'MFA_ENFORCEMENT_MODE') ?? 'deferred';
   if (requestedMfaEnforcementMode !== 'enforced' && requestedMfaEnforcementMode !== 'deferred') {
     error('MFA_ENFORCEMENT_MODE', 'must be enforced or deferred');
@@ -214,6 +221,7 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
     AUTH_CSRF_HMAC_KEY: authCsrfKey,
     AUTH_MFA_ENCRYPTION_KEY: authMfaEncryptionKey,
     AUTH_IMPORT_UPLOAD_HMAC_KEY: authImportUploadHmacKey,
+    MEDIA_MALWARE_SCAN_MODE: mediaMalwareScanMode,
     MFA_ENFORCEMENT_MODE: requestedMfaEnforcementMode,
     RENIVET_INVENTORY_API_ENABLED: inventoryApiEnabled,
     RENIVET_LOCAL_IMPORT_STORAGE_ENABLED: localImportStorageEnabled,

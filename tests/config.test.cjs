@@ -237,3 +237,20 @@ test('local import storage is ignored outside development', () => {
   const config = validateEnvironment({ NODE_ENV: 'test', RENIVET_LOCAL_IMPORT_STORAGE_ENABLED: 'true' });
   assert.equal(config.RENIVET_LOCAL_IMPORT_STORAGE_ENABLED, false);
 });
+
+test('media malware scan bypass is explicit, staging-only and disabled by default', () => {
+  assert.equal(validateEnvironment({}).MEDIA_MALWARE_SCAN_MODE, 'required');
+  assert.equal(validateEnvironment({ NODE_ENV: 'staging', MEDIA_MALWARE_SCAN_MODE: 'skip-staging',
+    DATABASE_URL: 'postgres://app:secret@db.internal:5432/test', REDIS_URL: 'redis://cache.internal:6379',
+    TYPESENSE_URL: 'https://typesense.internal:8108', PYTHON_SERVICE_URL: 'https://python.internal',
+    TYPESENSE_API_KEY: 'staging-key', AUTH_RATE_LIMIT_HMAC_KEY: 'staging-rate-limit-key-long-enough-for-tests',
+    AUTH_CHALLENGE_HMAC_KEY: 'staging-challenge-key-long-enough-for-tests',
+    AUTH_CSRF_HMAC_KEY: 'staging-csrf-key-long-enough-for-tests',
+    AUTH_MFA_ENCRYPTION_KEY: Buffer.alloc(32, 0x5a).toString('base64'),
+    AUTH_ALLOWED_ORIGINS: 'https://staging.example.test',
+  }).MEDIA_MALWARE_SCAN_MODE, 'skip-staging');
+  for (const env of ['development', 'test', 'production']) {
+    assert.throws(() => validateEnvironment({ NODE_ENV: env, MEDIA_MALWARE_SCAN_MODE: 'skip-staging' }), /MEDIA_MALWARE_SCAN_MODE/);
+  }
+  assert.throws(() => validateEnvironment({ MEDIA_MALWARE_SCAN_MODE: 'disabled' }), /MEDIA_MALWARE_SCAN_MODE/);
+});
