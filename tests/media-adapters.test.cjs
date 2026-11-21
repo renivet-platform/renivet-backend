@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const net = require('node:net');
 const test = require('node:test');
 const { ClamAvMediaScanner } = require('../dist/modules/media/clamav-media-scanner.js');
+const { StagingUnscannedMediaScanner } = require('../dist/modules/media/staging-unscanned-media-scanner.js');
 const { SharpMediaImageProcessor } = require('../dist/modules/media/sharp-media-image-processor.js');
 const { SpacesMediaStorage, mediaObjectKey, validateSpacesEndpoint } = require('../dist/modules/media/spaces-media-storage.js');
 
@@ -83,4 +84,10 @@ test('REN2-66 creates stripped WebP preview and thumbnail derivatives', async ()
     mimeType === 'image/webp' && width === 1 && height === 1 && bytes.length > 0 && /^[a-f0-9]{64}$/.test(sha256) && key.includes('brand-a')));
   await assert.rejects(new SharpMediaImageProcessor().createDerivatives(Buffer.from('<svg/>'), 'image/svg+xml', 'brand-a', 'asset-2'),
     { name: 'InvalidMediaImageError' });
+});
+
+test('explicit staging test adapter is configured without clamd and does not perform antivirus scanning', async () => {
+  const adapter = new StagingUnscannedMediaScanner();
+  assert.equal(adapter.isConfigured(), true);
+  assert.equal(await adapter.scan(Buffer.from('staging fixture')), 'CLEAN');
 });
