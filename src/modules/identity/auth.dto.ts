@@ -46,7 +46,7 @@ export class RegisterRequestDto extends AuthCredentialsDto {
   @ApiProperty({ type: 'string', minLength: NEW_PASSWORD_MIN_LENGTH, maxLength: PASSWORD_MAX_LENGTH,
     description: 'New accounts require a 15–128 character passphrase. Existing accounts may still sign in with older credentials.' })
   @Validate(NewAccountPassphraseConstraint)
-  override password!: string;
+  declare password: string;
 }
 
 export class PasswordSessionRequestDto extends AuthCredentialsDto {}
