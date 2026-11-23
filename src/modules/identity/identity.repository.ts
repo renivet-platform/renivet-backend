@@ -5,6 +5,17 @@ import { IdentityInfrastructure } from './identity-infrastructure';
 import { IdentityRepositoryPort, PasswordCredentialRecord } from './auth.service';
 import { OtpChallengeRepositoryPort, OtpChannel, OtpPurpose } from './otp-challenge.service';
 
+// Server-side admin session limits remain authoritative even when staging
+// uses longer customer/seller TTL environment variables.
+const activeAdmin = (userIdColumn: string): string => `EXISTS (
+  SELECT 1 FROM access.role_assignments a
+  JOIN access.roles r ON r.id=a.role_id
+   WHERE a.user_id=${userIdColumn} AND a.scope_type='global'
+     AND r.scope_kind='global' AND r.role_code='renivet_admin'
+     AND a.active_from<=clock_timestamp()
+     AND (a.active_until IS NULL OR a.active_until>clock_timestamp())
+)`;
+
 @Injectable()
 export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeRepositoryPort {
   constructor(private readonly infrastructure: IdentityInfrastructure) {}
@@ -153,7 +164,13 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
       }
       const inserted = await client.query(
         `INSERT INTO identity.user_sessions (user_id, token_hash, expires_at, ip_hash, absolute_expires_at)
-         SELECT u.id, $3, $4, $5, COALESCE($7::timestamptz, clock_timestamp() + interval '7 days')
+         SELECT u.id, $3,
+                  LEAST($4::timestamptz,
+                    CASE WHEN ${activeAdmin('u.id')} THEN clock_timestamp()+interval '15 minutes' ELSE $4::timestamptz END),
+                  $5,
+                  LEAST(COALESCE($7::timestamptz,clock_timestamp()+interval '7 days'),
+                    CASE WHEN ${activeAdmin('u.id')} THEN clock_timestamp()+interval '12 hours'
+                      ELSE COALESCE($7::timestamptz,clock_timestamp()+interval '7 days') END)
            FROM identity.users AS u
           WHERE u.id = $1
             AND u.state = 'active'
@@ -197,11 +214,16 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
     }>(
       `WITH refreshed AS (
          UPDATE identity.user_sessions AS session
-            SET expires_at = LEAST(clock_timestamp() + ($2::integer * interval '1 second'), absolute_expires_at),
+            SET expires_at = LEAST(clock_timestamp() + ($2::integer * interval '1 second'), absolute_expires_at,
+                  CASE WHEN ${activeAdmin('session.user_id')} THEN clock_timestamp()+interval '15 minutes'
+                    ELSE absolute_expires_at END,
+                  CASE WHEN ${activeAdmin('session.user_id')} THEN session.created_at+interval '12 hours'
+                    ELSE absolute_expires_at END),
                 updated_at = clock_timestamp(), row_version = row_version + 1
           WHERE token_hash = $1 AND revoked_at IS NULL
             AND expires_at > clock_timestamp()
             AND absolute_expires_at > clock_timestamp()
+            AND (NOT ${activeAdmin('session.user_id')} OR session.created_at+interval '12 hours'>clock_timestamp())
             AND EXISTS (SELECT 1 FROM identity.users AS active_account WHERE active_account.id = session.user_id AND active_account.state = 'active')
           RETURNING id, user_id, expires_at, mfa_verified_at
        )
@@ -446,7 +468,15 @@ export class IdentityRepository implements IdentityRepositoryPort, OtpChallengeR
         }
         const session = await client.query(
           `INSERT INTO identity.user_sessions (user_id, token_hash, expires_at, ip_hash, absolute_expires_at)
-           SELECT id, $2, $3, $4, $5 FROM identity.users
+           SELECT id, $2,
+                  LEAST($3::timestamptz,
+                    CASE WHEN ${activeAdmin('identity.users.id')} THEN clock_timestamp()+interval '15 minutes'
+                      ELSE $3::timestamptz END),
+                  $4,
+                  LEAST($5::timestamptz,
+                    CASE WHEN ${activeAdmin('identity.users.id')} THEN clock_timestamp()+interval '12 hours'
+                      ELSE $5::timestamptz END)
+              FROM identity.users
             WHERE id = $1 AND state = 'active' AND phone_verified_at IS NOT NULL
            RETURNING id`,
           [challenge.user_id, input.sessionTokenHash, input.sessionExpiresAt, input.ipHash, input.absoluteExpiresAt],
