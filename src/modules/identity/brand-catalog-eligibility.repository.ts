@@ -65,6 +65,19 @@ export class BrandCatalogEligibilityPostgresRepository implements BrandCatalogEl
         throw coded('BRAND_STATE_NOT_REVIEWABLE');
       }
 
+      // A reviewer ID in the maker's request is not independent proof.
+      // Require a previous attestation written under the checker's own session.
+      const attestation=await client.query(
+        `SELECT 1 FROM brands.brand_application_checker_attestations
+          WHERE brand_id=$1 AND applicant_user_id=$2 AND checker_user_id=$3
+            AND decision=$4 AND checked_at>clock_timestamp()-interval '7 days'
+          FOR SHARE`,
+        [outcome.brandId,outcome.applicantUserId,outcome.checkedByUserId,outcome.decision],
+      );
+      if (!attestation.rowCount) throw coded('BRAND_APPROVAL_CHECKER_ATTESTATION_REQUIRED');
+
+
+
       let membershipBefore: string | null = null;
       let membershipAfter: string | null = null;
       if (outcome.decision === 'approved') {

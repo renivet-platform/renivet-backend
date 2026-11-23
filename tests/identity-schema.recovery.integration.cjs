@@ -106,6 +106,7 @@ test('W1 disposable PostgreSQL snapshot recovery preserves the migrated schema a
         { table_schema: 'access', table_name: 'role_permissions' },
         { table_schema: 'access', table_name: 'roles' },
         { table_schema: 'access', table_name: 'security_audit_events' },
+        { table_schema: 'brands', table_name: 'brand_application_checker_attestations' },
         { table_schema: 'brands', table_name: 'brand_catalog_eligibility_events' },
         { table_schema: 'brands', table_name: 'brand_memberships' },
         { table_schema: 'brands', table_name: 'brands' },

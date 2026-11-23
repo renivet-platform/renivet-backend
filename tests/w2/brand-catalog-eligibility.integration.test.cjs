@@ -66,6 +66,13 @@ test('REN2-55 applies W1 approval outcomes atomically, idempotently, and through
   const eventId = randomUUID();
   const outcome = { eventId, brandId, applicantUserId: applicant, decision: 'approved',
     approvedByUserId: approver, checkedByUserId: checker, requestId: `req-${suffix}` };
+  await assert.rejects(repository.applyOutcome(outcome), code('BRAND_APPROVAL_CHECKER_ATTESTATION_REQUIRED'));
+  await pool.query(
+    `INSERT INTO brands.brand_application_checker_attestations
+      (brand_id,applicant_user_id,checker_user_id,decision,request_id)
+      VALUES($1,$2,$3,'approved',$4)`,
+    [brandId,applicant,checker,`attest-${suffix}`],
+  );
   const concurrentApprovals = await Promise.all([
     repository.applyOutcome(outcome),
     repository.applyOutcome({ ...outcome, requestId: `concurrent-replay-${suffix}` }),
@@ -99,6 +106,12 @@ test('REN2-55 applies W1 approval outcomes atomically, idempotently, and through
   )).rows[0].id;
   await assert.rejects(repository.applyOutcome({ ...outcome, brandId: rejectedBrand }), code('BRAND_APPROVAL_EVENT_CONFLICT'));
   assert.equal((await pool.query('SELECT onboarding_state FROM brands.brands WHERE id=$1', [rejectedBrand])).rows[0].onboarding_state, 'pending', 'cross-brand event replay must not change another brand');
+  await pool.query(
+    `INSERT INTO brands.brand_application_checker_attestations
+      (brand_id,applicant_user_id,checker_user_id,decision,request_id)
+      VALUES($1,$2,$3,'rejected',$4)`,
+    [rejectedBrand,applicant,checker,`reject-attest-${suffix}`],
+  );
   const rejected = await repository.applyOutcome({ eventId: randomUUID(), brandId: rejectedBrand,
     applicantUserId: applicant, decision: 'rejected', approvedByUserId: approver,
     checkedByUserId: checker, requestId: `reject-${suffix}` });
