@@ -103,6 +103,25 @@ test('verified login stores only a digest and returns an opaque cookie secret', 
   assert.equal(calls.sessions[0].expiresAt.getTime() - Date.now() <= 1800_000, true);
 });
 
+test('successful sign-in does not consume an account failure quota', async () => {
+  const { service, calls } = createService({
+    findPasswordCredential: async () => ({
+      userId: 'user-1', credentialId: 'credential-1', state: 'active',
+      emailVerifiedAt: new Date(), passwordHash: `hash:${password}`,
+    }),
+  });
+  await service.login({ email: 'buyer@example.test', password }, '192.0.2.10');
+  assert.deepEqual(calls.limits.map(([scope]) => scope), ['login-ip']);
+});
+
+test('failed sign-in uses a private account-and-IP quota and retains generic 401 response', async () => {
+  const { service, calls } = createService();
+  await assert.rejects(service.login({ email: 'buyer@example.test', password }, '192.0.2.10'), (error) => error.status === 401);
+  assert.deepEqual(calls.limits.map(([scope]) => scope), ['login-ip', 'login-account-ip-failure']);
+  assert.equal(calls.limits[1][1], 'buyer@example.test\\0' + '192.0.2.10');
+  assert.equal(calls.limits[1][2].limit, 5);
+});
+
 test('login persists the configured absolute expiry and caps the initial cookie lifetime', async () => {
   const { service, calls } = createService({
     findPasswordCredential: async () => ({
