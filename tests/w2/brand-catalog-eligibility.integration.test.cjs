@@ -50,10 +50,7 @@ test('REN2-55 applies W1 approval outcomes atomically, idempotently, and through
     `INSERT INTO brands.brand_memberships(brand_id,user_id,membership_state,invited_by_id)
      VALUES($1,$2,'pending',$3)`, [brandId, applicant, grantor],
   );
-  await pool.query(
-    `INSERT INTO access.role_assignments(user_id,role_id,brand_id,scope_type,active_from,granted_by_id)
-     VALUES($1,$2,$3,'brand',now(),$4)`, [applicant, role, brandId, grantor],
-  );
+  // New applications have no owner grant before approval. The approval transaction creates it.
   const permissionCountBefore = Number((await pool.query(
     `SELECT count(*)::int AS n FROM access.role_assignments WHERE user_id=$1 AND brand_id=$2`, [applicant, brandId],
   )).rows[0].n);
@@ -90,12 +87,14 @@ test('REN2-55 applies W1 approval outcomes atomically, idempotently, and through
       WHERE user_id=$1 AND brand_id=$2 AND permission_code='brand_membership.read'`, [applicant, brandId],
   )).rows[0].n, 1, 'existing assigned W1 permission becomes effective only after approval and joined membership');
   assert.equal(Number((await pool.query(
-    `SELECT count(*)::int AS n FROM access.role_assignments WHERE user_id=$1 AND brand_id=$2`, [applicant, brandId],
-  )).rows[0].n), permissionCountBefore, 'approval must not create or duplicate role assignments');
+    `SELECT count(*)::int AS n FROM access.role_assignments
+      WHERE user_id=$1 AND brand_id=$2 AND role_id=$3`, [applicant, brandId, role],
+  )).rows[0].n), permissionCountBefore + 1, 'approved applicant receives precisely one scoped owner role');
 
   const replay = await repository.applyOutcome({ ...outcome, requestId: `replay-${suffix}` });
   assert.equal(replay.replayed, true);
   assert.equal((await pool.query('SELECT count(*)::int AS n FROM brands.brand_catalog_eligibility_events WHERE event_id=$1', [eventId])).rows[0].n, 1);
+  assert.equal((await pool.query('SELECT count(*)::int AS n FROM access.role_assignments WHERE user_id=$1 AND brand_id=$2', [applicant, brandId])).rows[0].n, 1, 'replay does not duplicate ownership');
   await assert.rejects(repository.applyOutcome({ ...outcome, applicantUserId: grantor }), code('BRAND_APPROVAL_EVENT_CONFLICT'));
   const event = (await pool.query('SELECT event_id FROM brands.brand_catalog_eligibility_events WHERE event_id=$1', [eventId])).rows[0];
   await assert.rejects(pool.query('UPDATE brands.brand_catalog_eligibility_events SET request_id=request_id WHERE event_id=$1', [event.event_id]), /IMMUTABLE/i);
