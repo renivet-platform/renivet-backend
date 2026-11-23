@@ -1,6 +1,7 @@
 import { OtpDeliveryPort } from './otp-delivery';
 import { ResendOtpDeliveryFailure, ResendTemplateOtpDelivery } from './resend-template-otp-delivery';
 import { SmtpOtpDelivery } from './smtp-otp-delivery';
+import { ResendDirectOtpDelivery } from './resend-direct-otp-delivery';
 
 export interface EmailOtpProviderConfiguration {
   provider?: string;
@@ -19,6 +20,15 @@ export interface EmailOtpProviderConfiguration {
 
 /** Builds exactly one email adapter, retaining SMTP as the backwards-compatible default. */
 export function createEmailOtpDelivery(configuration: EmailOtpProviderConfiguration): OtpDeliveryPort {
+  if (configuration.provider === 'resend_direct') {
+    const apiKey = configuration.resendApiKey
+      ?? (configuration.smtpHost?.toLowerCase() === 'smtp.resend.com' ? configuration.smtpPassword : undefined);
+    return new ResendDirectOtpDelivery({
+      apiKey,
+      from: configuration.resendFrom ?? configuration.smtpFrom,
+      onDeliveryFailure: configuration.onResendDeliveryFailure,
+    });
+  }
   if (configuration.provider === 'resend') {
     const apiKey = configuration.resendApiKey
       ?? (configuration.smtpHost?.toLowerCase() === 'smtp.resend.com' ? configuration.smtpPassword : undefined);
