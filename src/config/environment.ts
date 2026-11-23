@@ -138,8 +138,8 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
   const smtpPassword = optionalConfigString(input, 'SMTP_PASSWORD');
   const smtpFrom = optionalConfigString(input, 'SMTP_FROM');
   const emailOtpProvider = optionalConfigString(input, 'EMAIL_OTP_PROVIDER') ?? 'smtp';
-  if (emailOtpProvider !== 'smtp' && emailOtpProvider !== 'resend') {
-    error('EMAIL_OTP_PROVIDER', 'must be smtp or resend');
+  if (emailOtpProvider !== 'smtp' && emailOtpProvider !== 'resend' && emailOtpProvider !== 'resend_direct') {
+    error('EMAIL_OTP_PROVIDER', 'must be smtp, resend or resend_direct');
   }
   const resendApiKey = optionalConfigString(input, 'RESEND_API_KEY');
   const resendFrom = optionalConfigString(input, 'RESEND_FROM');
