@@ -1,5 +1,5 @@
 import { createHmac, createHash, randomBytes } from 'node:crypto';
-import { isPasswordAllowed, PasswordHashService } from './passwords';
+import { isPasswordAllowed, isNewPasswordAllowed, PasswordHashService } from './passwords';
 import { AuthRateLimitExceededError, AuthRateLimitUnavailableError, AuthRateLimiter } from './rate-limiter';
 
 export interface PasswordCredentialRecord {
@@ -89,7 +89,7 @@ export class AuthService {
 
   async register(request: RegisterRequest, ip: string): Promise<{ status: 'accepted' }> {
     const email = normalizeEmail(request.email);
-    if (!email || !isPasswordAllowed(request.password)) {
+    if (!email || !isNewPasswordAllowed(request.password)) {
       throw new AuthHttpError(400, 'AUTH_INPUT_INVALID', 'The request could not be processed.');
     }
 
