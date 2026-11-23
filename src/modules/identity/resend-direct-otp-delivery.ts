@@ -63,7 +63,7 @@ export class ResendDirectOtpDelivery implements OtpDeliveryPort {
         try{const body:unknown=await response.json();
           if(body&&typeof body==='object'&&'name' in body&&typeof body.name==='string'
             &&/^[a-z0-9_-]{1,64}$/i.test(body.name))failure.code=body.name;
-        }catch{}
+        }catch{ /* Preserve the HTTP status without retaining provider details. */ }
         report(failure);throw new Error('provider rejected');
       }
       const result:unknown=await response.json().catch(()=>null);
