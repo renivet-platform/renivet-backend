@@ -2,7 +2,7 @@ import { createHash, createHmac, randomBytes, randomInt, randomUUID } from 'node
 import { AuthHttpError, normalizeEmail } from './auth.service';
 import { AuthLockContentionError, AuthRateLimitExceededError, AuthRateLimiter } from './rate-limiter';
 import { OtpDeliveryPort } from './otp-delivery';
-import { PasswordHashService, isPasswordAllowed } from './passwords';
+import { PasswordHashService, isNewPasswordAllowed } from './passwords';
 
 export type OtpChannel = 'email' | 'phone';
 export type OtpPurpose = 'email_verification' | 'phone_verification' | 'phone_login' | 'phone_registration' | 'password_recovery';
@@ -120,7 +120,7 @@ export class OtpChallengeService {
     }
     if (!this.options.hmacKey || this.options.hmacKey.length < 32) throw genericUnavailable();
     if (request.purpose === 'password_recovery') {
-      if (!request.newPassword || !isPasswordAllowed(request.newPassword) || !this.passwords) {
+      if (!request.newPassword || !isNewPasswordAllowed(request.newPassword) || !this.passwords) {
         throw new OtpChallengeError(400, 'AUTH_INPUT_INVALID', 'The request could not be processed.');
       }
     } else if (request.newPassword !== undefined) {
