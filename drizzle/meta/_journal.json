@@ -365,6 +365,13 @@
       "when": 1795180000000,
       "tag": "0051_import_category_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1795480000000,
+      "tag": "0052_brand_application_checker_attestations",
+      "breakpoints": true
     }
   ]
 }
