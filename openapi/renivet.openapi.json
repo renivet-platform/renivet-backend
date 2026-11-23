@@ -12230,9 +12230,9 @@
           },
           "password": {
             "type": "string",
-            "minLength": 8,
+            "minLength": 15,
             "maxLength": 128,
-            "description": "An 8–128 character passphrase. No composition rule is imposed.",
+            "description": "New accounts require a 15–128 character passphrase. Existing accounts may still sign in with older credentials.",
             "example": "synthetic example passphrase only"
           }
         },
@@ -12571,10 +12571,10 @@
           },
           "newPassword": {
             "type": "string",
-            "minLength": 8,
+            "minLength": 15,
             "maxLength": 128,
             "example": "synthetic replacement passphrase",
-            "description": "Required only for password_recovery; accepted as an 8–128 character passphrase and stored only as an Argon2id hash."
+            "description": "Required only for password_recovery; accepted as a 15–128 character passphrase and stored only as an Argon2id hash."
           }
         },
         "required": [

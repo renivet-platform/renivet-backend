@@ -44,6 +44,12 @@ function createService(overrides = {}, serviceOptions = options) {
   return { service: new AuthService(repository, passwords, limiter, serviceOptions), calls };
 }
 
+test('registration rejects short new passwords without touching the database', async () => {
+  const { service, calls } = createService();
+  await assert.rejects(service.register({ email: 'buyer@example.test', password: 'short123' }, '127.0.0.1'), error => error.status === 400);
+  assert.equal(calls.registrations.length, 0);
+});
+
 test('registration canonicalizes contact, persists only a hash, and returns a neutral accepted result', async () => {
   const { service, calls } = createService();
   const result = await service.register({ email: '  BUYER@Example.Test ', password }, '127.0.0.1');
