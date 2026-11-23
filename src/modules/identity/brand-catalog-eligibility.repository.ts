@@ -60,6 +60,11 @@ export class BrandCatalogEligibilityPostgresRepository implements BrandCatalogEl
           occurredAt: row.occurred_at };
       }
 
+      const targetState = outcome.decision;
+      if (previousBrandState !== 'pending' && previousBrandState !== targetState) {
+        throw coded('BRAND_STATE_NOT_REVIEWABLE');
+      }
+
       // A reviewer ID in the maker's request is not independent proof.
       // Require a previous attestation written under the checker's own session.
       const attestation=await client.query(
@@ -71,10 +76,7 @@ export class BrandCatalogEligibilityPostgresRepository implements BrandCatalogEl
       );
       if (!attestation.rowCount) throw coded('BRAND_APPROVAL_CHECKER_ATTESTATION_REQUIRED');
 
-      const targetState = outcome.decision;
-      if (previousBrandState !== 'pending' && previousBrandState !== targetState) {
-        throw coded('BRAND_STATE_NOT_REVIEWABLE');
-      }
+
 
       let membershipBefore: string | null = null;
       let membershipAfter: string | null = null;
