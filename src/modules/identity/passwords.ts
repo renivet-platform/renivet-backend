@@ -2,6 +2,7 @@ import * as argon2 from 'argon2';
 
 export const PASSWORD_MIN_LENGTH = 8;
 export const PASSWORD_MAX_LENGTH = 128;
+export const NEW_PASSWORD_MIN_LENGTH = 15;
 
 const ARGON2ID_OPTIONS: argon2.HashOptions = {
   type: argon2.argon2id,
@@ -20,6 +21,11 @@ export function isPasswordAllowed(password: unknown): password is string {
   if (typeof password !== 'string') return false;
   const length = [...password].length;
   return length >= PASSWORD_MIN_LENGTH && length <= PASSWORD_MAX_LENGTH;
+}
+
+/** New credentials require a stronger passphrase; legacy sign-in stays compatible. */
+export function isNewPasswordAllowed(password: unknown): password is string {
+  return isPasswordAllowed(password) && [...password].length >= NEW_PASSWORD_MIN_LENGTH;
 }
 
 export class PasswordHashService {
