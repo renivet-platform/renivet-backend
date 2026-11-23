@@ -1,5 +1,5 @@
 import { Body, Controller, ConflictException, ForbiddenException, Get, Headers, HttpCode, Param, Post, Req, ServiceUnavailableException, UnprocessableEntityException, UseGuards } from '@nestjs/common';
-import { ApiBody, ApiCookieAuth, ApiExtension, ApiHeader, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiCookieAuth, ApiExcludeEndpoint, ApiExtension, ApiHeader, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { MfaGuard, RequireMfa } from '../../common/guards/require-mfa';
 import { PlatformPermissionGuard, RequirePlatformAdminPermission } from '../access/platform-permission.guard';
@@ -19,6 +19,7 @@ export class BrandApplicationReviewController {
   constructor(private readonly eligibility: BrandCatalogEligibilityService, private readonly sessions: SessionService, private readonly config: ConfigService, private readonly infrastructure: IdentityInfrastructure) {}
 
   @Get('attestations')
+  @ApiExcludeEndpoint()
   @RequirePlatformAdminPermission('brand_membership.review')
   @RequireMfa('brand_membership.review')
   async attestations(@Param('brandId') brandId: string): Promise<{items:Array<{checkerUserId:string;decision:string}>}> {
@@ -34,6 +35,7 @@ export class BrandApplicationReviewController {
   }
 
   @Post('attest')
+  @ApiExcludeEndpoint()
   @HttpCode(200)
   @RequirePlatformAdminPermission('brand_membership.review')
   @RequireMfa('brand_membership.review')
