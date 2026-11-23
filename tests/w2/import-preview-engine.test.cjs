@@ -31,6 +31,15 @@ function taxonomy() {
     ] }] };
 }
 
+test('import maps differently cased enum values to the unique category value', () => {
+  const input = { batch: { id: 'batch-case', brandId: 'brand-1', sourceSha256: 'a'.repeat(64), sourceAsOf: '2026-11-09T00:00:00.000Z' },
+    mapping, taxonomy: taxonomy(), sourceRows: [{ ...sourceRows[0], rawRecord: { ...sourceRows[0].rawRecord, color: 'BLUE' } }], targets: [] };
+  const preview = buildImportPreview(input);
+  assert.equal(preview.rows[0].action, 'CREATE');
+  assert.equal(preview.rows[0].proposed.options.color, 'Blue');
+  assert.equal(input.sourceRows[0].rawRecord.color, 'BLUE');
+});
+
 test('REN2-77 maps source fields, classifies rows, and sends unknown categories to review', () => {
   const preview = buildImportPreview({
     batch: { id: 'batch-1', brandId: 'brand-1', sourceSha256: 'a'.repeat(64), sourceAsOf: '2026-11-09T00:00:00.000Z' },
