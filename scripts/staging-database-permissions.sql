@@ -14,12 +14,8 @@ BEGIN
 END $$;
 GRANT CONNECT, CREATE, TEMPORARY ON DATABASE renivet_staging TO renivet_staging_user;
 GRANT USAGE, CREATE ON SCHEMA public TO renivet_staging_user;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO renivet_staging_user;
-GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO renivet_staging_user;
-ALTER DEFAULT PRIVILEGES FOR ROLE doadmin IN SCHEMA public
-  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO renivet_staging_user;
-ALTER DEFAULT PRIVILEGES FOR ROLE doadmin IN SCHEMA public
-  GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO renivet_staging_user;
+-- Object ACLs belong to their creating owner. Do not broadly grant DML on
+-- every public table or on future doadmin-created objects.
 -- Confirm the staging role can create schemas; this is required by the W1/W2
 -- migrations (identity, brands, access, catalogue, inventory, etc.).
 SELECT current_database() AS database_name, current_user AS executor,
