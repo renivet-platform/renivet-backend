@@ -92,7 +92,7 @@ export class BrandCatalogEligibilityPostgresRepository implements BrandCatalogEl
       if (outcome.decision === 'approved') {
         // The applicant becomes the brand owner only after independent brand
         // approval and active membership; pending applications grant nothing.
-        const owner = await client.query(
+        await client.query(
           `INSERT INTO access.role_assignments
              (user_id,role_id,brand_id,scope_type,granted_by_id)
            SELECT $1,r.id,$2,'brand',$3 FROM access.roles r
