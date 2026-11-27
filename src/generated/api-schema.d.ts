@@ -1272,7 +1272,7 @@ export interface components {
              */
             email: string;
             /**
-             * @description An 8–128 character passphrase. No composition rule is imposed.
+             * @description New accounts require a 15–128 character passphrase. Existing accounts may still sign in with older credentials.
              * @example synthetic example passphrase only
              */
             password: string;
@@ -1427,7 +1427,7 @@ export interface components {
              */
             code: string;
             /**
-             * @description Required only for password_recovery; accepted as an 8–128 character passphrase and stored only as an Argon2id hash.
+             * @description Required only for password_recovery; accepted as a 15–128 character passphrase and stored only as an Argon2id hash.
              * @example synthetic replacement passphrase
              */
             newPassword?: string;

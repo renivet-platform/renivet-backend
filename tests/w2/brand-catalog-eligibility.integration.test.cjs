@@ -50,10 +50,7 @@ test('REN2-55 applies W1 approval outcomes atomically, idempotently, and through
     `INSERT INTO brands.brand_memberships(brand_id,user_id,membership_state,invited_by_id)
      VALUES($1,$2,'pending',$3)`, [brandId, applicant, grantor],
   );
-  await pool.query(
-    `INSERT INTO access.role_assignments(user_id,role_id,brand_id,scope_type,active_from,granted_by_id)
-     VALUES($1,$2,$3,'brand',now(),$4)`, [applicant, role, brandId, grantor],
-  );
+  // New applications have no owner grant before approval. The approval transaction creates it.
   const permissionCountBefore = Number((await pool.query(
     `SELECT count(*)::int AS n FROM access.role_assignments WHERE user_id=$1 AND brand_id=$2`, [applicant, brandId],
   )).rows[0].n);
@@ -66,6 +63,13 @@ test('REN2-55 applies W1 approval outcomes atomically, idempotently, and through
   const eventId = randomUUID();
   const outcome = { eventId, brandId, applicantUserId: applicant, decision: 'approved',
     approvedByUserId: approver, checkedByUserId: checker, requestId: `req-${suffix}` };
+  await assert.rejects(repository.applyOutcome(outcome), code('BRAND_APPROVAL_CHECKER_ATTESTATION_REQUIRED'));
+  await pool.query(
+    `INSERT INTO brands.brand_application_checker_attestations
+      (brand_id,applicant_user_id,checker_user_id,decision,request_id)
+      VALUES($1,$2,$3,'approved',$4)`,
+    [brandId,applicant,checker,`attest-${suffix}`],
+  );
   const concurrentApprovals = await Promise.all([
     repository.applyOutcome(outcome),
     repository.applyOutcome({ ...outcome, requestId: `concurrent-replay-${suffix}` }),
@@ -83,12 +87,14 @@ test('REN2-55 applies W1 approval outcomes atomically, idempotently, and through
       WHERE user_id=$1 AND brand_id=$2 AND permission_code='brand_membership.read'`, [applicant, brandId],
   )).rows[0].n, 1, 'existing assigned W1 permission becomes effective only after approval and joined membership');
   assert.equal(Number((await pool.query(
-    `SELECT count(*)::int AS n FROM access.role_assignments WHERE user_id=$1 AND brand_id=$2`, [applicant, brandId],
-  )).rows[0].n), permissionCountBefore, 'approval must not create or duplicate role assignments');
+    `SELECT count(*)::int AS n FROM access.role_assignments
+      WHERE user_id=$1 AND brand_id=$2 AND role_id=$3`, [applicant, brandId, role],
+  )).rows[0].n), permissionCountBefore + 1, 'approved applicant receives precisely one scoped owner role');
 
   const replay = await repository.applyOutcome({ ...outcome, requestId: `replay-${suffix}` });
   assert.equal(replay.replayed, true);
   assert.equal((await pool.query('SELECT count(*)::int AS n FROM brands.brand_catalog_eligibility_events WHERE event_id=$1', [eventId])).rows[0].n, 1);
+  assert.equal((await pool.query('SELECT count(*)::int AS n FROM access.role_assignments WHERE user_id=$1 AND brand_id=$2', [applicant, brandId])).rows[0].n, 1, 'replay does not duplicate ownership');
   await assert.rejects(repository.applyOutcome({ ...outcome, applicantUserId: grantor }), code('BRAND_APPROVAL_EVENT_CONFLICT'));
   const event = (await pool.query('SELECT event_id FROM brands.brand_catalog_eligibility_events WHERE event_id=$1', [eventId])).rows[0];
   await assert.rejects(pool.query('UPDATE brands.brand_catalog_eligibility_events SET request_id=request_id WHERE event_id=$1', [event.event_id]), /IMMUTABLE/i);
@@ -99,6 +105,12 @@ test('REN2-55 applies W1 approval outcomes atomically, idempotently, and through
   )).rows[0].id;
   await assert.rejects(repository.applyOutcome({ ...outcome, brandId: rejectedBrand }), code('BRAND_APPROVAL_EVENT_CONFLICT'));
   assert.equal((await pool.query('SELECT onboarding_state FROM brands.brands WHERE id=$1', [rejectedBrand])).rows[0].onboarding_state, 'pending', 'cross-brand event replay must not change another brand');
+  await pool.query(
+    `INSERT INTO brands.brand_application_checker_attestations
+      (brand_id,applicant_user_id,checker_user_id,decision,request_id)
+      VALUES($1,$2,$3,'rejected',$4)`,
+    [rejectedBrand,applicant,checker,`reject-attest-${suffix}`],
+  );
   const rejected = await repository.applyOutcome({ eventId: randomUUID(), brandId: rejectedBrand,
     applicantUserId: applicant, decision: 'rejected', approvedByUserId: approver,
     checkedByUserId: checker, requestId: `reject-${suffix}` });

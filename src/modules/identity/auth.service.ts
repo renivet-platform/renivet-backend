@@ -1,5 +1,5 @@
 import { createHmac, createHash, randomBytes } from 'node:crypto';
-import { isPasswordAllowed, PasswordHashService } from './passwords';
+import { isPasswordAllowed, isNewPasswordAllowed, PasswordHashService } from './passwords';
 import { AuthRateLimitExceededError, AuthRateLimitUnavailableError, AuthRateLimiter } from './rate-limiter';
 
 export interface PasswordCredentialRecord {
@@ -89,7 +89,7 @@ export class AuthService {
 
   async register(request: RegisterRequest, ip: string): Promise<{ status: 'accepted' }> {
     const email = normalizeEmail(request.email);
-    if (!email || !isPasswordAllowed(request.password)) {
+    if (!email || !isNewPasswordAllowed(request.password)) {
       throw new AuthHttpError(400, 'AUTH_INPUT_INVALID', 'The request could not be processed.');
     }
 
@@ -111,7 +111,7 @@ export class AuthService {
       throw new AuthHttpError(400, 'AUTH_INPUT_INVALID', 'The request could not be processed.');
     }
 
-    await this.consumeLimit('login-account', email, this.options.loginAccountLimit);
+    // Bound total traffic per source, regardless of success or failure.
     await this.consumeLimit('login-ip', ip, this.options.loginIpLimit);
 
     let credential: PasswordCredentialRecord | null;
@@ -134,6 +134,9 @@ export class AuthService {
       credential.state !== 'active' ||
       !credential.emailVerifiedAt
     ) {
+      // A stranger must not be able to lock an account by submitting bad
+      // passwords from a different IP. Count only failed attempts per pair.
+      await this.consumeLimit('login-account-ip-failure', `${email}\0${ip}`, this.options.loginAccountLimit);
       throw GENERIC_AUTH_FAILURE;
     }
 

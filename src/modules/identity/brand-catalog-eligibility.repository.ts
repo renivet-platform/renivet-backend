@@ -65,6 +65,19 @@ export class BrandCatalogEligibilityPostgresRepository implements BrandCatalogEl
         throw coded('BRAND_STATE_NOT_REVIEWABLE');
       }
 
+      // A reviewer ID in the maker's request is not independent proof.
+      // Require a previous attestation written under the checker's own session.
+      const attestation=await client.query(
+        `SELECT 1 FROM brands.brand_application_checker_attestations
+          WHERE brand_id=$1 AND applicant_user_id=$2 AND checker_user_id=$3
+            AND decision=$4 AND checked_at>clock_timestamp()-interval '7 days'
+          FOR SHARE`,
+        [outcome.brandId,outcome.applicantUserId,outcome.checkedByUserId,outcome.decision],
+      );
+      if (!attestation.rowCount) throw coded('BRAND_APPROVAL_CHECKER_ATTESTATION_REQUIRED');
+
+
+
       let membershipBefore: string | null = null;
       let membershipAfter: string | null = null;
       if (outcome.decision === 'approved') {
@@ -87,6 +100,29 @@ export class BrandCatalogEligibilityPostgresRepository implements BrandCatalogEl
         } else {
           throw coded('BRAND_MEMBERSHIP_NOT_REVIEWABLE');
         }
+      }
+
+      if (outcome.decision === 'approved') {
+        // The applicant becomes the brand owner only after independent brand
+        // approval and active membership; pending applications grant nothing.
+        await client.query(
+          `INSERT INTO access.role_assignments
+             (user_id,role_id,brand_id,scope_type,granted_by_id)
+           SELECT $1,r.id,$2,'brand',$3 FROM access.roles r
+            WHERE r.role_code='brand_owner' AND r.scope_kind='brand'
+           ON CONFLICT (user_id,role_id,brand_id) WHERE brand_id IS NOT NULL DO NOTHING`,
+          [outcome.applicantUserId,outcome.brandId,outcome.approvedByUserId],
+        );
+        const activeOwner = await client.query(
+          `SELECT 1 FROM access.role_assignments a
+            JOIN access.roles r ON r.id=a.role_id
+            WHERE a.user_id=$1 AND a.brand_id=$2 AND a.scope_type='brand'
+              AND r.role_code='brand_owner' AND r.scope_kind='brand'
+              AND a.active_from<=clock_timestamp()
+              AND (a.active_until IS NULL OR a.active_until>clock_timestamp())`,
+          [outcome.applicantUserId,outcome.brandId],
+        );
+        if (!activeOwner.rowCount) throw coded('BRAND_OWNER_ASSIGNMENT_UNAVAILABLE');
       }
 
       if (previousBrandState === 'pending') {

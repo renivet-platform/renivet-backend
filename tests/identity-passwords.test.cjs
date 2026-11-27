@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { isPasswordAllowed, PasswordHashService } = require('../dist/modules/identity/passwords');
+const { isPasswordAllowed, isNewPasswordAllowed, PasswordHashService } = require('../dist/modules/identity/passwords');
 
 test('password policy accepts 8 to 128 characters without composition requirements', () => {
   assert.equal(isPasswordAllowed('a'.repeat(8)), true);
@@ -10,6 +10,14 @@ test('password policy accepts 8 to 128 characters without composition requiremen
   assert.equal(isPasswordAllowed('a'.repeat(129)), false);
   assert.equal(isPasswordAllowed('                '), true);
   assert.equal(isPasswordAllowed(''), false);
+});
+
+test('new password policy requires 15 characters while legacy sign-in remains compatible', () => {
+  assert.equal(isNewPasswordAllowed('a'.repeat(14)), false);
+  assert.equal(isNewPasswordAllowed('a'.repeat(15)), true);
+  assert.equal(isNewPasswordAllowed('a'.repeat(128)), true);
+  assert.equal(isNewPasswordAllowed('a'.repeat(129)), false);
+  assert.equal(isPasswordAllowed('a'.repeat(8)), true);
 });
 
 test('password hashing uses Argon2id at the approved minimum and verifies safely', async () => {
