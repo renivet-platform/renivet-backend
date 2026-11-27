@@ -25,6 +25,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { AuthHttpError, AuthService } from './auth.service';
+import { resolveAuthClientIp } from './auth-client-ip';
 import { AuthExceptionFilter } from './auth-exception.filter';
 import { CsrfRejectedError, csrfMatches, readSessionToken, SessionService } from './session.service';
 import { ConfigService } from '@nestjs/config';
@@ -59,6 +60,12 @@ const authRequestValidation = new ValidationPipe({
 export class AuthController {
   constructor(private readonly authentication: AuthService, private readonly sessions: SessionService, private readonly configuration: ConfigService) {}
 
+  private clientIp(context: AuthenticatedRequestContext, path: string): string {
+    return resolveAuthClientIp(context.headers, context.ip, path,
+      this.configuration.get<string>('AUTH_PROXY_CLIENT_IP_HMAC_KEY'),
+      this.configuration.get<boolean>('AUTH_TRUST_DO_CONNECTING_IP') === true);
+  }
+
   @Post('register')
   @HttpCode(202)
   @UsePipes(authRequestValidation)
@@ -77,7 +84,7 @@ export class AuthController {
     @Body() request: RegisterRequestDto,
     @Req() context: AuthenticatedRequestContext,
   ): Promise<RegistrationAcceptedDto> {
-    return this.authentication.register(request, context.ip);
+    return this.authentication.register(request, this.clientIp(context, '/auth/register'));
   }
 
   @Post('sessions')
@@ -108,7 +115,7 @@ export class AuthController {
     @Req() context: AuthenticatedRequestContext,
     @Res({ passthrough: true }) response: CookieResponse,
   ): Promise<PasswordSessionResponseDto> {
-    const result = await this.authentication.login(request, context.ip, readSessionToken(context.headers.cookie));
+    const result = await this.authentication.login(request, this.clientIp(context, '/auth/sessions'), readSessionToken(context.headers.cookie));
     response.header('Cache-Control', 'no-store');
     response.header(
       'Set-Cookie',
