@@ -14,6 +14,7 @@ RUN npm ci --omit=dev --no-audit --no-fund \
     && npm cache clean --force \
     && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/drizzle ./drizzle
 USER node
 EXPOSE 4000
 CMD ["node", "dist/main.js"]
