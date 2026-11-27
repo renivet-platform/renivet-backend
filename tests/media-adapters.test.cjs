@@ -63,6 +63,12 @@ test('REN2-66 makes private, brand-scoped Spaces upload intents with short expir
   assert.ok(Number.isInteger(expirySeconds) && expirySeconds >= 298 && expirySeconds <= 300,
     `Expected a short upload expiry (298–300 seconds), got ${expirySeconds}`);
   assert.equal(signed.searchParams.has('X-Amz-Signature'), true);
+  const signedHeaders = signed.searchParams.get('X-Amz-SignedHeaders').split(';');
+  for (const header of ['content-type', 'x-amz-acl', 'x-amz-meta-renivet-brand-id', 'x-amz-meta-renivet-media-asset-id']) {
+    assert.ok(signedHeaders.includes(header), `Missing signed header: ${header}`);
+    assert.equal(signed.searchParams.has(header), false);
+  }
+  assert.equal(signed.searchParams.has('x-amz-checksum-crc32'), false);
   assert.deepEqual(intent.headers, {
     'content-type': 'image/png', 'x-amz-acl': 'private', 'x-amz-meta-renivet-brand-id': 'brand-a', 'x-amz-meta-renivet-media-asset-id': 'asset-1',
   });

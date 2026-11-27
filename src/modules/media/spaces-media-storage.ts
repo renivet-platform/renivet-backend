@@ -63,7 +63,7 @@ export class SpacesMediaStorage implements MediaStoragePort {
     });
     const expiresAt = input.expiresAt ? new Date(input.expiresAt) : new Date(Date.now() + 300_000);
     const expiresIn = Math.max(1, Math.min(300, Math.floor((expiresAt.getTime() - Date.now()) / 1000)));
-    const uploadUrl = await getSignedUrl(this.requireClient(), command, { expiresIn });
+    const uploadUrl = await getSignedUrl(this.requireClient(), command, { expiresIn, unhoistableHeaders: new Set(['x-amz-acl', 'x-amz-meta-renivet-brand-id', 'x-amz-meta-renivet-media-asset-id']), signableHeaders: new Set(['content-type']) });
     return {
       uploadUrl,
       expiresAt: new Date(Math.min(expiresAt.getTime(), Date.now() + expiresIn * 1000)).toISOString(),
@@ -133,6 +133,7 @@ export class SpacesMediaStorage implements MediaStoragePort {
       endpoint: this.endpoint,
       region: this.region,
       forcePathStyle: false,
+      requestChecksumCalculation: 'WHEN_REQUIRED',
       credentials: { accessKeyId: this.accessKeyId, secretAccessKey: this.secretAccessKey },
     });
     return this.client;

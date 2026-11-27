@@ -174,7 +174,7 @@ export class ImportUploadController {
     if (!parsedEndpoint || !accessKeyId || !secretAccessKey || !region || !bucket) {
       throw new ServiceUnavailableException({ code: 'IMPORT_STORAGE_UNAVAILABLE', message: 'Import storage is unavailable.' });
     }
-    this.client ??= new S3Client({ endpoint: parsedEndpoint.origin, region, forcePathStyle: false,
+    this.client ??= new S3Client({ endpoint: parsedEndpoint.origin, region, forcePathStyle: false, requestChecksumCalculation: 'WHEN_REQUIRED',
       credentials: { accessKeyId, secretAccessKey } });
     const command = new PutObjectCommand({ Bucket: bucket, Key: storageKey, ContentType: input.mimeType,
       ContentLength: input.byteLength, ACL: 'private', Metadata: { 'renivet-brand-id': access.brandId,
@@ -182,10 +182,10 @@ export class ImportUploadController {
     const expiresAt = row?.expires_at ?? new Date(Date.now() + 5 * 60_000);
     const expiresIn = Math.max(1, Math.min(300, Math.floor((new Date(expiresAt).getTime() - Date.now()) / 1000)));
     let uploadUrl: string;
-    try { uploadUrl = await getSignedUrl(this.client, command, { expiresIn }); }
+    try { uploadUrl = await getSignedUrl(this.client, command, { expiresIn, unhoistableHeaders: new Set(['x-amz-acl', 'x-amz-meta-renivet-brand-id', 'x-amz-meta-renivet-import-upload-id', 'x-amz-meta-renivet-sha256']), signableHeaders: new Set(['content-type']) }); }
     catch { throw new ServiceUnavailableException({ code: 'IMPORT_STORAGE_UNAVAILABLE', message: 'Import storage is unavailable.' }); }
     return { fileUploadId, uploadMethod: 'PUT', uploadUrl, expiresAt: new Date(expiresAt).toISOString(), headers: {
-      'content-type': input.mimeType, 'x-amz-acl': 'private', 'x-amz-meta-renivet-brand-id': access.brandId,
+      'content-type': input.mimeType, 'cache-control': 'private, no-store', 'x-amz-acl': 'private', 'x-amz-meta-renivet-brand-id': access.brandId,
       'x-amz-meta-renivet-import-upload-id': fileUploadId, 'x-amz-meta-renivet-sha256': input.sha256.toLowerCase(),
     } };
   }
@@ -308,7 +308,7 @@ export class ImportUploadController {
         || !region || !/^[a-z0-9-]{2,32}$/.test(region) || !accessKeyId || !secretAccessKey) {
         throw new ServiceUnavailableException({ code: 'IMPORT_STORAGE_UNAVAILABLE', message: 'Import storage is unavailable.' });
       }
-      this.client ??= new S3Client({ endpoint: storageEndpoint.origin, region, forcePathStyle: false,
+      this.client ??= new S3Client({ endpoint: storageEndpoint.origin, region, forcePathStyle: false, requestChecksumCalculation: 'WHEN_REQUIRED',
         credentials: { accessKeyId, secretAccessKey } });
     }
     let bytes: Buffer;

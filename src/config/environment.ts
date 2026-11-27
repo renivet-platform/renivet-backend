@@ -107,6 +107,9 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
   const python = parseUrl(input, 'PYTHON_SERVICE_URL', ['http:', 'https:'], protectedEnvironment);
   const searchKey = optionalString(input, 'TYPESENSE_API_KEY');
   const authRateLimitKey = optionalString(input, 'AUTH_RATE_LIMIT_HMAC_KEY');
+  const authProxyClientIpKey = optionalString(input, 'AUTH_PROXY_CLIENT_IP_HMAC_KEY');
+  const trustDoConnectingIp = optionalBoolean(input, 'AUTH_TRUST_DO_CONNECTING_IP') ?? false;
+  if (authProxyClientIpKey && authProxyClientIpKey.length < 32) error('AUTH_PROXY_CLIENT_IP_HMAC_KEY', 'must contain at least 32 characters');
   const authChallengeKey = optionalString(input, 'AUTH_CHALLENGE_HMAC_KEY');
   const authCsrfKey = optionalString(input, 'AUTH_CSRF_HMAC_KEY');
   const authMfaEncryptionKey = optionalString(input, 'AUTH_MFA_ENCRYPTION_KEY');
@@ -217,6 +220,8 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
     PYTHON_SERVICE_URL: python,
     TYPESENSE_API_KEY: searchKey,
     AUTH_RATE_LIMIT_HMAC_KEY: authRateLimitKey,
+    AUTH_PROXY_CLIENT_IP_HMAC_KEY: authProxyClientIpKey,
+    AUTH_TRUST_DO_CONNECTING_IP: trustDoConnectingIp,
     AUTH_CHALLENGE_HMAC_KEY: authChallengeKey,
     AUTH_CSRF_HMAC_KEY: authCsrfKey,
     AUTH_MFA_ENCRYPTION_KEY: authMfaEncryptionKey,

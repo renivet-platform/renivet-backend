@@ -51,6 +51,13 @@ test('REN2-76 issues a short-lived brand-bound private upload URL and records it
   assert.equal(intent.uploadMethod, 'PUT');
   assert.match(intent.uploadUrl, /^https:\/\//);
   assert.equal(intent.headers['x-amz-meta-renivet-brand-id'], request.brandAccess.brandId);
+  assert.equal(intent.headers['cache-control'], 'private, no-store');
+  const signed = new URL(intent.uploadUrl);
+  const signedHeaders = signed.searchParams.get('X-Amz-SignedHeaders').split(';');
+  for (const header of ['content-type', 'x-amz-acl', 'x-amz-meta-renivet-brand-id', 'x-amz-meta-renivet-import-upload-id', 'x-amz-meta-renivet-sha256']) {
+    assert.ok(signedHeaders.includes(header), `Missing signed header: ${header}`);
+    assert.equal(signed.searchParams.has(header), false);
+  }
   assert.equal(calls.length, 2);
   assert.match(calls[1].sql, /access\.security_audit_events/);
 });
